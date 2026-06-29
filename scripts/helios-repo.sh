@@ -140,11 +140,15 @@ cmd_pr() {
 	require_repo
 	local title="${1:-}"
 	cmd_push
+	local branch
+	branch="$(current_branch)"
 	info "Opening pull request"
+	# Run gh from inside the repo and pin --head so branch detection never
+	# depends on the caller's working directory.
 	if [[ -n "${title}" ]]; then
-		gh pr create --repo "${REPO}" --base "${DEFAULT_BRANCH}" --title "${title}" --fill
+		( cd "${WORK_DIR}" && gh pr create --base "${DEFAULT_BRANCH}" --head "${branch}" --title "${title}" --fill )
 	else
-		gh pr create --repo "${REPO}" --base "${DEFAULT_BRANCH}" --fill
+		( cd "${WORK_DIR}" && gh pr create --base "${DEFAULT_BRANCH}" --head "${branch}" --fill )
 	fi
 }
 
