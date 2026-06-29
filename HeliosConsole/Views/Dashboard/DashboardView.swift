@@ -84,6 +84,8 @@ struct DashboardView: View {
             ReportsView()
         case .enrollments:
             EnrollmentsView()
+        case .cleanup:
+            CleanupView()
         case .settings:
             SettingsView()
         }

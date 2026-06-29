@@ -21,6 +21,7 @@ final class CleanupSettings {
         static let protectEnabled = "Cleanup.ProtectEnabled"
         static let protectURL = "Cleanup.ProtectURL"
         static let protectClientID = "Cleanup.ProtectClientID"
+        static let protectAutoCleanup = "Cleanup.ProtectAutoCleanup"
     }
 
     /// Keychain account for the Jamf Protect API password.
@@ -75,6 +76,13 @@ final class CleanupSettings {
     var protectClientPassword: String {
         get { KeychainManager.shared.loadString(forKey: Self.protectPasswordKeychainKey) ?? "" }
         set { KeychainManager.shared.saveString(newValue, forKey: Self.protectPasswordKeychainKey) }
+    }
+
+    /// When on, deleting a Jamf Pro record also deletes the matching Jamf
+    /// Protect record (by serial).
+    var protectAutoCleanup: Bool {
+        get { defaults.bool(forKey: Key.protectAutoCleanup) }
+        set { defaults.set(newValue, forKey: Key.protectAutoCleanup) }
     }
 
     var normalizedProtectURL: URL? { Self.normalize(protectURL) }
