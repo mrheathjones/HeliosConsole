@@ -184,9 +184,10 @@ class MDMConfigurationManager: ObservableObject {
         }
 
         // Operator role (Admin / Support / User). Accept top-level or nested.
+        // Fails closed: when a deployed profile omits the key, role stays nil
+        // and Cleanup is hidden (only an explicit "Admin" grants it).
         let role = (defaults.string(forKey: MDMKeys.role))
             ?? (jamfProDict[MDMKeys.role] as? String)
-            ?? "Admin"
 
         // Cleanup feature settings (nested)
         var cleanupStaleDays = 90

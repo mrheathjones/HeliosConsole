@@ -58,8 +58,13 @@ struct MDMConfiguration: Codable {
         case user = "User"
     }
 
+    /// Resolves the operator role fail-closed: a missing, blank, or
+    /// unrecognized value (including wrong case like "admin") is treated as
+    /// the least-privileged `.user`, so the destructive Cleanup feature is
+    /// never exposed by accident. Only the exact string "Admin" grants it.
     var appRole: AppRole {
-        AppRole(rawValue: role ?? "Admin") ?? .admin
+        guard let role, let parsed = AppRole(rawValue: role) else { return .user }
+        return parsed
     }
 
     /// Whether the Cleanup feature should be available to this operator.
@@ -79,7 +84,7 @@ struct MDMConfiguration: Codable {
         abmClientId: String?,
         abmKeyId: String?,
         abmPrivateKey: String?,
-        role: String? = "Admin",
+        role: String? = nil,
         cleanupStaleDays: Int = 90,
         cleanupDefaultStaticGroupID: String? = nil,
         cleanupDefaultSiteID: String? = nil,
@@ -146,6 +151,9 @@ struct MDMConfiguration: Codable {
         screenShareEnabled: false,
         abmClientId: nil,
         abmKeyId: nil,
-        abmPrivateKey: nil
+        abmPrivateKey: nil,
+        // No-config (local dev) fallback shows Cleanup. Real deployments must
+        // set role=Admin in the profile; an absent key fails closed (hidden).
+        role: "Admin"
     )
 }
