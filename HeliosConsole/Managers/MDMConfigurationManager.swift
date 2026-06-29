@@ -46,6 +46,15 @@ class MDMConfigurationManager: ObservableObject {
         static let abmClientId = "ABMClientId"
         static let abmKeyId = "ABMKeyId"
         static let abmPrivateKey = "ABMPrivateKey"
+
+        // Role-based access
+        static let role = "role"
+
+        // Cleanup feature (nested)
+        static let cleanup = "cleanup"
+
+        // Jamf Protect (nested)
+        static let jamfProtect = "jamfProtect"
     }
     
     private init() {
@@ -173,7 +182,34 @@ class MDMConfigurationManager: ObservableObject {
         } else {
             sidebarItems = MDMConfiguration.default.sidebarItems
         }
-        
+
+        // Operator role (Admin / Support / User). Accept top-level or nested.
+        let role = (defaults.string(forKey: MDMKeys.role))
+            ?? (jamfProDict[MDMKeys.role] as? String)
+            ?? "Admin"
+
+        // Cleanup feature settings (nested)
+        var cleanupStaleDays = 90
+        var cleanupDefaultStaticGroupID: String? = nil
+        var cleanupDefaultSiteID: String? = nil
+        if let cleanupDict = defaults.dictionary(forKey: MDMKeys.cleanup) {
+            if let days = cleanupDict["staleDays"] as? Int { cleanupStaleDays = days }
+            else if let s = cleanupDict["staleDays"] as? String, let days = Int(s) { cleanupStaleDays = days }
+            cleanupDefaultStaticGroupID = cleanupDict["defaultStaticGroupID"] as? String
+            cleanupDefaultSiteID = cleanupDict["defaultSiteID"] as? String
+        }
+
+        // Jamf Protect settings (nested). The password is never delivered
+        // here — it lives in the Keychain.
+        var protectEnabled = false
+        var protectURL: String? = nil
+        var protectClientID: String? = nil
+        if let protectDict = defaults.dictionary(forKey: MDMKeys.jamfProtect) {
+            protectEnabled = protectDict["enabled"] as? Bool ?? false
+            protectURL = protectDict["url"] as? String
+            protectClientID = protectDict["clientID"] as? String
+        }
+
         return MDMConfiguration(
             jamfURL: serverURL,
             masterClientID: clientID,
@@ -187,7 +223,14 @@ class MDMConfigurationManager: ObservableObject {
             screenShareEnabled: screenShareEnabled,
             abmClientId: abmClientId,
             abmKeyId: abmKeyId,
-            abmPrivateKey: abmPrivateKey
+            abmPrivateKey: abmPrivateKey,
+            role: role,
+            cleanupStaleDays: cleanupStaleDays,
+            cleanupDefaultStaticGroupID: cleanupDefaultStaticGroupID,
+            cleanupDefaultSiteID: cleanupDefaultSiteID,
+            protectEnabled: protectEnabled,
+            protectURL: protectURL,
+            protectClientID: protectClientID
         )
     }
     

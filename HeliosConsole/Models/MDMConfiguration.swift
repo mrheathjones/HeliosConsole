@@ -28,7 +28,21 @@ struct MDMConfiguration: Codable {
     let abmClientId: String?
     let abmKeyId: String?
     let abmPrivateKey: String?
-    
+
+    // MARK: - Role-based access + Cleanup feature (Jamf stale-device cleanup)
+    /// Operator role delivered by MDM (Admin / Support / User). The Cleanup
+    /// feature is Admin-only. Absent → treated as Admin.
+    let role: String?
+    /// Stale threshold (days without check-in) used by Cleanup.
+    let cleanupStaleDays: Int
+    let cleanupDefaultStaticGroupID: String?
+    let cleanupDefaultSiteID: String?
+
+    // Jamf Protect (optional, gated)
+    let protectEnabled: Bool
+    let protectURL: String?
+    let protectClientID: String?
+
     var isABMConfigured: Bool {
         guard let clientId = abmClientId, !clientId.isEmpty,
               let keyId = abmKeyId, !keyId.isEmpty,
@@ -36,6 +50,63 @@ struct MDMConfiguration: Codable {
             return false
         }
         return true
+    }
+
+    enum AppRole: String {
+        case admin = "Admin"
+        case support = "Support"
+        case user = "User"
+    }
+
+    var appRole: AppRole {
+        AppRole(rawValue: role ?? "Admin") ?? .admin
+    }
+
+    /// Whether the Cleanup feature should be available to this operator.
+    var isCleanupAdmin: Bool { appRole == .admin }
+
+    init(
+        jamfURL: String,
+        masterClientID: String,
+        masterClientSecret: String,
+        appTitle: String,
+        appSubtitle: String,
+        sidebarItems: [SidebarItemConfig],
+        requiredRoleName: String,
+        supportURL: String?,
+        localAdminUsername: String,
+        screenShareEnabled: Bool,
+        abmClientId: String?,
+        abmKeyId: String?,
+        abmPrivateKey: String?,
+        role: String? = "Admin",
+        cleanupStaleDays: Int = 90,
+        cleanupDefaultStaticGroupID: String? = nil,
+        cleanupDefaultSiteID: String? = nil,
+        protectEnabled: Bool = false,
+        protectURL: String? = nil,
+        protectClientID: String? = nil
+    ) {
+        self.jamfURL = jamfURL
+        self.masterClientID = masterClientID
+        self.masterClientSecret = masterClientSecret
+        self.appTitle = appTitle
+        self.appSubtitle = appSubtitle
+        self.sidebarItems = sidebarItems
+        self.requiredRoleName = requiredRoleName
+        self.supportURL = supportURL
+        self.localAdminUsername = localAdminUsername
+        self.screenShareEnabled = screenShareEnabled
+        self.abmClientId = abmClientId
+        self.abmKeyId = abmKeyId
+        self.abmPrivateKey = abmPrivateKey
+        self.role = role
+        self.cleanupStaleDays = cleanupStaleDays
+        self.cleanupDefaultStaticGroupID = cleanupDefaultStaticGroupID
+        self.cleanupDefaultSiteID = cleanupDefaultSiteID
+        self.protectEnabled = protectEnabled
+        self.protectURL = protectURL
+        self.protectClientID = protectClientID
     }
     
     struct SidebarItemConfig: Codable, Identifiable {
