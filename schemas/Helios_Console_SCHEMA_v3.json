@@ -1,0 +1,144 @@
+{
+  "title": "Helios Console Configuration",
+  "description": "Configuration profile for Helios Console MDM application",
+  "properties": {
+    "jamfPro": {
+      "title": "Jamf Pro Connection",
+      "description": "Jamf Pro server connection and API credentials",
+      "type": "object",
+      "properties": {
+        "serverURL": {
+          "title": "Server URL",
+          "description": "Full Jamf Pro server URL (e.g., https://myorg.jamfcloud.com)",
+          "type": "string"
+        },
+        "masterClientID": {
+          "title": "Master Client ID",
+          "description": "OAuth client ID for the master API integration (used for read-only inventory)",
+          "type": "string"
+        },
+        "masterClientSecret": {
+          "title": "Master Client Secret",
+          "description": "OAuth client secret for the master API integration",
+          "type": "string"
+        },
+        "requiredRoleName": {
+          "title": "Required Role Name",
+          "description": "Jamf Pro API role assigned to per-user integrations",
+          "type": "string",
+          "default": "SVC_WATCHER_USER"
+        },
+        "screenShareEnabled": {
+          "title": "Enable Screen Share",
+          "description": "Show the Screen Share action in the device Actions menu. Uses Apple's built-in Screen Sharing app with VPN IP preference (EA_VPN_IP_ADDRESS).",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": ["serverURL", "masterClientID", "masterClientSecret"]
+    },
+    "userInterface": {
+      "title": "User Interface",
+      "description": "UI customization settings",
+      "type": "object",
+      "properties": {
+        "appTitle": {
+          "title": "App Title",
+          "description": "Primary title displayed in the sidebar header",
+          "type": "string",
+          "default": "Helios"
+        },
+        "appSubtitle": {
+          "title": "App Subtitle",
+          "description": "Subtitle displayed below the app title",
+          "type": "string",
+          "default": "Console"
+        },
+        "supportURL": {
+          "title": "Support URL",
+          "description": "URL for the support link (optional)",
+          "type": "string"
+        }
+      }
+    },
+    "localAdministration": {
+      "title": "Local Administration",
+      "description": "Local admin account settings for LAPS lookups",
+      "type": "object",
+      "properties": {
+        "username": {
+          "title": "Local Admin Username",
+          "description": "Local administrator account name for password lookups",
+          "type": "string",
+          "default": "macadmin"
+        }
+      }
+    },
+    "appleBusinessManager": {
+      "title": "Apple Business Manager",
+      "description": "ABM API credentials for AppleCare coverage lookups",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "title": "Enable ABM Integration",
+          "description": "Enable Apple Business Manager API lookups",
+          "type": "boolean",
+          "default": false
+        },
+        "clientID": {
+          "title": "ABM Client ID",
+          "description": "Apple Business Manager API client ID",
+          "type": "string"
+        },
+        "keyID": {
+          "title": "ABM Key ID",
+          "description": "Apple Business Manager API key identifier",
+          "type": "string"
+        },
+        "privateKey": {
+          "title": "ABM Private Key",
+          "description": "ES256 private key for ABM JWT authentication (PEM format)",
+          "type": "string"
+        }
+      }
+    },
+    "SidebarItems": {
+      "title": "Sidebar Items",
+      "description": "Custom sidebar navigation items (optional — uses defaults if omitted)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Item ID",
+            "description": "Unique identifier for the sidebar item",
+            "type": "string"
+          },
+          "icon": {
+            "title": "SF Symbol",
+            "description": "SF Symbols icon name",
+            "type": "string"
+          },
+          "title": {
+            "title": "Display Title",
+            "description": "Title shown in the sidebar",
+            "type": "string"
+          },
+          "isEnabled": {
+            "title": "Enabled",
+            "description": "Whether this sidebar item is visible",
+            "type": "boolean",
+            "default": true
+          },
+          "order": {
+            "title": "Sort Order",
+            "description": "Display order (lower numbers appear first)",
+            "type": "integer"
+          }
+        },
+        "required": ["id", "icon", "title", "order"]
+      }
+    }
+  },
+  "required": ["jamfPro"]
+}

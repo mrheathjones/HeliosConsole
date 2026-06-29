@@ -1,0 +1,2 @@
+- Helios Console version: 1.0 Build: a00201.
+- Resolved Scaling issue on Dashboard items.

@@ -1,0 +1,881 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		7EB171382F7960E100105721 /* ActionLogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB171372F7960E100105721 /* ActionLogEntry.swift */; };
+		7EB171392F7960E100105721 /* ActionLogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB171372F7960E100105721 /* ActionLogEntry.swift */; };
+		7EB1713B2F7960FA00105721 /* ActionLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB1713A2F7960FA00105721 /* ActionLogService.swift */; };
+		7EB1713C2F7960FA00105721 /* ActionLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB1713A2F7960FA00105721 /* ActionLogService.swift */; };
+		7EB1713F2F79628D00105721 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB1713E2F79628D00105721 /* LogsView.swift */; };
+		F001 /* HeliosConsoleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = S001 /* HeliosConsoleApp.swift */; };
+		F002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A001 /* Assets.xcassets */; };
+		F003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = S003 /* AppSettings.swift */; };
+		F004 /* Computer.swift in Sources */ = {isa = PBXBuildFile; fileRef = S004 /* Computer.swift */; };
+		F005 /* MDMConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S005 /* MDMConfiguration.swift */; };
+		F006 /* MobileDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = S006 /* MobileDevice.swift */; };
+		F007 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = S007 /* User.swift */; };
+		F008 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = S008 /* AuthViewModel.swift */; };
+		F009 /* BiometricAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S009 /* BiometricAuthManager.swift */; };
+		F010 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S010 /* KeychainManager.swift */; };
+		F011 /* MDMConfigurationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S011 /* MDMConfigurationManager.swift */; };
+		F012 /* AbmAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S012 /* AbmAPIService.swift */; };
+		F013 /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S013 /* AnnouncementService.swift */; };
+		F014 /* ComputerInventoryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = S014 /* ComputerInventoryCache.swift */; };
+		F015 /* ComputerInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S015 /* ComputerInventoryService.swift */; };
+		F016 /* ComputerSearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S016 /* ComputerSearchModels.swift */; };
+		F017 /* ComputerSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S017 /* ComputerSearchService.swift */; };
+		F018 /* HealthMetricsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = S018 /* HealthMetricsCalculator.swift */; };
+		F019 /* JamfAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S019 /* JamfAPIService.swift */; };
+		F020 /* MobileDeviceInventoryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = S020 /* MobileDeviceInventoryCache.swift */; };
+		F021 /* MobileDeviceInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S021 /* MobileDeviceInventoryService.swift */; };
+		F022 /* MobileDeviceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S022 /* MobileDeviceModels.swift */; };
+		F023 /* UnifiedSearchResult+ModelIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = S023 /* UnifiedSearchResult+ModelIdentifier.swift */; };
+		F024 /* UnifiedSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S024 /* UnifiedSearchService.swift */; };
+		F025 /* DeviceIconProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = S025 /* DeviceIconProvider.swift */; };
+		F026 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = S026 /* MockData.swift */; };
+		F027 /* BiometricPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S027 /* BiometricPromptView.swift */; };
+		F028 /* BiometricSetupPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S028 /* BiometricSetupPromptView.swift */; };
+		F029 /* FeatureRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = S029 /* FeatureRow.swift */; };
+		F030 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S030 /* LoginView.swift */; };
+		F031 /* SSOButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = S031 /* SSOButton.swift */; };
+		F032 /* ScaleButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = S032 /* ScaleButtonStyle.swift */; };
+		F033 /* WelcomeContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S033 /* WelcomeContentView.swift */; };
+		F034 /* WelcomeLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S034 /* WelcomeLoginView.swift */; };
+		F035 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S035 /* WelcomeView.swift */; };
+		F036 /* PlaceholderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = S036 /* PlaceholderViews.swift */; };
+		F037 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S037 /* SidebarView.swift */; };
+		F038 /* ComputerResultCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = S038 /* ComputerResultCard.swift */; };
+		F039 /* DashboardContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S039 /* DashboardContentView.swift */; };
+		F040 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S040 /* DashboardView.swift */; };
+		F041 /* DeviceHealthSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = S041 /* DeviceHealthSection.swift */; };
+		F042 /* DeviceListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = S042 /* DeviceListRow.swift */; };
+		F043 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S043 /* DeviceListView.swift */; };
+		F044 /* DeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S044 /* DeviceView.swift */; };
+		F045 /* HealthFilteredDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S045 /* HealthFilteredDeviceListView.swift */; };
+		F046 /* MobileDeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S046 /* MobileDeviceView.swift */; };
+		F047 /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S047 /* AnnouncementsView.swift */; };
+		F048 /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S048 /* ReportsView.swift */; };
+		F049 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S049 /* SettingsView.swift */; };
+		F050 /* EnrollmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S050 /* EnrollmentsView.swift */; };
+		F051 /* AnimatedBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S051 /* AnimatedBackgroundView.swift */; };
+		F052 /* HealthMetricType.swift in Sources */ = {isa = PBXBuildFile; fileRef = S052 /* HealthMetricType.swift */; };
+		F053 /* HealthMetricView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S053 /* HealthMetricView.swift */; };
+		F054 /* HealthScorecardCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = S054 /* HealthScorecardCard.swift */; };
+		F055 /* InventoryLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S055 /* InventoryLoadingView.swift */; };
+		F056 /* ThemeColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = S056 /* ThemeColors.swift */; };
+		F060 /* DeviceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = S060 /* DeviceListItem.swift */; };
+		F061 /* PlatformType.swift in Sources */ = {isa = PBXBuildFile; fileRef = S061 /* PlatformType.swift */; };
+		F062 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = S062 /* DeepLinkRouter.swift */; };
+		MB_F001 /* HeliosMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MB_S001 /* HeliosMenuBarApp.swift */; };
+		MB_F002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A001 /* Assets.xcassets */; };
+		MB_F003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = S003 /* AppSettings.swift */; };
+		MB_F004 /* Computer.swift in Sources */ = {isa = PBXBuildFile; fileRef = S004 /* Computer.swift */; };
+		MB_F005 /* MDMConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S005 /* MDMConfiguration.swift */; };
+		MB_F006 /* MobileDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = S006 /* MobileDevice.swift */; };
+		MB_F007 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = S007 /* User.swift */; };
+		MB_F010 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S010 /* KeychainManager.swift */; };
+		MB_F011 /* MDMConfigurationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = S011 /* MDMConfigurationManager.swift */; };
+		MB_F014 /* ComputerInventoryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = S014 /* ComputerInventoryCache.swift */; };
+		MB_F015 /* ComputerInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S015 /* ComputerInventoryService.swift */; };
+		MB_F016 /* ComputerSearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S016 /* ComputerSearchModels.swift */; };
+		MB_F017 /* ComputerSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S017 /* ComputerSearchService.swift */; };
+		MB_F019 /* JamfAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S019 /* JamfAPIService.swift */; };
+		MB_F020 /* MobileDeviceInventoryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = S020 /* MobileDeviceInventoryCache.swift */; };
+		MB_F021 /* MobileDeviceInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S021 /* MobileDeviceInventoryService.swift */; };
+		MB_F022 /* MobileDeviceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S022 /* MobileDeviceModels.swift */; };
+		MB_F023 /* UnifiedSearchResult+ModelIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = S023 /* UnifiedSearchResult+ModelIdentifier.swift */; };
+		MB_F024 /* UnifiedSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S024 /* UnifiedSearchService.swift */; };
+		MB_F025 /* DeviceIconProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = S025 /* DeviceIconProvider.swift */; };
+		MB_F056 /* ThemeColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = S056 /* ThemeColors.swift */; };
+		MB_F060 /* DeviceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = S060 /* DeviceListItem.swift */; };
+		MB_F061 /* PlatformType.swift in Sources */ = {isa = PBXBuildFile; fileRef = S061 /* PlatformType.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		7EB171372F7960E100105721 /* ActionLogEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionLogEntry.swift; sourceTree = "<group>"; };
+		7EB1713A2F7960FA00105721 /* ActionLogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionLogService.swift; sourceTree = "<group>"; };
+		7EB1713E2F79628D00105721 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		A001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		MB_E001 /* HeliosMenuBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HeliosMenuBar.entitlements; sourceTree = "<group>"; };
+		MB_P001 /* HeliosMenuBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HeliosMenuBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		MB_S001 /* HeliosMenuBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeliosMenuBarApp.swift; sourceTree = "<group>"; };
+		P001 /* HeliosConsole.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HeliosConsole.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		S001 /* HeliosConsoleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeliosConsoleApp.swift; sourceTree = "<group>"; };
+		S003 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		S004 /* Computer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Computer.swift; sourceTree = "<group>"; };
+		S005 /* MDMConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMConfiguration.swift; sourceTree = "<group>"; };
+		S006 /* MobileDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDevice.swift; sourceTree = "<group>"; };
+		S007 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
+		S008 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		S009 /* BiometricAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricAuthManager.swift; sourceTree = "<group>"; };
+		S010 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		S011 /* MDMConfigurationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMConfigurationManager.swift; sourceTree = "<group>"; };
+		S012 /* AbmAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AbmAPIService.swift; sourceTree = "<group>"; };
+		S013 /* AnnouncementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementService.swift; sourceTree = "<group>"; };
+		S014 /* ComputerInventoryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerInventoryCache.swift; sourceTree = "<group>"; };
+		S015 /* ComputerInventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerInventoryService.swift; sourceTree = "<group>"; };
+		S016 /* ComputerSearchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerSearchModels.swift; sourceTree = "<group>"; };
+		S017 /* ComputerSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerSearchService.swift; sourceTree = "<group>"; };
+		S018 /* HealthMetricsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricsCalculator.swift; sourceTree = "<group>"; };
+		S019 /* JamfAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfAPIService.swift; sourceTree = "<group>"; };
+		S020 /* MobileDeviceInventoryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceInventoryCache.swift; sourceTree = "<group>"; };
+		S021 /* MobileDeviceInventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceInventoryService.swift; sourceTree = "<group>"; };
+		S022 /* MobileDeviceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceModels.swift; sourceTree = "<group>"; };
+		S023 /* UnifiedSearchResult+ModelIdentifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UnifiedSearchResult+ModelIdentifier.swift"; sourceTree = "<group>"; };
+		S024 /* UnifiedSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSearchService.swift; sourceTree = "<group>"; };
+		S025 /* DeviceIconProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIconProvider.swift; sourceTree = "<group>"; };
+		S026 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
+		S027 /* BiometricPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricPromptView.swift; sourceTree = "<group>"; };
+		S028 /* BiometricSetupPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricSetupPromptView.swift; sourceTree = "<group>"; };
+		S029 /* FeatureRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureRow.swift; sourceTree = "<group>"; };
+		S030 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		S031 /* SSOButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSOButton.swift; sourceTree = "<group>"; };
+		S032 /* ScaleButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleButtonStyle.swift; sourceTree = "<group>"; };
+		S033 /* WelcomeContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeContentView.swift; sourceTree = "<group>"; };
+		S034 /* WelcomeLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeLoginView.swift; sourceTree = "<group>"; };
+		S035 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		S036 /* PlaceholderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderViews.swift; sourceTree = "<group>"; };
+		S037 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		S038 /* ComputerResultCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerResultCard.swift; sourceTree = "<group>"; };
+		S039 /* DashboardContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardContentView.swift; sourceTree = "<group>"; };
+		S040 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		S041 /* DeviceHealthSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceHealthSection.swift; sourceTree = "<group>"; };
+		S042 /* DeviceListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListRow.swift; sourceTree = "<group>"; };
+		S043 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
+		S044 /* DeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceView.swift; sourceTree = "<group>"; };
+		S045 /* HealthFilteredDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthFilteredDeviceListView.swift; sourceTree = "<group>"; };
+		S046 /* MobileDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceView.swift; sourceTree = "<group>"; };
+		S047 /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
+		S048 /* ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsView.swift; sourceTree = "<group>"; };
+		S049 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		S050 /* EnrollmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentsView.swift; sourceTree = "<group>"; };
+		S051 /* AnimatedBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedBackgroundView.swift; sourceTree = "<group>"; };
+		S052 /* HealthMetricType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricType.swift; sourceTree = "<group>"; };
+		S053 /* HealthMetricView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricView.swift; sourceTree = "<group>"; };
+		S054 /* HealthScorecardCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthScorecardCard.swift; sourceTree = "<group>"; };
+		S055 /* InventoryLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryLoadingView.swift; sourceTree = "<group>"; };
+		S056 /* ThemeColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeColors.swift; sourceTree = "<group>"; };
+		S060 /* DeviceListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListItem.swift; sourceTree = "<group>"; };
+		S061 /* PlatformType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformType.swift; sourceTree = "<group>"; };
+		S062 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FRMWK001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		MB_FRMWK001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		7EB1713D2F79626000105721 /* Logs */ = {
+			isa = PBXGroup;
+			children = (
+				7EB1713E2F79628D00105721 /* LogsView.swift */,
+			);
+			path = Logs;
+			sourceTree = "<group>";
+		};
+		GRP001 /* HeliosConsole */ = {
+			isa = PBXGroup;
+			children = (
+				S001 /* HeliosConsoleApp.swift */,
+				GRP003 /* Models */,
+				GRP004 /* ViewModels */,
+				GRP005 /* Managers */,
+				GRP006 /* Services */,
+				GRP007 /* Utilities */,
+				GRP008 /* Data */,
+				GRP009 /* Views */,
+				MB_GRP001 /* MenuBarApp */,
+				A001 /* Assets.xcassets */,
+			);
+			path = HeliosConsole;
+			sourceTree = "<group>";
+		};
+		GRP002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				P001 /* HeliosConsole.app */,
+				MB_P001 /* HeliosMenuBar.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		GRP003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				S003 /* AppSettings.swift */,
+				S004 /* Computer.swift */,
+				S005 /* MDMConfiguration.swift */,
+				S006 /* MobileDevice.swift */,
+				S007 /* User.swift */,
+				S060 /* DeviceListItem.swift */,
+				S061 /* PlatformType.swift */,
+				7EB171372F7960E100105721 /* ActionLogEntry.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		GRP004 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				S008 /* AuthViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		GRP005 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				S009 /* BiometricAuthManager.swift */,
+				S010 /* KeychainManager.swift */,
+				S011 /* MDMConfigurationManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		GRP006 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				S012 /* AbmAPIService.swift */,
+				S013 /* AnnouncementService.swift */,
+				S014 /* ComputerInventoryCache.swift */,
+				S015 /* ComputerInventoryService.swift */,
+				S016 /* ComputerSearchModels.swift */,
+				S017 /* ComputerSearchService.swift */,
+				S018 /* HealthMetricsCalculator.swift */,
+				S019 /* JamfAPIService.swift */,
+				S020 /* MobileDeviceInventoryCache.swift */,
+				S021 /* MobileDeviceInventoryService.swift */,
+				S022 /* MobileDeviceModels.swift */,
+				S023 /* UnifiedSearchResult+ModelIdentifier.swift */,
+				S024 /* UnifiedSearchService.swift */,
+				S062 /* DeepLinkRouter.swift */,
+				7EB1713A2F7960FA00105721 /* ActionLogService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		GRP007 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				S025 /* DeviceIconProvider.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		GRP008 /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				S026 /* MockData.swift */,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		GRP009 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				GRP010 /* Authentication */,
+				GRP011 /* Sidebar */,
+				GRP012 /* Dashboard */,
+				GRP013 /* Device */,
+				GRP014 /* Announcement */,
+				GRP015 /* Reports */,
+				GRP016 /* Settings */,
+				GRP017 /* Enrollments */,
+				GRP018 /* Components */,
+				7EB1713D2F79626000105721 /* Logs */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		GRP010 /* Authentication */ = {
+			isa = PBXGroup;
+			children = (
+				S027 /* BiometricPromptView.swift */,
+				S028 /* BiometricSetupPromptView.swift */,
+				S029 /* FeatureRow.swift */,
+				S030 /* LoginView.swift */,
+				S031 /* SSOButton.swift */,
+				S032 /* ScaleButtonStyle.swift */,
+				S033 /* WelcomeContentView.swift */,
+				S034 /* WelcomeLoginView.swift */,
+				S035 /* WelcomeView.swift */,
+			);
+			path = Authentication;
+			sourceTree = "<group>";
+		};
+		GRP011 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				S036 /* PlaceholderViews.swift */,
+				S037 /* SidebarView.swift */,
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		GRP012 /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				S038 /* ComputerResultCard.swift */,
+				S039 /* DashboardContentView.swift */,
+				S040 /* DashboardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		GRP013 /* Device */ = {
+			isa = PBXGroup;
+			children = (
+				S041 /* DeviceHealthSection.swift */,
+				S042 /* DeviceListRow.swift */,
+				S043 /* DeviceListView.swift */,
+				S044 /* DeviceView.swift */,
+				S045 /* HealthFilteredDeviceListView.swift */,
+				S046 /* MobileDeviceView.swift */,
+			);
+			path = Device;
+			sourceTree = "<group>";
+		};
+		GRP014 /* Announcement */ = {
+			isa = PBXGroup;
+			children = (
+				S047 /* AnnouncementsView.swift */,
+			);
+			path = Announcement;
+			sourceTree = "<group>";
+		};
+		GRP015 /* Reports */ = {
+			isa = PBXGroup;
+			children = (
+				S048 /* ReportsView.swift */,
+			);
+			path = Reports;
+			sourceTree = "<group>";
+		};
+		GRP016 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				S049 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		GRP017 /* Enrollments */ = {
+			isa = PBXGroup;
+			children = (
+				S050 /* EnrollmentsView.swift */,
+			);
+			path = Enrollments;
+			sourceTree = "<group>";
+		};
+		GRP018 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				S051 /* AnimatedBackgroundView.swift */,
+				S052 /* HealthMetricType.swift */,
+				S053 /* HealthMetricView.swift */,
+				S054 /* HealthScorecardCard.swift */,
+				S055 /* InventoryLoadingView.swift */,
+				S056 /* ThemeColors.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		MB_GRP001 /* MenuBarApp */ = {
+			isa = PBXGroup;
+			children = (
+				MB_S001 /* HeliosMenuBarApp.swift */,
+				MB_E001 /* HeliosMenuBar.entitlements */,
+			);
+			path = MenuBarApp;
+			sourceTree = "<group>";
+		};
+		ROOT001 = {
+			isa = PBXGroup;
+			children = (
+				GRP001 /* HeliosConsole */,
+				GRP002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		MB_TGT001 /* HeliosMenuBar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = MB_CFG003 /* Build configuration list for PBXNativeTarget "HeliosMenuBar" */;
+			buildPhases = (
+				MB_SRC001PH /* Sources */,
+				MB_FRMWK001 /* Frameworks */,
+				MB_RES001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HeliosMenuBar;
+			productName = HeliosMenuBar;
+			productReference = MB_P001 /* HeliosMenuBar.app */;
+			productType = "com.apple.product-type.application";
+		};
+		TGT001 /* HeliosConsole */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG003 /* Build configuration list for PBXNativeTarget "HeliosConsole" */;
+			buildPhases = (
+				SRC001PH /* Sources */,
+				FRMWK001 /* Frameworks */,
+				RES001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HeliosConsole;
+			productName = HeliosConsole;
+			productReference = P001 /* HeliosConsole.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PRJ001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					MB_TGT001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					TGT001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = CFG001 /* Build configuration list for PBXProject "HeliosConsole" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = ROOT001;
+			productRefGroup = GRP002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				TGT001 /* HeliosConsole */,
+				MB_TGT001 /* HeliosMenuBar */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		MB_RES001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MB_F002 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		RES001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F002 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		MB_SRC001PH /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MB_F001 /* HeliosMenuBarApp.swift in Sources */,
+				MB_F003 /* AppSettings.swift in Sources */,
+				7EB1713C2F7960FA00105721 /* ActionLogService.swift in Sources */,
+				MB_F004 /* Computer.swift in Sources */,
+				MB_F005 /* MDMConfiguration.swift in Sources */,
+				MB_F006 /* MobileDevice.swift in Sources */,
+				MB_F007 /* User.swift in Sources */,
+				MB_F010 /* KeychainManager.swift in Sources */,
+				MB_F011 /* MDMConfigurationManager.swift in Sources */,
+				MB_F014 /* ComputerInventoryCache.swift in Sources */,
+				MB_F015 /* ComputerInventoryService.swift in Sources */,
+				MB_F016 /* ComputerSearchModels.swift in Sources */,
+				MB_F017 /* ComputerSearchService.swift in Sources */,
+				MB_F019 /* JamfAPIService.swift in Sources */,
+				MB_F020 /* MobileDeviceInventoryCache.swift in Sources */,
+				MB_F021 /* MobileDeviceInventoryService.swift in Sources */,
+				MB_F022 /* MobileDeviceModels.swift in Sources */,
+				MB_F023 /* UnifiedSearchResult+ModelIdentifier.swift in Sources */,
+				7EB171392F7960E100105721 /* ActionLogEntry.swift in Sources */,
+				MB_F024 /* UnifiedSearchService.swift in Sources */,
+				MB_F025 /* DeviceIconProvider.swift in Sources */,
+				MB_F056 /* ThemeColors.swift in Sources */,
+				MB_F060 /* DeviceListItem.swift in Sources */,
+				MB_F061 /* PlatformType.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		SRC001PH /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F001 /* HeliosConsoleApp.swift in Sources */,
+				F003 /* AppSettings.swift in Sources */,
+				7EB1713B2F7960FA00105721 /* ActionLogService.swift in Sources */,
+				F004 /* Computer.swift in Sources */,
+				F005 /* MDMConfiguration.swift in Sources */,
+				F006 /* MobileDevice.swift in Sources */,
+				F007 /* User.swift in Sources */,
+				F008 /* AuthViewModel.swift in Sources */,
+				F009 /* BiometricAuthManager.swift in Sources */,
+				F010 /* KeychainManager.swift in Sources */,
+				F011 /* MDMConfigurationManager.swift in Sources */,
+				F012 /* AbmAPIService.swift in Sources */,
+				F013 /* AnnouncementService.swift in Sources */,
+				F014 /* ComputerInventoryCache.swift in Sources */,
+				F015 /* ComputerInventoryService.swift in Sources */,
+				F016 /* ComputerSearchModels.swift in Sources */,
+				F017 /* ComputerSearchService.swift in Sources */,
+				F018 /* HealthMetricsCalculator.swift in Sources */,
+				F019 /* JamfAPIService.swift in Sources */,
+				F020 /* MobileDeviceInventoryCache.swift in Sources */,
+				F021 /* MobileDeviceInventoryService.swift in Sources */,
+				F022 /* MobileDeviceModels.swift in Sources */,
+				F023 /* UnifiedSearchResult+ModelIdentifier.swift in Sources */,
+				F024 /* UnifiedSearchService.swift in Sources */,
+				F025 /* DeviceIconProvider.swift in Sources */,
+				F026 /* MockData.swift in Sources */,
+				F027 /* BiometricPromptView.swift in Sources */,
+				F028 /* BiometricSetupPromptView.swift in Sources */,
+				F029 /* FeatureRow.swift in Sources */,
+				F030 /* LoginView.swift in Sources */,
+				F031 /* SSOButton.swift in Sources */,
+				F032 /* ScaleButtonStyle.swift in Sources */,
+				F033 /* WelcomeContentView.swift in Sources */,
+				F034 /* WelcomeLoginView.swift in Sources */,
+				7EB1713F2F79628D00105721 /* LogsView.swift in Sources */,
+				F035 /* WelcomeView.swift in Sources */,
+				F036 /* PlaceholderViews.swift in Sources */,
+				F037 /* SidebarView.swift in Sources */,
+				F038 /* ComputerResultCard.swift in Sources */,
+				F039 /* DashboardContentView.swift in Sources */,
+				F040 /* DashboardView.swift in Sources */,
+				F041 /* DeviceHealthSection.swift in Sources */,
+				F042 /* DeviceListRow.swift in Sources */,
+				F043 /* DeviceListView.swift in Sources */,
+				F044 /* DeviceView.swift in Sources */,
+				F045 /* HealthFilteredDeviceListView.swift in Sources */,
+				F046 /* MobileDeviceView.swift in Sources */,
+				F047 /* AnnouncementsView.swift in Sources */,
+				F048 /* ReportsView.swift in Sources */,
+				F049 /* SettingsView.swift in Sources */,
+				7EB171382F7960E100105721 /* ActionLogEntry.swift in Sources */,
+				F050 /* EnrollmentsView.swift in Sources */,
+				F051 /* AnimatedBackgroundView.swift in Sources */,
+				F052 /* HealthMetricType.swift in Sources */,
+				F053 /* HealthMetricView.swift in Sources */,
+				F054 /* HealthScorecardCard.swift in Sources */,
+				F055 /* InventoryLoadingView.swift in Sources */,
+				F056 /* ThemeColors.swift in Sources */,
+				F060 /* DeviceListItem.swift in Sources */,
+				F061 /* PlatformType.swift in Sources */,
+				F062 /* DeepLinkRouter.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		CFG_DEBUG /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CFG_RELEASE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		CFG_TGT_DEBUG /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HeliosConsole/HeliosConsole.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = a00201;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HeliosConsole/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		CFG_TGT_RELEASE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HeliosConsole/HeliosConsole.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = a00201;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HeliosConsole/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		MB_CFG_TGT_DEBUG /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HeliosConsole/MenuBarApp/HeliosMenuBar.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = a00201;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console.menubar;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		MB_CFG_TGT_RELEASE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HeliosConsole/MenuBarApp/HeliosMenuBar.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = a00201;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console.menubar;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CFG001 /* Build configuration list for PBXProject "HeliosConsole" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG_DEBUG /* Debug */,
+				CFG_RELEASE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFG003 /* Build configuration list for PBXNativeTarget "HeliosConsole" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG_TGT_DEBUG /* Debug */,
+				CFG_TGT_RELEASE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		MB_CFG003 /* Build configuration list for PBXNativeTarget "HeliosMenuBar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				MB_CFG_TGT_DEBUG /* Debug */,
+				MB_CFG_TGT_RELEASE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = PRJ001 /* Project object */;
+}
