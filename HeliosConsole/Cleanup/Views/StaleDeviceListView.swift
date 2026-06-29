@@ -40,6 +40,27 @@ struct StaleDeviceListView: View {
         !visibleDevices.isEmpty && visibleSelectedCount == visibleDevices.count
     }
 
+    private var exportFilename: String {
+        ExportNaming.filename("Helios", filter.title, date: Date())
+    }
+
+    /// Builds a report from exactly what the list currently shows.
+    private func buildTable() -> ReportTable {
+        var subtitle = "Filter: \(filter.title)"
+        if !searchText.isEmpty {
+            subtitle += " • search “\(searchText)”"
+        }
+        return ReportBuilders.deviceTable(
+            title: "Helios Cleanup — \(filter.title)",
+            subtitle: subtitle,
+            devices: visibleDevices,
+            columns: ReportColumn.allCases,
+            staleDays: model.settings.staleDays,
+            includeSummary: true,
+            generatedAt: Date()
+        )
+    }
+
     var body: some View {
         deviceTable
             .navigationTitle(filter.title)
@@ -52,6 +73,9 @@ struct StaleDeviceListView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
+                    CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
+                        .disabled(visibleDevices.isEmpty)
+
                     Button {
                         Task { await model.refresh() }
                     } label: {

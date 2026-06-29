@@ -13,6 +13,7 @@ struct CleanupDashboardView: View {
     @Binding var showSettings: Bool
     @AppStorage("dashboard.cleanupSitesExpanded") private var sitesExpanded = true
     @AppStorage(CleanupSettings.Key.staleDays) private var staleDays = 90
+    @State private var showReportBuilder = false
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: 190, maximum: 280), spacing: 14)]
@@ -108,6 +109,10 @@ struct CleanupDashboardView: View {
         }
         .refreshable {
             await model.refresh()
+        }
+        .sheet(isPresented: $showReportBuilder) {
+            CleanupReportBuilderView()
+                .environment(model)
         }
     }
 
@@ -220,6 +225,13 @@ struct CleanupDashboardView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             staleDaysMenu
+
+            Button {
+                showReportBuilder = true
+            } label: {
+                Label("Report Builder", systemImage: "doc.badge.plus")
+            }
+            .disabled(model.devices.isEmpty && model.protectDevices.isEmpty)
 
             Button {
                 Task { await model.refresh() }

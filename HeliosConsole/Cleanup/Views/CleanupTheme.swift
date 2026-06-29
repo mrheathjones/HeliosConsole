@@ -119,4 +119,29 @@ enum CleanupFormatters {
         guard let date else { return "Never" }
         return lastContact.string(from: date)
     }
+
+    /// Stable, locale-independent timestamp for report cells.
+    static let report: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
+
+    static func reportDate(_ date: Date?) -> String {
+        guard let date else { return "Never" }
+        return report.string(from: date)
+    }
+
+    /// Date stamp for export filenames, e.g. 2026-06-11.
+    static let fileStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    static func fileDate(_ date: Date) -> String {
+        fileStamp.string(from: date)
+    }
 }

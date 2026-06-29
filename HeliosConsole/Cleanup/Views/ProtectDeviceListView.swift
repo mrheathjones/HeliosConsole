@@ -39,6 +39,25 @@ struct ProtectDeviceListView: View {
         visibleDevices.count(where: { selection.contains($0.uuid) })
     }
 
+    private var exportFilename: String {
+        ExportNaming.filename("Helios", filter.title, date: Date())
+    }
+
+    private func buildTable() -> ReportTable {
+        var subtitle = "Jamf Protect • \(filter.title)"
+        if !searchText.isEmpty {
+            subtitle += " • search “\(searchText)”"
+        }
+        return ReportBuilders.protectTable(
+            title: "Helios Cleanup — \(filter.title)",
+            subtitle: subtitle,
+            devices: visibleDevices,
+            staleDays: model.settings.staleDays,
+            includeSummary: true,
+            generatedAt: Date()
+        )
+    }
+
     var body: some View {
         List(visibleDevices) { device in
             ProtectRow(
@@ -60,6 +79,9 @@ struct ProtectDeviceListView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
+                    .disabled(visibleDevices.isEmpty)
+
                 Button {
                     Task { await model.refresh() }
                 } label: {
