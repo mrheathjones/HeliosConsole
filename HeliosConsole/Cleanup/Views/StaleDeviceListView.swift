@@ -73,19 +73,6 @@ struct StaleDeviceListView: View {
                     selectionBar
                 }
             }
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
-                        .disabled(visibleDevices.isEmpty)
-
-                    Button {
-                        Task { await model.refresh() }
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .disabled(model.isLoading)
-                }
-            }
             .sheet(isPresented: $showActions) {
                 CleanupActionsSheet()
                     .environment(model)
@@ -140,6 +127,19 @@ struct StaleDeviceListView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+
+            CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
+                .disabled(visibleDevices.isEmpty)
+                .controlSize(.small)
+
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isLoading)
+            .help("Refresh")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

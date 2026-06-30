@@ -37,6 +37,8 @@ struct CleanupDashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                headerBar
+
                 if let error = model.loadError, model.devices.isEmpty {
                     errorCard(error)
                 }
@@ -105,8 +107,6 @@ struct CleanupDashboardView: View {
             .padding(20)
         }
         .scrollContentBackground(.hidden)
-        .navigationTitle("Cleanup")
-        .toolbar { toolbarContent }
         .overlay {
             if model.isLoading && model.devices.isEmpty && model.loadError == nil {
                 VStack(spacing: 14) {
@@ -234,33 +234,53 @@ struct CleanupDashboardView: View {
         .glassCard()
     }
 
-    // MARK: - Toolbar
+    // MARK: - Inline header (actions live in the content, top-right — Helios's
+    // window has no nav toolbar, so SwiftUI .toolbar items would land over the
+    // sidebar/traffic-lights).
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
+    private var headerBar: some View {
+        HStack(spacing: 10) {
+            Text("Cleanup")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+
+            Spacer()
+
             staleDaysMenu
 
-            Button {
+            headerIconButton("doc.badge.plus", help: "Report Builder",
+                             disabled: model.devices.isEmpty && model.protectDevices.isEmpty) {
                 showReportBuilder = true
-            } label: {
-                Label("Report Builder", systemImage: "doc.badge.plus")
             }
-            .disabled(model.devices.isEmpty && model.protectDevices.isEmpty)
-
-            Button {
+            headerIconButton("arrow.clockwise", help: "Refresh", disabled: model.isLoading) {
                 Task { await model.refresh() }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(model.isLoading)
-
-            Button {
+            headerIconButton("gearshape", help: "Cleanup Settings") {
                 showSettings = true
-            } label: {
-                Label("Cleanup Settings", systemImage: "gearshape")
             }
         }
+    }
+
+    private func headerIconButton(
+        _ systemName: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 32, height: 32)
+                Image(systemName: systemName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
+        .help(help)
     }
 
     private var staleDaysMenu: some View {
@@ -274,8 +294,19 @@ struct CleanupDashboardView: View {
                 }
             }
         } label: {
-            Label("Stale: \(effectiveStaleDays)d", systemImage: "clock.badge.questionmark")
+            HStack(spacing: 6) {
+                Image(systemName: "clock.badge.questionmark")
+                Text("Stale: \(effectiveStaleDays)d")
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(Capsule().fill(Color.white.opacity(0.1)))
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
         .onChange(of: staleDaysStored) {
             Task { await model.refresh() }
         }

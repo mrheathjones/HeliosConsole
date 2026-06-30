@@ -79,19 +79,6 @@ struct ProtectDeviceListView: View {
                 deleteBar
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
-                    .disabled(visibleDevices.isEmpty)
-
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(model.isLoading || isDeleting)
-            }
-        }
         .overlay {
             if visibleDevices.isEmpty {
                 emptyOverlay
@@ -184,6 +171,19 @@ struct ProtectDeviceListView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+
+            CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
+                .disabled(visibleDevices.isEmpty)
+                .controlSize(.small)
+
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isLoading || isDeleting)
+            .help("Refresh")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
