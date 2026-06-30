@@ -2,54 +2,54 @@
 //  CleanupTheme.swift
 //  HeliosConsole
 //
-//  Visual language for the Cleanup feature: a soft gradient backdrop,
-//  glassy cards, a stale badge, a tri-state checkbox, and shared date
-//  formatters. Ported from Clean Slate; MeshGradient (macOS 15+) replaced
-//  with a LinearGradient so it builds on the macOS 14 deployment target.
+//  Visual language for the Cleanup feature, matched to Helios's native look:
+//  translucent-white cards over the app's AnimatedBackgroundView, a circular
+//  back button, a stale badge, a tri-state checkbox, and shared date formatters.
 //
 
 import SwiftUI
 
-struct AppBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        LinearGradient(
-            colors: colorScheme == .dark ? Self.darkColors : Self.lightColors,
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-    }
-
-    private static let lightColors: [Color] = [
-        Color(red: 0.88, green: 0.94, blue: 0.99),
-        Color(red: 0.80, green: 0.90, blue: 0.98),
-        Color(red: 0.78, green: 0.90, blue: 0.94),
-    ]
-
-    private static let darkColors: [Color] = [
-        Color(red: 0.05, green: 0.09, blue: 0.16),
-        Color(red: 0.08, green: 0.14, blue: 0.24),
-        Color(red: 0.05, green: 0.10, blue: 0.17),
-    ]
-}
-
+/// Card styling matched to Helios's native cards (DashboardContentView /
+/// DeviceListRow): a subtle translucent-white fill over the app's animated
+/// background, a faint hairline border, and a soft shadow.
 struct GlassCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(20)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
             )
-            .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
     }
 }
 
 extension View {
     func glassCard() -> some View { modifier(GlassCard()) }
+}
+
+/// Helios-style circular back button (matches DeviceView / MobileDeviceView).
+struct CleanupBackButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 30, height: 30)
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Back to Cleanup")
+    }
 }
 
 /// Color-coded "days stale" badge.

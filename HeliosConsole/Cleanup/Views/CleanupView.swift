@@ -11,15 +11,18 @@ import SwiftUI
 
 struct CleanupView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Binding var isInNestedView: Bool
     @State private var model = CleanupViewModel()
     @State private var showSettings = false
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
         ZStack {
-            AppBackground()
+            // Match Helios's native content background (animated gradient orbs).
+            AnimatedBackgroundView(animate: .constant(true))
 
             if model.settings.isConfigured {
-                NavigationStack {
+                NavigationStack(path: $navigationPath) {
                     CleanupDashboardView(showSettings: $showSettings)
                         .navigationDestination(for: DeviceFilter.self) { filter in
                             StaleDeviceListView(filter: filter)
@@ -34,6 +37,13 @@ struct CleanupView: View {
             }
         }
         .environment(model)
+        // Hide the sidebar while a filtered list is open, like the main app.
+        .onChange(of: navigationPath.count) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isInNestedView = newValue > 0
+            }
+        }
+        .onAppear { isInNestedView = false }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 CleanupSettingsView()

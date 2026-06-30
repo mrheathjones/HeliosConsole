@@ -11,6 +11,7 @@ import SwiftUI
 
 struct StaleDeviceListView: View {
     @Environment(CleanupViewModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     let filter: DeviceFilter
 
     @State private var showActions = false
@@ -64,6 +65,7 @@ struct StaleDeviceListView: View {
     var body: some View {
         deviceTable
             .navigationTitle(filter.title)
+            .navigationBarBackButtonHidden(true)
             .searchable(text: $searchText, prompt: "Name, email, or serial")
             .safeAreaInset(edge: .top, spacing: 0) { countBar }
             .safeAreaInset(edge: .bottom) {
@@ -102,6 +104,8 @@ struct StaleDeviceListView: View {
 
     private var countBar: some View {
         HStack(spacing: 10) {
+            CleanupBackButton { dismiss() }
+
             CleanupCheckBox(state: checkAllState) {
                 model.toggleSelectAll(in: visibleDevices)
             }

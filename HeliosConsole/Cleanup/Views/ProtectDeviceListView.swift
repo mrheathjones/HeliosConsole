@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ProtectDeviceListView: View {
     @Environment(CleanupViewModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     let filter: ProtectFilter
 
     @State private var selection: Set<String> = []
@@ -70,6 +71,7 @@ struct ProtectDeviceListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .navigationTitle(filter.title)
+        .navigationBarBackButtonHidden(true)
         .searchable(text: $searchText, prompt: "Host name or serial")
         .safeAreaInset(edge: .top, spacing: 0) { countBar }
         .safeAreaInset(edge: .bottom) {
@@ -144,6 +146,8 @@ struct ProtectDeviceListView: View {
 
     private var countBar: some View {
         HStack(spacing: 10) {
+            CleanupBackButton { dismiss() }
+
             CleanupCheckBox(state: checkAllState) {
                 let ids = Set(visibleDevices.map(\.uuid))
                 if ids.isSubset(of: selection) {
