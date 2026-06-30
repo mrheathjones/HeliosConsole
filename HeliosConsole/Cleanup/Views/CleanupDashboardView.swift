@@ -14,7 +14,6 @@ struct CleanupDashboardView: View {
     @AppStorage("dashboard.cleanupSitesExpanded") private var sitesExpanded = true
     /// 0 = unset → use the MDM profile's default (config = default, user-overridable).
     @AppStorage(CleanupSettings.Key.staleDays) private var staleDaysStored = 0
-    @State private var showReportBuilder = false
 
     /// The stale threshold actually in effect: the user's in-app choice if set,
     /// otherwise the config-profile default.
@@ -124,10 +123,6 @@ struct CleanupDashboardView: View {
         }
         .refreshable {
             await model.refresh()
-        }
-        .sheet(isPresented: $showReportBuilder) {
-            CleanupReportBuilderView()
-                .environment(model)
         }
     }
 
@@ -248,10 +243,6 @@ struct CleanupDashboardView: View {
 
             staleDaysMenu
 
-            headerIconButton("doc.badge.plus", help: "Report Builder",
-                             disabled: model.devices.isEmpty && model.protectDevices.isEmpty) {
-                showReportBuilder = true
-            }
             headerIconButton("arrow.clockwise", help: "Refresh", disabled: model.isLoading) {
                 Task { await model.refresh() }
             }

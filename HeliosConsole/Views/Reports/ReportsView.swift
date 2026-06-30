@@ -21,7 +21,9 @@ enum ReportFilterCategory: String, CaseIterable, Identifiable, Codable {
     case applications = "Applications"
     case appleCare = "AppleCare"
     case softwareUpdates = "Software Updates"
-    
+    case staleDevices = "Stale Devices"
+    case unmanaged = "Unmanaged"
+
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -34,6 +36,8 @@ enum ReportFilterCategory: String, CaseIterable, Identifiable, Codable {
         case .applications: return "app.badge"
         case .appleCare: return "checkmark.seal.fill"
         case .softwareUpdates: return "arrow.down.circle"
+        case .staleDevices: return "clock.badge.exclamationmark"
+        case .unmanaged: return "antenna.radiowaves.left.and.right.slash"
         }
     }
     var color: Color {
@@ -47,6 +51,8 @@ enum ReportFilterCategory: String, CaseIterable, Identifiable, Codable {
         case .applications: return .pink
         case .appleCare: return .teal
         case .softwareUpdates: return .mint
+        case .staleDevices: return .orange
+        case .unmanaged: return .red
         }
     }
     var description: String {
@@ -60,6 +66,8 @@ enum ReportFilterCategory: String, CaseIterable, Identifiable, Codable {
         case .applications: return "Filter by installed applications"
         case .appleCare: return "Filter by AppleCare coverage status"
         case .softwareUpdates: return "Filter by pending software updates"
+        case .staleDevices: return "Cleanup: devices that have gone quiet (no check-in)"
+        case .unmanaged: return "Cleanup: devices without active MDM management"
         }
     }
     
@@ -132,6 +140,30 @@ enum SoftwareUpdateFilter: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
+// MARK: - Cleanup filters
+
+enum StalenessLevel: String, CaseIterable, Identifiable, Codable {
+    case over30 = "Over 30 days"
+    case over90 = "Over 90 days"
+    case over180 = "Over 180 days"
+    case overOneYear = "Over 1 year"
+    var id: String { rawValue }
+    var days: Int {
+        switch self {
+        case .over30: return 30
+        case .over90: return 90
+        case .over180: return 180
+        case .overOneYear: return 365
+        }
+    }
+}
+
+enum ManagedFilter: String, CaseIterable, Identifiable, Codable {
+    case unmanagedOnly = "Unmanaged Only"
+    case managedOnly = "Managed Only"
+    var id: String { rawValue }
+}
+
 // MARK: - Export Format
 
 enum ExportFormat: String, CaseIterable, Identifiable {
@@ -186,6 +218,8 @@ struct ReportFilter: Identifiable, Codable {
         case applications(type: ApplicationFilterType, appName: String)
         case appleCare(status: AppleCareFilter)
         case softwareUpdates(status: SoftwareUpdateFilter)
+        case staleDevices(level: StalenessLevel)
+        case unmanaged(status: ManagedFilter)
     }
     
     var displayDescription: String {
@@ -199,6 +233,8 @@ struct ReportFilter: Identifiable, Codable {
         case .applications(let t, let n): return "\(t.rawValue): \(n)"
         case .appleCare(let s): return s.rawValue
         case .softwareUpdates(let s): return s.rawValue
+        case .staleDevices(let l): return l.rawValue
+        case .unmanaged(let s): return s.rawValue
         }
     }
 }
@@ -394,6 +430,8 @@ struct ReportsView: View {
     @State private var applicationName = ""
     @State private var appleCareFilter: AppleCareFilter = .active
     @State private var softwareUpdateFilter: SoftwareUpdateFilter = .hasPendingUpdates
+    @State private var stalenessLevel: StalenessLevel = .over90
+    @State private var managedFilter: ManagedFilter = .unmanagedOnly
     
     // Device detail navigation
     @State private var selectedComputer: Computer?
@@ -1072,9 +1110,29 @@ struct ReportsView: View {
                 }
                 .padding(.top, 4)
             }
+        case .staleDevices:
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Find devices that haven't checked in for:").font(.system(size: 14, weight: .medium)).foregroundColor(isDark ? .white : .primary)
+                VStack(spacing: 8) {
+                    ForEach(StalenessLevel.allCases) { level in
+                        radioButton(level.rawValue, selected: stalenessLevel == level) { stalenessLevel = level }
+                    }
+                }
+                previewBox(stalenessLevel.rawValue)
+            }
+        case .unmanaged:
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Filter by MDM management status:").font(.system(size: 14, weight: .medium)).foregroundColor(isDark ? .white : .primary)
+                VStack(spacing: 8) {
+                    ForEach(ManagedFilter.allCases) { filter in
+                        radioButton(filter.rawValue, selected: managedFilter == filter) { managedFilter = filter }
+                    }
+                }
+                previewBox(managedFilter.rawValue)
+            }
         }
     }
-    
+
     private func radioButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
@@ -1130,6 +1188,8 @@ struct ReportsView: View {
         case .applications: applicationFilterType = .hasApp; applicationName = ""
         case .appleCare: appleCareFilter = .active
         case .softwareUpdates: softwareUpdateFilter = .hasPendingUpdates
+        case .staleDevices: stalenessLevel = .over90
+        case .unmanaged: managedFilter = .unmanagedOnly
         }
     }
     
@@ -1145,6 +1205,8 @@ struct ReportsView: View {
         case .applications: guard !applicationName.isEmpty else { return }; f = ReportFilter(category: selectedFilterCategory, parameters: .applications(type: applicationFilterType, appName: applicationName))
         case .appleCare: f = ReportFilter(category: selectedFilterCategory, parameters: .appleCare(status: appleCareFilter))
         case .softwareUpdates: f = ReportFilter(category: selectedFilterCategory, parameters: .softwareUpdates(status: softwareUpdateFilter))
+        case .staleDevices: f = ReportFilter(category: selectedFilterCategory, parameters: .staleDevices(level: stalenessLevel))
+        case .unmanaged: f = ReportFilter(category: selectedFilterCategory, parameters: .unmanaged(status: managedFilter))
         }
         filters.removeAll { $0.category == selectedFilterCategory }
         filters.append(f)
@@ -1210,9 +1272,24 @@ struct ReportsView: View {
                 case .noUpdateData: return !updateInfo.hasData
                 }
             }
+        case .staleDevices(let level):
+            let cutoff = Date().addingTimeInterval(-Double(level.days) * 86400)
+            return r.filter { device in
+                guard let lc = device.lastCheckIn else { return true }  // never checked in counts as stale
+                return lc < cutoff
+            }
+        case .unmanaged(let status):
+            return r.filter { device in
+                // Management status is tracked only for macOS computers.
+                guard device.platform == .macOS,
+                      let computer = computerCache.computers.first(where: { $0.id == device.id }) else {
+                    return false
+                }
+                return status == .managedOnly ? computer.isManaged : !computer.isManaged
+            }
         }
     }
-    
+
     /// Get coverage info from a device result by looking up purchasing data
     private func getDeviceCoverageInfo(_ device: ReportDeviceResult) -> (hasData: Bool, isExpired: Bool, isExpiringSoon: Bool) {
         if device.platform == .macOS {

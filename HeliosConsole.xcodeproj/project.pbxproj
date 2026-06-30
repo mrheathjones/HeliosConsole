@@ -109,7 +109,6 @@
 		CLF13 /* CleanupReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR13 /* CleanupReportModels.swift */; };
 		CLF14 /* CleanupReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR14 /* CleanupReportPDF.swift */; };
 		CLF15 /* CleanupExportMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR15 /* CleanupExportMenu.swift */; };
-		CLF16 /* CleanupReportBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR16 /* CleanupReportBuilderView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -194,7 +193,6 @@
 		CLR13 /* CleanupReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportModels.swift; sourceTree = "<group>"; };
 		CLR14 /* CleanupReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportPDF.swift; sourceTree = "<group>"; };
 		CLR15 /* CleanupExportMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExportMenu.swift; sourceTree = "<group>"; };
-		CLR16 /* CleanupReportBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportBuilderView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -498,7 +496,6 @@
 				CLR12 /* CleanupSettingsView.swift */,
 				CLR14 /* CleanupReportPDF.swift */,
 				CLR15 /* CleanupExportMenu.swift */,
-				CLR16 /* CleanupReportBuilderView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -647,7 +644,6 @@
 				CLF13 /* CleanupReportModels.swift in Sources */,
 				CLF14 /* CleanupReportPDF.swift in Sources */,
 				CLF15 /* CleanupExportMenu.swift in Sources */,
-				CLF16 /* CleanupReportBuilderView.swift in Sources */,
 				F001 /* HeliosConsoleApp.swift in Sources */,
 				F003 /* AppSettings.swift in Sources */,
 				7EB1713B2F7960FA00105721 /* ActionLogService.swift in Sources */,
@@ -842,7 +838,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -870,7 +866,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -898,7 +894,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -928,7 +924,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
