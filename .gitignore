@@ -31,3 +31,6 @@ DerivedData/
 *.cer
 .env
 .env.*
+
+# Distribution packages
+dist/

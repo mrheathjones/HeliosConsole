@@ -1,0 +1,163 @@
+{
+  "title": "Helios Console — Managed Configuration",
+  "description": "Managed configuration for the Helios Console macOS app. Preference domain MUST equal the app's bundle identifier: com.helios.console. Values set here are FORCED and override the in-app Settings (which appear locked). The app reads a nested structure; keep the object groupings below. SECURITY: managed-preference plists are world-readable on disk — scope the master API Role to the minimum privileges the app needs, and scope this profile to the appropriate machines (in particular, only Admin-role machines should receive a master client that has Cleanup write/delete scopes).",
+  "type": "object",
+  "properties": {
+    "jamfPro": {
+      "type": "object",
+      "title": "Jamf Pro Connection",
+      "description": "Master API client used for inventory reads (and, on Admin machines with the proper role, Cleanup writes).",
+      "properties": {
+        "serverURL": {
+          "type": "string",
+          "title": "Jamf Pro Server URL",
+          "description": "Full HTTPS base URL of the Jamf Pro instance, no trailing slash. Example: https://yourorg.jamfcloud.com",
+          "default": "https://yourorg.jamfcloud.com"
+        },
+        "masterClientID": {
+          "type": "string",
+          "title": "Master API Client ID",
+          "description": "OAuth client_id of the Jamf API Client used by Helios. Not secret."
+        },
+        "masterClientSecret": {
+          "type": "string",
+          "title": "Master API Client Secret",
+          "description": "OAuth client_secret for the master API Client. Delivered via this profile. NOTE: managed-preference plists are readable on disk — scope the API Role tightly and rotate if exposed."
+        },
+        "requiredRoleName": {
+          "type": "string",
+          "title": "Required Jamf API Role Name",
+          "description": "Name of the Jamf API Role the master client is expected to hold. Informational / used for diagnostics.",
+          "default": "SVC_WATCHER_USER"
+        },
+        "screenShareEnabled": {
+          "type": "boolean",
+          "title": "Enable Screen Share",
+          "description": "Enables the in-app Screen Share affordance.",
+          "default": false
+        }
+      },
+      "required": ["serverURL", "masterClientID", "masterClientSecret"]
+    },
+    "role": {
+      "type": "string",
+      "title": "Operator Role",
+      "description": "Role-based access control. The destructive Cleanup feature (bulk unmanage / move / group / delete of stale device records) is shown ONLY when this is exactly \"Admin\". Any other value — Support, User, blank, missing, or a typo — hides Cleanup (fail-closed). Scope this profile so only intended admin operators receive role=Admin.",
+      "enum": ["Admin", "Support", "User"],
+      "default": "User"
+    },
+    "userInterface": {
+      "type": "object",
+      "title": "User Interface",
+      "description": "Branding / UI text shown in the app.",
+      "properties": {
+        "appTitle": {
+          "type": "string",
+          "title": "App Title",
+          "description": "Primary title shown in the app header.",
+          "default": "Helios"
+        },
+        "appSubtitle": {
+          "type": "string",
+          "title": "App Subtitle",
+          "description": "Secondary title shown in the app header.",
+          "default": "Console"
+        },
+        "supportURL": {
+          "type": "string",
+          "title": "Support URL",
+          "description": "Optional link surfaced for end-user support.",
+          "default": ""
+        }
+      }
+    },
+    "localAdministration": {
+      "type": "object",
+      "title": "Local Administration",
+      "description": "Local admin account settings used by the app.",
+      "properties": {
+        "username": {
+          "type": "string",
+          "title": "Local Admin Username",
+          "description": "Local administrator account name the app references.",
+          "default": "macadmin"
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "title": "Cleanup (Stale Device) Settings",
+      "description": "Defaults for the Admin-only Cleanup feature. These are starting values; the stale threshold can be adjusted in-app unless you also lock the field by setting it here.",
+      "properties": {
+        "staleDays": {
+          "type": "integer",
+          "title": "Stale Threshold (days)",
+          "description": "Devices with no Jamf Pro check-in for this many days are considered stale.",
+          "default": 90
+        },
+        "defaultStaticGroupID": {
+          "type": "string",
+          "title": "Default Static Group ID",
+          "description": "Optional Jamf static computer group ID pre-selected in the 'Add to static group' action picker."
+        },
+        "defaultSiteID": {
+          "type": "string",
+          "title": "Default Site ID",
+          "description": "Optional Jamf site ID pre-selected in the 'Move to site' action picker."
+        }
+      }
+    },
+    "jamfProtect": {
+      "type": "object",
+      "title": "Jamf Protect (optional)",
+      "description": "Optional Jamf Protect tenant connection for the Cleanup feature's Protect cards and independent Protect-record deletion. The Protect API PASSWORD is NOT delivered here — it is entered in the app and stored in the login Keychain.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "title": "Enable Jamf Protect",
+          "description": "Turn on the Jamf Protect integration.",
+          "default": false
+        },
+        "url": {
+          "type": "string",
+          "title": "Jamf Protect Tenant URL",
+          "description": "Full HTTPS tenant URL. Example: https://yourorg.protect.jamfcloud.com"
+        },
+        "clientID": {
+          "type": "string",
+          "title": "Jamf Protect API Client ID",
+          "description": "Jamf Protect API client id. The matching password is entered in-app (Keychain), not delivered via this profile."
+        }
+      }
+    },
+    "appleBusinessManager": {
+      "type": "object",
+      "title": "Apple Business Manager (optional)",
+      "description": "Optional ABM API connection (AppleCare lookups via ES256 JWT).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "title": "Enable ABM",
+          "description": "Turn on the Apple Business Manager integration.",
+          "default": false
+        },
+        "clientID": {
+          "type": "string",
+          "title": "ABM API Client ID",
+          "description": "Apple Business Manager API client id."
+        },
+        "keyID": {
+          "type": "string",
+          "title": "ABM Key ID",
+          "description": "Apple Business Manager private key id."
+        },
+        "privateKey": {
+          "type": "string",
+          "title": "ABM Private Key (PEM)",
+          "description": "PEM-encoded ES256 private key for ABM JWT signing. Sensitive — delivered via this profile; scope tightly."
+        }
+      }
+    }
+  },
+  "required": ["jamfPro"]
+}

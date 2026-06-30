@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.helios.console</string>
+			<key>PayloadIdentifier</key>
+			<string>com.helios.console.config</string>
+			<key>PayloadUUID</key>
+			<string>7C1E9A20-0001-4B3C-9D22-AAAAAAAAAAAA</string>
+			<key>PayloadDisplayName</key>
+			<string>Helios Console — Settings</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadEnabled</key>
+			<true/>
+
+			<!-- Jamf Pro connection (master API client). -->
+			<key>jamfPro</key>
+			<dict>
+				<key>serverURL</key>
+				<string>https://yourorg.jamfcloud.com</string>
+				<key>masterClientID</key>
+				<string>REPLACE-WITH-MASTER-CLIENT-ID</string>
+				<key>masterClientSecret</key>
+				<string>REPLACE-WITH-MASTER-CLIENT-SECRET</string>
+				<key>requiredRoleName</key>
+				<string>SVC_WATCHER_USER</string>
+				<key>screenShareEnabled</key>
+				<false/>
+			</dict>
+
+			<!-- Role-based access. Cleanup (destructive bulk actions) shows
+			     ONLY for the exact value "Admin". Anything else hides it.
+			     Scope THIS profile so only admin Macs get role=Admin. -->
+			<key>role</key>
+			<string>Admin</string>
+
+			<!-- User interface / branding. -->
+			<key>userInterface</key>
+			<dict>
+				<key>appTitle</key>
+				<string>Helios</string>
+				<key>appSubtitle</key>
+				<string>Console</string>
+				<key>supportURL</key>
+				<string>https://support.yourcompany.com</string>
+			</dict>
+
+			<!-- Cleanup defaults (Admin-only feature). -->
+			<key>cleanup</key>
+			<dict>
+				<key>staleDays</key>
+				<integer>90</integer>
+				<!-- Optional action-picker defaults: -->
+				<!-- <key>defaultStaticGroupID</key><string>123</string> -->
+				<!-- <key>defaultSiteID</key><string>1</string> -->
+			</dict>
+
+			<!-- Optional Jamf Protect tenant. The API PASSWORD is entered in
+			     the app (Keychain), never delivered in this profile. -->
+			<!--
+			<key>jamfProtect</key>
+			<dict>
+				<key>enabled</key>
+				<true/>
+				<key>url</key>
+				<string>https://yourorg.protect.jamfcloud.com</string>
+				<key>clientID</key>
+				<string>REPLACE-WITH-PROTECT-CLIENT-ID</string>
+			</dict>
+			-->
+		</dict>
+	</array>
+	<key>PayloadDisplayName</key>
+	<string>Helios Console</string>
+	<key>PayloadIdentifier</key>
+	<string>com.helios.console</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>7C1E9A20-0000-4B3C-9D22-BBBBBBBBBBBB</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadOrganization</key>
+	<string>Your Organization</string>
+</dict>
+</plist>
