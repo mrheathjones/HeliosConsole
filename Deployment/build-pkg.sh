@@ -280,5 +280,10 @@ if [[ "$BUMP" == "true" ]]; then
 fi
 
 printf '\n✅ Created: %s\n' "$PKG_PATH"
-[[ "$SIGN_PKG" == "true" && -n "$PKG_IDENTITY" ]] && printf '   pkg signed: %s\n' "$PKG_IDENTITY"
-[[ "$NOTARIZE" == "true" ]] && printf '   app notarized + stapled (pkg not notarized)\n'
+if [[ "$SIGN_PKG" == "true" && -n "$PKG_IDENTITY" ]]; then
+    printf '   pkg signed: %s\n' "$PKG_IDENTITY"
+fi
+if [[ "$NOTARIZE" == "true" ]]; then
+    printf '   app notarized + stapled (pkg not notarized)\n'
+fi
+exit 0

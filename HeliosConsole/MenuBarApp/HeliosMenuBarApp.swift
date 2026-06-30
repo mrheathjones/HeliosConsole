@@ -93,7 +93,9 @@ private struct MenuBarLabel: View {
 // MARK: - Menu Bar Content View
 
 struct MenuBarContentView: View {
-    @StateObject private var searchService = UnifiedDeviceSearchService()
+    // Self-sufficient: authenticate with the MDM master client (no shared
+    // Keychain with the main app).
+    @StateObject private var searchService = UnifiedDeviceSearchService(useMasterCredentials: true)
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>?
 
@@ -145,7 +147,12 @@ struct MenuBarContentView: View {
     }
 
     private var connectionBadge: some View {
-        let hasCredentials = KeychainManager.shared.loadJamfCredentials() != nil
+        // Self-sufficient: "connected" reflects the MDM master client being
+        // configured (not a shared Keychain credential from the main app).
+        let config = MDMConfigurationManager.shared.configuration
+        let hasCredentials = !config.jamfURL.isEmpty
+            && !config.masterClientID.isEmpty
+            && config.masterClientID != "your-master-client-id"
         return HStack(spacing: 4) {
             Circle()
                 .fill(hasCredentials ? .green : .orange)

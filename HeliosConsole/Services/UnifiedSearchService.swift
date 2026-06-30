@@ -118,7 +118,17 @@ final class UnifiedDeviceSearchService: ObservableObject {
     private let keychain = KeychainManager.shared
     private var cachedBearerToken: String?
     private var tokenExpiration: Date?
-    
+
+    /// When true, authenticate with the MDM-supplied master client instead of
+    /// the per-user credentials in the Keychain. The menu bar companion uses
+    /// this so it is self-sufficient and does NOT need a shared Keychain with
+    /// the main app.
+    private let useMasterCredentials: Bool
+
+    init(useMasterCredentials: Bool = false) {
+        self.useMasterCredentials = useMasterCredentials
+    }
+
     private var configuration: MDMConfiguration {
         MDMConfigurationManager.shared.configuration
     }
@@ -410,23 +420,38 @@ final class UnifiedDeviceSearchService: ObservableObject {
             return token
         }
         
-        // Get user's credentials from keychain
-        guard let credentials = keychain.loadJamfCredentials() else {
-            throw NSError(domain: "UnifiedSearch", code: 401, userInfo: [NSLocalizedDescriptionKey: "No credentials available"])
+        // Resolve which API client to authenticate with.
+        let clientID: String
+        let clientSecret: String
+        if useMasterCredentials {
+            // Self-sufficient mode (menu bar): use the MDM master client.
+            clientID = configuration.masterClientID
+            clientSecret = configuration.masterClientSecret
+            guard !clientID.isEmpty, clientID != "your-master-client-id",
+                  !clientSecret.isEmpty, clientSecret != "your-master-client-secret" else {
+                throw NSError(domain: "UnifiedSearch", code: 401, userInfo: [NSLocalizedDescriptionKey: "No credentials available"])
+            }
+        } else {
+            // Per-user mode (main app): credentials from the Keychain.
+            guard let credentials = keychain.loadJamfCredentials() else {
+                throw NSError(domain: "UnifiedSearch", code: 401, userInfo: [NSLocalizedDescriptionKey: "No credentials available"])
+            }
+            clientID = credentials.clientID
+            clientSecret = credentials.clientSecret
         }
-        
+
         // Request new bearer token
         guard let url = URL(string: "\(jamfURL)/api/v1/oauth/token") else {
             throw NSError(domain: "UnifiedSearch", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
-        
-        let bodyString = "grant_type=client_credentials&client_id=\(credentials.clientID)&client_secret=\(credentials.clientSecret)"
+
+        let bodyString = "grant_type=client_credentials&client_id=\(clientID)&client_secret=\(clientSecret)"
         request.httpBody = bodyString.data(using: .utf8)
         
         let (data, response) = try await URLSession.shared.data(for: request)
