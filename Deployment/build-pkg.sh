@@ -42,9 +42,10 @@ OUTPUT=""
 # --- App signing ---------------------------------------------------
 # Sign the APP with a Developer ID Application identity + hardened runtime.
 # Empty = use the project's own signing settings (fine for dev-team machines).
-# Example (Helios team TEAMIDXXXXXX):
-#   APP_IDENTITY="Developer ID Application: Your Name (TEAMIDXXXXXX)"
-APP_IDENTITY=""
+# When set, build-pkg.sh signs Manual and OVERRIDES the project's team with the
+# team embedded in the identity (so this works even though the .xcodeproj's
+# DEVELOPMENT_TEAM is TEAMIDXXXXXX, for which this Mac has no cert).
+APP_IDENTITY="Developer ID Application: Your Name (TEAMIDXXXXXX)"
 
 # --- App notarization (NOT the pkg) --------------------------------
 # true  = notarize + staple the .app itself (requires APP_IDENTITY).
@@ -196,6 +197,7 @@ build_args=(
     -configuration Release
     -derivedDataPath "$DERIVED"
     -arch arm64 -arch x86_64
+    -allowProvisioningUpdates
     ONLY_ACTIVE_ARCH=NO
     MARKETING_VERSION="$FULL_VERSION"
     CURRENT_PROJECT_VERSION="$BASE_BUILD"
