@@ -50,6 +50,7 @@ script** (no command-line flags — runs straight from CodeRunner or by double-c
 | `NOTARIZE` | `true` = notarize + staple the **app** (not the pkg); requires `APP_IDENTITY`. |
 | `SIGN_PKG` | `true` = sign the pkg with your Developer ID Installer cert (auto-detected). |
 | `BUMP` | `true` = increment the project's build number after a successful build. |
+| `MIRROR_DIST` | If set, also copies the finished `.pkg` to this path (e.g. an iCloud archive folder). Empty = don't mirror. |
 
 Set `CHANNEL`, run it → `dist/HeliosConsole-<version>.pkg`. The build is **universal**
 (`arm64,x86_64`), so it installs natively on Apple Silicon and Intel. DerivedData is written to

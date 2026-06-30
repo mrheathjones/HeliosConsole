@@ -63,6 +63,11 @@ PKG_IDENTITY=""                     # empty = auto-detect "Developer ID Installe
 # true = after a successful build, bump CURRENT_PROJECT_VERSION in the project.
 BUMP=true
 
+# --- Mirror the finished pkg ---------------------------------------
+# After a successful build, also copy the .pkg here (e.g. an iCloud folder for
+# archiving / sharing). Empty = don't mirror.
+MIRROR_DIST="/Users/heath/Library/Mobile Documents/com~apple~CloudDocs/_APPS_IM_BUILDING/Vibe/HELIOS/HeliosConsole/dist"
+
 # ===================================================================
 
 # ---------------------------------------------------------------------------
@@ -271,6 +276,17 @@ fi
 productbuild "${prod_args[@]}" "$PKG_PATH"
 
 # ---------------------------------------------------------------------------
+# Mirror the finished pkg (optional) — e.g. to an iCloud archive folder
+# ---------------------------------------------------------------------------
+MIRRORED_PATH=""
+if [[ -n "$MIRROR_DIST" ]]; then
+    info "Mirroring pkg → $MIRROR_DIST"
+    mkdir -p "$MIRROR_DIST"
+    cp "$PKG_PATH" "$MIRROR_DIST/"
+    MIRRORED_PATH="$MIRROR_DIST/$(basename "$PKG_PATH")"
+fi
+
+# ---------------------------------------------------------------------------
 # Bump build counter in the project (optional)
 # ---------------------------------------------------------------------------
 if [[ "$BUMP" == "true" ]]; then
@@ -280,6 +296,9 @@ if [[ "$BUMP" == "true" ]]; then
 fi
 
 printf '\n✅ Created: %s\n' "$PKG_PATH"
+if [[ -n "$MIRRORED_PATH" ]]; then
+    printf '   mirrored to: %s\n' "$MIRRORED_PATH"
+fi
 if [[ "$SIGN_PKG" == "true" && -n "$PKG_IDENTITY" ]]; then
     printf '   pkg signed: %s\n' "$PKG_IDENTITY"
 fi
