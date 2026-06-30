@@ -12,8 +12,23 @@ struct CleanupDashboardView: View {
     @Environment(CleanupViewModel.self) private var model
     @Binding var showSettings: Bool
     @AppStorage("dashboard.cleanupSitesExpanded") private var sitesExpanded = true
-    @AppStorage(CleanupSettings.Key.staleDays) private var staleDays = 90
+    /// 0 = unset → use the MDM profile's default (config = default, user-overridable).
+    @AppStorage(CleanupSettings.Key.staleDays) private var staleDaysStored = 0
     @State private var showReportBuilder = false
+
+    /// The stale threshold actually in effect: the user's in-app choice if set,
+    /// otherwise the config-profile default.
+    private var effectiveStaleDays: Int {
+        staleDaysStored > 0 ? staleDaysStored : MDMConfigurationManager.shared.configuration.cleanupStaleDays
+    }
+
+    /// Dropdown options — the common presets plus the current/MDM value so it's
+    /// always selectable even if it isn't a preset.
+    private var staleDayOptions: [Int] {
+        Array(Set([7, 14, 30, 45, 60, 90, 120, 180, 365, effectiveStaleDays]))
+            .filter { $0 > 0 }
+            .sorted()
+    }
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: 190, maximum: 280), spacing: 14)]
@@ -250,17 +265,21 @@ struct CleanupDashboardView: View {
 
     private var staleDaysMenu: some View {
         Menu {
-            Picker("Stale after", selection: $staleDays) {
-                ForEach([7, 14, 30, 60, 90, 180, 365], id: \.self) { days in
+            Picker("Stale after", selection: Binding(
+                get: { effectiveStaleDays },
+                set: { staleDaysStored = $0 }
+            )) {
+                ForEach(staleDayOptions, id: \.self) { days in
                     Text("\(days) days").tag(days)
                 }
             }
         } label: {
-            Label("\(staleDays)d", systemImage: "clock.badge.questionmark")
+            Label("Stale: \(effectiveStaleDays)d", systemImage: "clock.badge.questionmark")
         }
-        .onChange(of: staleDays) {
+        .onChange(of: staleDaysStored) {
             Task { await model.refresh() }
         }
+        .help("Devices with no Jamf check-in for this many days are stale. Default comes from your MDM profile; change it here anytime.")
     }
 }
 

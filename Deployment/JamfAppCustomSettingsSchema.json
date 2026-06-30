@@ -110,7 +110,7 @@
     "jamfProtect": {
       "type": "object",
       "title": "Jamf Protect (optional)",
-      "description": "Optional Jamf Protect tenant connection for the Cleanup feature's Protect cards and independent Protect-record deletion. The Protect API PASSWORD is NOT delivered here — it is entered in the app and stored in the login Keychain.",
+      "description": "Optional Jamf Protect tenant connection for the Cleanup feature's Protect cards and independent Protect-record deletion. The Protect API password may be delivered here (it then locks the in-app field) or left out and entered in the app (Keychain).",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -126,7 +126,12 @@
         "clientID": {
           "type": "string",
           "title": "Jamf Protect API Client ID",
-          "description": "Jamf Protect API client id. The matching password is entered in-app (Keychain), not delivered via this profile."
+          "description": "Jamf Protect API client id."
+        },
+        "password": {
+          "type": "string",
+          "title": "Jamf Protect API Password",
+          "description": "Jamf Protect API password. Optional — if set here it is used and the in-app field locks; if omitted, it is entered in the app and stored in the Keychain. Sensitive: managed-pref plists are world-readable, so scope this profile tightly."
         }
       }
     },

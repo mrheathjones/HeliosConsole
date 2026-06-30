@@ -14,7 +14,8 @@ struct CleanupSettingsView: View {
     @Environment(CleanupViewModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    @AppStorage(CleanupSettings.Key.staleDays) private var staleDays = 90
+    /// 0 = unset → use the MDM profile's default (config = default, user-overridable).
+    @AppStorage(CleanupSettings.Key.staleDays) private var staleDaysStored = 0
     @AppStorage(CleanupSettings.Key.protectEnabled) private var protectEnabled = false
     @AppStorage(CleanupSettings.Key.protectURL) private var protectURL = ""
     @AppStorage(CleanupSettings.Key.protectClientID) private var protectClientID = ""
@@ -26,6 +27,12 @@ struct CleanupSettingsView: View {
     @State private var protectTestResult: String?
     @State private var protectTestOK = false
     @State private var testing = false
+
+    /// The stale threshold in effect: the user's in-app choice if set,
+    /// otherwise the config-profile default.
+    private var effectiveStaleDays: Int {
+        staleDaysStored > 0 ? staleDaysStored : MDMConfigurationManager.shared.configuration.cleanupStaleDays
+    }
 
     private var jamfURLDisplay: String {
         model.settings.normalizedJamfURL?.absoluteString ?? "Not configured"
@@ -62,10 +69,13 @@ struct CleanupSettingsView: View {
 
             // MARK: Stale threshold
             Section {
-                Stepper(value: $staleDays, in: 1...730) {
-                    LabeledContent("Stale after", value: "\(staleDays) days")
+                Stepper(value: Binding(
+                    get: { effectiveStaleDays },
+                    set: { staleDaysStored = $0 }
+                ), in: 1...730) {
+                    LabeledContent("Stale after", value: "\(effectiveStaleDays) days")
                 }
-                .onChange(of: staleDays) {
+                .onChange(of: staleDaysStored) {
                     Task { await model.refresh() }
                 }
             } header: {
@@ -80,8 +90,16 @@ struct CleanupSettingsView: View {
                 if protectEnabled {
                     TextField("Tenant URL", text: $protectURL, prompt: Text("https://yourorg.protect.jamfcloud.com"))
                     TextField("API Client ID", text: $protectClientID)
-                    SecureField("API Client Password", text: $protectPassword, prompt: Text(model.settings.protectClientPassword.isEmpty ? "Paste password" : "•••••••• (saved)"))
-                        .onSubmit { saveProtectPassword() }
+                    if model.settings.protectPasswordIsManaged {
+                        LabeledContent("API Client Password") {
+                            Label("Delivered by MDM", systemImage: "lock.fill")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                        }
+                    } else {
+                        SecureField("API Client Password", text: $protectPassword, prompt: Text(model.settings.protectClientPassword.isEmpty ? "Paste password" : "•••••••• (saved)"))
+                            .onSubmit { saveProtectPassword() }
+                    }
 
                     HStack {
                         Button("Test Connection") {
@@ -101,7 +119,7 @@ struct CleanupSettingsView: View {
             } header: {
                 Text("Jamf Protect")
             } footer: {
-                Text("Optional. Connect a Jamf Protect tenant to see Protect counts on the dashboard and delete Protect records. The password is stored in the Keychain.")
+                Text("Optional. Connect a Jamf Protect tenant to see Protect counts on the dashboard and delete Protect records. The password is stored in the Keychain, or delivered by your MDM profile (in which case the field above is locked).")
             }
         }
         .formStyle(.grouped)

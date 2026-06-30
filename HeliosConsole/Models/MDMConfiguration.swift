@@ -42,6 +42,9 @@ struct MDMConfiguration: Codable {
     let protectEnabled: Bool
     let protectURL: String?
     let protectClientID: String?
+    /// Jamf Protect API password, optionally delivered via the profile.
+    /// Sensitive — managed-pref plists are world-readable; scope tightly.
+    let protectPassword: String?
 
     var isABMConfigured: Bool {
         guard let clientId = abmClientId, !clientId.isEmpty,
@@ -90,7 +93,8 @@ struct MDMConfiguration: Codable {
         cleanupDefaultSiteID: String? = nil,
         protectEnabled: Bool = false,
         protectURL: String? = nil,
-        protectClientID: String? = nil
+        protectClientID: String? = nil,
+        protectPassword: String? = nil
     ) {
         self.jamfURL = jamfURL
         self.masterClientID = masterClientID
@@ -112,6 +116,7 @@ struct MDMConfiguration: Codable {
         self.protectEnabled = protectEnabled
         self.protectURL = protectURL
         self.protectClientID = protectClientID
+        self.protectPassword = protectPassword
     }
     
     struct SidebarItemConfig: Codable, Identifiable {

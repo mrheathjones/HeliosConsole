@@ -60,8 +60,8 @@
 				<!-- <key>defaultSiteID</key><string>1</string> -->
 			</dict>
 
-			<!-- Optional Jamf Protect tenant. The API PASSWORD is entered in
-			     the app (Keychain), never delivered in this profile. -->
+			<!-- Optional Jamf Protect tenant. The password may be delivered
+			     here (locks the in-app field) or omitted and entered in-app. -->
 			<!--
 			<key>jamfProtect</key>
 			<dict>
@@ -71,6 +71,8 @@
 				<string>https://yourorg.protect.jamfcloud.com</string>
 				<key>clientID</key>
 				<string>REPLACE-WITH-PROTECT-CLIENT-ID</string>
+				<key>password</key>
+				<string>REPLACE-WITH-PROTECT-PASSWORD</string>
 			</dict>
 			-->
 		</dict>

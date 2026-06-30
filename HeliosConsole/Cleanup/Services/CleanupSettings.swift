@@ -73,8 +73,21 @@ final class CleanupSettings {
         set { defaults.set(newValue, forKey: Key.protectClientID) }
     }
 
+    /// True when the Protect password is delivered by the MDM profile, in
+    /// which case the in-app field is locked and the managed value is used.
+    var protectPasswordIsManaged: Bool {
+        !(mdm.protectPassword ?? "").isEmpty
+    }
+
     var protectClientPassword: String {
-        get { KeychainManager.shared.loadString(forKey: Self.protectPasswordKeychainKey) ?? "" }
+        get {
+            // A profile-delivered password wins (like the master secret);
+            // otherwise fall back to the in-app Keychain value.
+            if let managed = mdm.protectPassword, !managed.isEmpty {
+                return managed
+            }
+            return KeychainManager.shared.loadString(forKey: Self.protectPasswordKeychainKey) ?? ""
+        }
         set { KeychainManager.shared.saveString(newValue, forKey: Self.protectPasswordKeychainKey) }
     }
 
