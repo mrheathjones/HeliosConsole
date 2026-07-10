@@ -226,6 +226,19 @@
         }
       },
       "required": ["tenantID", "clientID", "redirectURI"]
+    },
+
+    "entra": {
+      "type": "object",
+      "description": "Microsoft Entra (Graph) device cleanup for the Return to Service action. Separate from the 'entraID' block above (which governs interactive user login). When present, Return to Service also deletes the erased Mac's Entra device object(s) by displayName so it can re-register cleanly with PSSO / Company Portal. This block only POINTS to the preference domain that carries the Graph app credentials; the secrets live in that separate managed-pref domain, deployed with its own payload. Omit to disable Entra cleanup.",
+      "properties": {
+        "credentialDomain": {
+          "type": "string",
+          "description": "Preference domain (bundle identifier) of a separate managed-preferences payload holding the Entra Graph credentials. Helios (unsandboxed) reads it via UserDefaults(suiteName:). That domain must supply: entra_tenant_id, entra_client_id, and at least one of entra_cert_pem (PEM certificate + private key, preferred — Helios signs a PS256 client assertion) or entra_client_secret (fallback). The app registration needs the Device.ReadWrite.All application permission AND the 'Cloud Device Administrator' Entra role to delete device objects. See Helios_Entra_Graph_Credentials_SCHEMA_v1.json for that domain's schema.",
+          "examples": ["com.helios.console.entra"]
+        }
+      },
+      "required": ["credentialDomain"]
     }
   },
   "required": ["jamfPro"]
