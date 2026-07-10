@@ -65,6 +65,11 @@ struct DeviceView: View {
     @State private var showingCommandAlert: Bool = false
     @State private var showingActionConfirmation: Bool = false
     @State private var pendingAction: DeviceAction?
+    /// Typed confirmation for destructive actions (must match the device name).
+    @State private var confirmationText: String = ""
+    /// Non-nil while a multi-stage flow (Return to Service) is processing;
+    /// drives the progress modal and carries the current stage message.
+    @State private var processingMessage: String? = nil
     @State private var showingUnlockAccountSheet: Bool = false
     @State private var unlockUsername: String = ""
     @State private var showingLocalAdminPassword: Bool = false
@@ -304,9 +309,12 @@ struct DeviceView: View {
             
             // Command result overlay
             commandResultOverlay
-            
+
             // Action confirmation overlay
             actionConfirmationOverlay
+
+            // Processing progress overlay (Return to Service multi-stage flow)
+            processingOverlay
             
             // Unlock account sheet overlay
             unlockAccountOverlay
@@ -620,6 +628,11 @@ struct DeviceView: View {
     @ViewBuilder
     private var actionConfirmationOverlay: some View {
         if showingActionConfirmation, let action = pendingAction {
+            // Destructive actions require the operator to type ERASE to confirm.
+            let canConfirm = !action.isDestructive
+                || confirmationText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare("ERASE") == .orderedSame
+
             ZStack {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
@@ -627,9 +640,10 @@ struct DeviceView: View {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showingActionConfirmation = false
                             pendingAction = nil
+                            confirmationText = ""
                         }
                     }
-                
+
                 VStack(spacing: 0) {
                     // Warning header
                     VStack(spacing: 12) {
@@ -660,17 +674,44 @@ struct DeviceView: View {
                     Text(displayComputer.displayName)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
+                        .padding(.bottom, action.isDestructive ? 16 : 24)
+
+                    // Typed confirmation for destructive actions.
+                    if action.isDestructive {
+                        VStack(spacing: 6) {
+                            Text("Type ERASE to confirm:")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                            TextField("ERASE", text: $confirmationText)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 13))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.white.opacity(0.08))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(canConfirm ? Color.green.opacity(0.6) : Color.white.opacity(0.15), lineWidth: 1)
+                                )
+                                .frame(width: 260)
+                        }
                         .padding(.bottom, 24)
-                    
+                    }
+
                     Divider()
                         .background(Color.white.opacity(0.1))
-                    
+
                     // Buttons
                     HStack(spacing: 0) {
                         Button {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 showingActionConfirmation = false
                                 pendingAction = nil
+                                confirmationText = ""
                             }
                         } label: {
                             Text("Cancel")
@@ -680,26 +721,28 @@ struct DeviceView: View {
                                 .frame(height: 50)
                         }
                         .buttonStyle(.plain)
-                        
+
                         Divider()
                             .background(Color.white.opacity(0.1))
                             .frame(height: 50)
-                        
+
                         Button {
                             let actionToExecute = action
                             withAnimation(.easeOut(duration: 0.2)) {
                                 showingActionConfirmation = false
                                 pendingAction = nil
+                                confirmationText = ""
                             }
                             Task { await executeAction(actionToExecute) }
                         } label: {
                             Text(action.confirmButtonTitle)
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(action.isDestructive ? .red : (action.isWarning ? .orange : .blue))
+                                .foregroundColor(canConfirm ? (action.isDestructive ? .red : (action.isWarning ? .orange : .blue)) : .gray)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!canConfirm)
                     }
                 }
                 .frame(width: 320)
@@ -1251,6 +1294,53 @@ struct DeviceView: View {
     
     // MARK: - Command Result Alert Overlay
     
+    // MARK: - Processing Progress Overlay
+
+    @ViewBuilder
+    private var processingOverlay: some View {
+        if let message = processingMessage {
+            ZStack {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 18) {
+                    Text("Return to Service")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .frame(width: 240)
+
+                    Text(message)
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .frame(minHeight: 34)
+                        .padding(.horizontal, 24)
+
+                    Text("Please keep this window open — do not close the app.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+                .padding(.vertical, 28)
+                .frame(width: 340)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(white: 0.12))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 30)
+            }
+        }
+    }
+
     @ViewBuilder
     private var commandResultOverlay: some View {
         if showingCommandAlert, let result = commandResult {
@@ -1508,18 +1598,18 @@ struct DeviceView: View {
     
     // MARK: - Return to Service (Erase → Delete Jamf record → Delete from Entra)
 
-    /// Orchestrates the full decommission: queue the ERASE_DEVICE command,
-    /// confirm it was issued, delete the Jamf computer record, then remove the
-    /// device object(s) from Microsoft Entra. Ports the default `after-sent`
-    /// behavior of Erase_and_Delete_Devices.sh. Each stage logs independently;
-    /// the Entra stage is best-effort and never blocks the rest.
+    /// Orchestrates the full decommission: queue the ERASE_DEVICE command, WAIT
+    /// for the device to acknowledge it, delete the Jamf computer record, then
+    /// remove the device object(s) from Microsoft Entra. Ports the `after-ack`
+    /// behavior of Erase_and_Delete_Devices.sh: the Jamf record must NOT be
+    /// deleted until the erase is acknowledged, because deleting it removes the
+    /// MDM profile and unmanages the Mac — an unacknowledged command would then
+    /// never be delivered. Each stage logs independently; Entra is best-effort.
     private func sendEraseCommand() async {
         guard let managementId = displayComputer.general?.managementId else {
             await showError("Device management ID not available — cannot erase this device.")
             return
         }
-
-        await MainActor.run { isExecutingCommand = true }
 
         let config = MDMConfigurationManager.shared.configuration
         let deviceName = displayComputer.displayName
@@ -1527,29 +1617,52 @@ struct DeviceView: View {
         let deviceId = displayComputer.id
         let category = "Device Actions"
 
+        await MainActor.run {
+            isExecutingCommand = true
+            processingMessage = "Sending erase command to \(deviceName)…"
+        }
+
         var summaryLines: [String] = []
         var overallSuccess = true
+
+        // EraseDevice always requires a 6-digit PIN in the API call, but the PIN
+        // only MATTERS on Intel/T2 Macs — there it becomes the recovery PIN
+        // needed to unlock the Mac after the wipe. Apple Silicon ignores it, so
+        // the PIN is only surfaced/logged for non-Apple-Silicon hardware. When
+        // the architecture is unknown, `isAppleSilicon` is false, so the PIN is
+        // shown (safe default).
+        let erasePIN = String(format: "%06d", Int.random(in: 0...999999))
+        let showPIN = !displayComputer.isAppleSilicon
 
         do {
             let token = try await getBearerToken()
 
-            // 1) Queue the erase command and capture its UUID.
-            let commandUUID = try await issueEraseCommand(managementId: managementId, token: token, jamfURL: config.jamfURL)
-            summaryLines.append("• Erase command queued.")
+            // 1) Queue the erase command (with PIN) and capture its UUID.
+            let commandUUID = try await issueEraseCommand(managementId: managementId, pin: erasePIN, token: token, jamfURL: config.jamfURL)
+            if showPIN {
+                summaryLines.append("• Erase command queued. Recovery PIN: \(erasePIN) (needed to unlock this Intel/T2 Mac).")
+            } else {
+                summaryLines.append("• Erase command queued.")
+            }
             ActionLogService.shared.logAction(
-                actionName: "Erase Device", actionCategory: category,
+                actionName: showPIN ? "Erase Device (recovery PIN \(erasePIN))" : "Erase Device",
+                actionCategory: category,
                 deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
                 success: true, errorMessage: nil
             )
 
-            // 2) Confirm the command was issued (accepted + sent, non-error state).
-            let issued = await verifyCommandIssued(uuid: commandUUID, token: token, jamfURL: config.jamfURL)
+            // 2) WAIT until the device ACKNOWLEDGES the erase. Deleting the Jamf
+            // record unmanages the Mac (removes MDM), so it must not happen until
+            // the wipe is acknowledged/underway or the command never processes.
+            await MainActor.run { processingMessage = "Waiting for \(deviceName) to acknowledge the erase…" }
+            let acked = await waitForAcknowledgment(uuid: commandUUID, deviceName: deviceName, token: token, jamfURL: config.jamfURL)
 
-            // 3) Delete the Jamf record only after the erase is confirmed issued.
-            if issued {
+            // 3) Delete the Jamf record only after the erase is acknowledged.
+            if acked {
+                await MainActor.run { processingMessage = "Erase acknowledged. Removing Jamf record…" }
                 do {
                     try await deleteJamfRecord(computerId: deviceId, token: token, jamfURL: config.jamfURL)
-                    summaryLines.append("• Jamf record removed.")
+                    summaryLines.append("• Erase acknowledged; Jamf record removed.")
                     ActionLogService.shared.logAction(
                         actionName: "Delete Jamf Record", actionCategory: category,
                         deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
@@ -1566,17 +1679,18 @@ struct DeviceView: View {
                 }
             } else {
                 overallSuccess = false
-                summaryLines.append("• Erase could not be confirmed as issued — Jamf record left in place. Follow up manually.")
+                summaryLines.append("• Erase was NOT acknowledged in time — Jamf record left in place so the command can still be delivered. Follow up manually.")
                 ActionLogService.shared.logAction(
                     actionName: "Delete Jamf Record", actionCategory: category,
                     deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
-                    success: false, errorMessage: "Erase command not confirmed issued; record not deleted."
+                    success: false, errorMessage: "Erase not acknowledged; record intentionally not deleted (would unmanage the Mac)."
                 )
             }
 
             // 4) Entra cleanup — best effort, only when configured. Never fatal.
             if let entra = EntraGraphService(configuration: config) {
                 let entraName = displayComputer.general?.name ?? deviceName
+                await MainActor.run { processingMessage = "Removing '\(entraName)' from Microsoft Entra…" }
                 let result = await entra.deleteDevices(displayName: entraName)
                 var entraSuccess = true
                 switch result.outcome {
@@ -1600,6 +1714,7 @@ struct DeviceView: View {
 
             await MainActor.run {
                 isExecutingCommand = false
+                processingMessage = nil
                 commandResult = CommandResult(
                     success: overallSuccess,
                     title: overallSuccess ? "Return to Service Complete" : "Return to Service — Attention Needed",
@@ -1610,15 +1725,20 @@ struct DeviceView: View {
 
         } catch {
             NSLog("❌ Return to Service error: \(error.localizedDescription)")
+            await MainActor.run { processingMessage = nil }
             await showError(error.localizedDescription)
         }
     }
 
-    /// POST an ERASE_DEVICE MDM command and return its command UUID.
-    private func issueEraseCommand(managementId: String, token: String, jamfURL: String) async throws -> String {
+    /// POST an ERASE_DEVICE MDM command (with the required 6-digit PIN) and
+    /// return its command UUID.
+    private func issueEraseCommand(managementId: String, pin: String, token: String, jamfURL: String) async throws -> String {
         let parameters: [String: Any] = [
             "clientData": [["managementId": managementId]],
-            "commandData": ["commandType": "ERASE_DEVICE"]
+            "commandData": [
+                "commandType": "ERASE_DEVICE",
+                "pin": pin
+            ]
         ]
         let postData = try JSONSerialization.data(withJSONObject: parameters, options: [])
 
@@ -1651,50 +1771,71 @@ struct DeviceView: View {
         return uuid
     }
 
-    /// Confirm an erase command exists in Jamf's queue with a non-error state
-    /// (PENDING / ACKNOWLEDGED / NOT_NOW all count as "issued"). Retries a few
-    /// times to tolerate brief eventual-consistency after the POST.
-    private func verifyCommandIssued(uuid: String, token: String, jamfURL: String) async -> Bool {
-        guard !uuid.isEmpty else { return false }
+    /// Poll the erase command until the device ACKNOWLEDGES it (or it reports
+    /// COMPLETED), so the Jamf record is only deleted once the wipe is actually
+    /// underway. Returns false on NOT_NOW / ERROR / FAILED or on timeout — in
+    /// which case the caller must NOT delete the record (that would unmanage the
+    /// Mac before the command is delivered). Mirrors wait_for_ack in the script:
+    /// 180s timeout, 15s poll interval.
+    private func waitForAcknowledgment(uuid: String, deviceName: String, token: String, jamfURL: String) async -> Bool {
+        guard !uuid.isEmpty else {
+            NSLog("⚠️ No command UUID to poll — cannot confirm acknowledgment")
+            return false
+        }
 
-        for attempt in 1...3 {
+        let timeoutSeconds = 180
+        let pollIntervalSeconds = 15
+        var waited = 0
+
+        while waited < timeoutSeconds {
+            await MainActor.run {
+                processingMessage = "Waiting for \(deviceName) to acknowledge the erase…  (\(waited)s)"
+            }
+
             var components = URLComponents(string: "\(jamfURL)/api/v2/mdm/commands")
             components?.queryItems = [
                 URLQueryItem(name: "page", value: "0"),
                 URLQueryItem(name: "page-size", value: "1"),
                 URLQueryItem(name: "filter", value: "uuid==\"\(uuid)\"")
             ]
-            guard let url = components?.url else { return false }
 
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.timeoutInterval = 30
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let url = components?.url {
+                var request = URLRequest(url: url)
+                request.httpMethod = "GET"
+                request.timeoutInterval = 30
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                    let state = Self.extractCommandState(from: data)
-                    let normalized = state.uppercased()
-                        .replacingOccurrences(of: "_", with: "")
-                        .replacingOccurrences(of: " ", with: "")
-                    NSLog("🔎 Command \(uuid) state=\(state.isEmpty ? "<none>" : state) (attempt \(attempt))")
-                    switch normalized {
-                    case "", "ERROR", "FAILED":
-                        break // not yet visible or errored — retry
-                    default:
-                        return true
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                        let state = Self.extractCommandState(from: data)
+                        let normalized = state.uppercased()
+                            .replacingOccurrences(of: "_", with: "")
+                            .replacingOccurrences(of: " ", with: "")
+                        NSLog("🔎 Erase \(uuid) state=\(state.isEmpty ? "<none>" : state) (waited \(waited)s)")
+                        switch normalized {
+                        case "ACKNOWLEDGED", "COMPLETED":
+                            return true
+                        case "ERROR", "FAILED", "NOTNOW":
+                            NSLog("❌ Erase \(uuid) returned \(state) — not deleting the record")
+                            return false
+                        default:
+                            break // PENDING / empty — keep waiting
+                        }
+                    } else {
+                        NSLog("⚠️ Ack poll failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1))")
                     }
+                } catch {
+                    NSLog("⚠️ Ack poll error for \(uuid): \(error.localizedDescription)")
                 }
-            } catch {
-                NSLog("⚠️ Verify command \(uuid) attempt \(attempt) failed: \(error.localizedDescription)")
             }
 
-            if attempt < 3 {
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
-            }
+            try? await Task.sleep(nanoseconds: UInt64(pollIntervalSeconds) * 1_000_000_000)
+            waited += pollIntervalSeconds
         }
+
+        NSLog("⏱️ Timed out after \(timeoutSeconds)s waiting for ack of \(uuid)")
         return false
     }
 
