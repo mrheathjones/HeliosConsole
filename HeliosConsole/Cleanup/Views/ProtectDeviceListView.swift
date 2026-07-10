@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ProtectDeviceListView: View {
     @Environment(CleanupViewModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     let filter: ProtectFilter
 
     @State private var selection: Set<String> = []
@@ -70,24 +71,12 @@ struct ProtectDeviceListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .navigationTitle(filter.title)
+        .navigationBarBackButtonHidden(true)
         .searchable(text: $searchText, prompt: "Host name or serial")
         .safeAreaInset(edge: .top, spacing: 0) { countBar }
         .safeAreaInset(edge: .bottom) {
             if !selection.isEmpty {
                 deleteBar
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
-                    .disabled(visibleDevices.isEmpty)
-
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(model.isLoading || isDeleting)
             }
         }
         .overlay {
@@ -144,6 +133,8 @@ struct ProtectDeviceListView: View {
 
     private var countBar: some View {
         HStack(spacing: 10) {
+            CleanupBackButton { dismiss() }
+
             CleanupCheckBox(state: checkAllState) {
                 let ids = Set(visibleDevices.map(\.uuid))
                 if ids.isSubset(of: selection) {
@@ -180,6 +171,19 @@ struct ProtectDeviceListView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+
+            CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
+                .disabled(visibleDevices.isEmpty)
+                .controlSize(.small)
+
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isLoading || isDeleting)
+            .help("Refresh")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

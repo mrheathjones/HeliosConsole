@@ -11,6 +11,7 @@ import SwiftUI
 
 struct StaleDeviceListView: View {
     @Environment(CleanupViewModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     let filter: DeviceFilter
 
     @State private var showActions = false
@@ -64,24 +65,12 @@ struct StaleDeviceListView: View {
     var body: some View {
         deviceTable
             .navigationTitle(filter.title)
+            .navigationBarBackButtonHidden(true)
             .searchable(text: $searchText, prompt: "Name, email, or serial")
             .safeAreaInset(edge: .top, spacing: 0) { countBar }
             .safeAreaInset(edge: .bottom) {
                 if !model.selection.isEmpty {
                     selectionBar
-                }
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
-                        .disabled(visibleDevices.isEmpty)
-
-                    Button {
-                        Task { await model.refresh() }
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .disabled(model.isLoading)
                 }
             }
             .sheet(isPresented: $showActions) {
@@ -102,6 +91,8 @@ struct StaleDeviceListView: View {
 
     private var countBar: some View {
         HStack(spacing: 10) {
+            CleanupBackButton { dismiss() }
+
             CleanupCheckBox(state: checkAllState) {
                 model.toggleSelectAll(in: visibleDevices)
             }
@@ -136,6 +127,19 @@ struct StaleDeviceListView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+
+            CleanupExportMenu(filename: exportFilename, makeTable: buildTable)
+                .disabled(visibleDevices.isEmpty)
+                .controlSize(.small)
+
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isLoading)
+            .help("Refresh")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

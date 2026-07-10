@@ -85,7 +85,7 @@ struct DashboardView: View {
         case .enrollments:
             EnrollmentsView()
         case .cleanup:
-            CleanupView()
+            CleanupView(isInNestedView: $isInNestedView)
         case .settings:
             SettingsView()
         }

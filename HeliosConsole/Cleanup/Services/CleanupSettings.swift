@@ -73,8 +73,21 @@ final class CleanupSettings {
         set { defaults.set(newValue, forKey: Key.protectClientID) }
     }
 
+    /// True when the Protect password is delivered by the MDM profile, in
+    /// which case the in-app field is locked and the managed value is used.
+    var protectPasswordIsManaged: Bool {
+        !(mdm.protectPassword ?? "").isEmpty
+    }
+
     var protectClientPassword: String {
-        get { KeychainManager.shared.loadString(forKey: Self.protectPasswordKeychainKey) ?? "" }
+        get {
+            // A profile-delivered password wins (like the master secret);
+            // otherwise fall back to the in-app Keychain value.
+            if let managed = mdm.protectPassword, !managed.isEmpty {
+                return managed
+            }
+            return KeychainManager.shared.loadString(forKey: Self.protectPasswordKeychainKey) ?? ""
+        }
         set { KeychainManager.shared.saveString(newValue, forKey: Self.protectPasswordKeychainKey) }
     }
 
@@ -103,5 +116,51 @@ final class CleanupSettings {
         if !s.lowercased().hasPrefix("http") { s = "https://" + s }
         while s.hasSuffix("/") { s.removeLast() }
         return URL(string: s)
+    }
+}
+
+// MARK: - Connection tests
+
+/// Standalone Jamf Pro / Jamf Protect connection tests. Builds throwaway
+/// clients from a `CleanupSettings`, so any screen (the main Settings view or
+/// the Cleanup view model) can run a test without owning a full view model.
+enum CleanupConnectionTester {
+    @MainActor
+    static func testJamf(_ settings: CleanupSettings) async -> Result<String, Error> {
+        do {
+            guard settings.isConfigured, let url = settings.normalizedJamfURL else {
+                throw JamfCleanupError.notConfigured
+            }
+            let client = JamfCleanupClient(
+                baseURL: url,
+                clientID: settings.jamfClientID,
+                clientSecret: settings.jamfClientSecret,
+                pageSize: settings.pageSize
+            )
+            let version = try await client.testConnection()
+            await client.invalidateToken()
+            return .success("Connected — Jamf Pro \(version)")
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    @MainActor
+    static func testProtect(_ settings: CleanupSettings) async -> Result<String, Error> {
+        do {
+            guard settings.isProtectConfigured, let url = settings.normalizedProtectURL else {
+                throw JamfCleanupError.protectNotConfigured
+            }
+            let client = JamfProtectClient(
+                baseURL: url,
+                clientID: settings.protectClientID,
+                password: settings.protectClientPassword
+            )
+            try await client.testConnection()
+            await client.invalidate()
+            return .success("Connected to Jamf Protect")
+        } catch {
+            return .failure(error)
+        }
     }
 }

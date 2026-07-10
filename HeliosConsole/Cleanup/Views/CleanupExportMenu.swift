@@ -12,8 +12,8 @@ import UniformTypeIdentifiers
 
 /// A FileDocument whose bytes and type are supplied at export time.
 struct ExportDocument: FileDocument {
-    static let readableContentTypes: [UTType] = [.commaSeparatedText, .markdownReport, .pdf, .plainText]
-    static let writableContentTypes: [UTType] = [.commaSeparatedText, .markdownReport, .pdf, .plainText]
+    static let readableContentTypes: [UTType] = [.commaSeparatedText, .markdownReport, .pdf, .plainText, .excelWorkbook]
+    static let writableContentTypes: [UTType] = [.commaSeparatedText, .markdownReport, .pdf, .plainText, .excelWorkbook]
 
     var data: Data
 

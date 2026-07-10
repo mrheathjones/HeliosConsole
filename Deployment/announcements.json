@@ -1,0 +1,15 @@
+{
+  "Announcements": [
+    {
+      "id": "helios-reports-overhaul-2026-07",
+      "title": "Reports, Reimagined",
+      "message": "The Report Builder has been rebuilt from the ground up — faster to use, with more ways to slice your fleet, and a much better results experience.\n\n**Build reports faster**\n- Collapsible sections, with your active filters pinned to the top\n- A new *Individual Device* scope — pull one device by serial or asset tag\n\n**More ways to filter**\n- Computer Group and Device Group filters, with a searchable list of every smart and static group\n- Jamf Protect coverage (Has / Missing / Stale record) for your Macs\n- All of Cleanup's stale-device filters, right in the builder\n\n**A better results view**\n- Results open in a focused window you can search across name, serial, model, OS, and more — and sort by any column\n- Click any device to jump straight to its full detail\n\n**Export that just works**\n- One click to CSV, Excel, PDF, or Markdown — with your applied filters listed right in the file\n- Optionally include Device Enrollment (ADE) details, including serials that are in Apple Business Manager but not yet in Jamf\n\n**New: Environment Health Scorecard**\n- A dedicated report of fleet compliance plus a managed-device breakdown by OS, exportable in every format\n\nOpen **Reports** to take it for a spin. Cleanup settings now live in **Settings → Cleanup**.",
+      "type": "update",
+      "priority": "normal",
+      "createdAt": "2026-07-10T15:00:00Z",
+      "expiresAt": "2026-09-10T00:00:00Z",
+      "dismissible": true,
+      "requiredReading": false
+    }
+  ]
+}

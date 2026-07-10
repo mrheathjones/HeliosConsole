@@ -215,9 +215,9 @@ class AnnouncementService: ObservableObject {
     
     // MARK: - Configuration
     
-    /// The managed preference domain for MDM-pushed announcements
-    /// This should match your configuration profile's PayloadType
-    private let managedPreferenceDomain = "com.yourcompany.helios.announcements"
+    /// The managed preference domain for MDM-pushed announcements.
+    /// Matches the announcements schema ($id) and ConfigurationManager.
+    private let managedPreferenceDomain = "com.helios.console.announcements"
     
     /// Local file path for announcements JSON
     /// /Library/Application Support/Helios/Announcements/announcements.json
@@ -446,13 +446,14 @@ class AnnouncementService: ObservableObject {
     
     /// Load announcements from MDM managed preferences
     private func loadFromManagedPreferences() -> [Announcement]? {
-        // Read from managed app configuration
-        // This reads preferences set by MDM configuration profiles
-        guard let managedPrefs = UserDefaults.standard.persistentDomain(forName: managedPreferenceDomain) else {
-            return nil
-        }
-        
-        guard let announcementsData = managedPrefs["Announcements"] as? [[String: Any]] else {
+        // Read from managed app configuration set by MDM configuration profiles.
+        // Use UserDefaults(suiteName:), NOT persistentDomain(forName:): the latter
+        // reads the user's own defaults domain and does not surface MDM-managed
+        // preferences (which land in /Library/Managed Preferences/<domain>.plist).
+        // This mirrors ConfigurationManager.loadAnnouncementsFromMDMProfile().
+        let defaults = UserDefaults(suiteName: managedPreferenceDomain) ?? UserDefaults.standard
+
+        guard let announcementsData = defaults.array(forKey: "Announcements") as? [[String: Any]] else {
             return nil
         }
         

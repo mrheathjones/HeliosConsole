@@ -11,16 +11,18 @@ import SwiftUI
 
 struct CleanupView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Binding var isInNestedView: Bool
     @State private var model = CleanupViewModel()
-    @State private var showSettings = false
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
         ZStack {
-            AppBackground()
+            // Match Helios's native content background (animated gradient orbs).
+            AnimatedBackgroundView(animate: .constant(true))
 
             if model.settings.isConfigured {
-                NavigationStack {
-                    CleanupDashboardView(showSettings: $showSettings)
+                NavigationStack(path: $navigationPath) {
+                    CleanupDashboardView()
                         .navigationDestination(for: DeviceFilter.self) { filter in
                             StaleDeviceListView(filter: filter)
                         }
@@ -34,12 +36,13 @@ struct CleanupView: View {
             }
         }
         .environment(model)
-        .sheet(isPresented: $showSettings) {
-            NavigationStack {
-                CleanupSettingsView()
+        // Hide the sidebar while a filtered list is open, like the main app.
+        .onChange(of: navigationPath.count) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isInNestedView = newValue > 0
             }
-            .environment(model)
         }
+        .onAppear { isInNestedView = false }
         // Release Jamf/Protect tokens server-side when leaving cleanup or
         // backgrounding the app (abandoned tokens hold a Jamf DB connection).
         .onChange(of: scenePhase) { _, phase in

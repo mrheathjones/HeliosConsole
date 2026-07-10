@@ -10,10 +10,23 @@ import SwiftUI
 
 struct CleanupDashboardView: View {
     @Environment(CleanupViewModel.self) private var model
-    @Binding var showSettings: Bool
     @AppStorage("dashboard.cleanupSitesExpanded") private var sitesExpanded = true
-    @AppStorage(CleanupSettings.Key.staleDays) private var staleDays = 90
-    @State private var showReportBuilder = false
+    /// 0 = unset → use the MDM profile's default (config = default, user-overridable).
+    @AppStorage(CleanupSettings.Key.staleDays) private var staleDaysStored = 0
+
+    /// The stale threshold actually in effect: the user's in-app choice if set,
+    /// otherwise the config-profile default.
+    private var effectiveStaleDays: Int {
+        staleDaysStored > 0 ? staleDaysStored : MDMConfigurationManager.shared.configuration.cleanupStaleDays
+    }
+
+    /// Dropdown options — the common presets plus the current/MDM value so it's
+    /// always selectable even if it isn't a preset.
+    private var staleDayOptions: [Int] {
+        Array(Set([7, 14, 30, 45, 60, 90, 120, 180, 365, effectiveStaleDays]))
+            .filter { $0 > 0 }
+            .sorted()
+    }
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: 190, maximum: 280), spacing: 14)]
@@ -22,6 +35,8 @@ struct CleanupDashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                headerBar
+
                 if let error = model.loadError, model.devices.isEmpty {
                     errorCard(error)
                 }
@@ -90,8 +105,6 @@ struct CleanupDashboardView: View {
             .padding(20)
         }
         .scrollContentBackground(.hidden)
-        .navigationTitle("Cleanup")
-        .toolbar { toolbarContent }
         .overlay {
             if model.isLoading && model.devices.isEmpty && model.loadError == nil {
                 VStack(spacing: 14) {
@@ -109,10 +122,6 @@ struct CleanupDashboardView: View {
         }
         .refreshable {
             await model.refresh()
-        }
-        .sheet(isPresented: $showReportBuilder) {
-            CleanupReportBuilderView()
-                .environment(model)
         }
     }
 
@@ -219,48 +228,76 @@ struct CleanupDashboardView: View {
         .glassCard()
     }
 
-    // MARK: - Toolbar
+    // MARK: - Inline header (actions live in the content, top-right — Helios's
+    // window has no nav toolbar, so SwiftUI .toolbar items would land over the
+    // sidebar/traffic-lights).
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
+    private var headerBar: some View {
+        HStack(spacing: 10) {
+            Text("Cleanup")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+
+            Spacer()
+
             staleDaysMenu
 
-            Button {
-                showReportBuilder = true
-            } label: {
-                Label("Report Builder", systemImage: "doc.badge.plus")
-            }
-            .disabled(model.devices.isEmpty && model.protectDevices.isEmpty)
-
-            Button {
+            headerIconButton("arrow.clockwise", help: "Refresh", disabled: model.isLoading) {
                 Task { await model.refresh() }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .disabled(model.isLoading)
-
-            Button {
-                showSettings = true
-            } label: {
-                Label("Cleanup Settings", systemImage: "gearshape")
             }
         }
     }
 
+    private func headerIconButton(
+        _ systemName: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 32, height: 32)
+                Image(systemName: systemName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
+        .help(help)
+    }
+
     private var staleDaysMenu: some View {
         Menu {
-            Picker("Stale after", selection: $staleDays) {
-                ForEach([7, 14, 30, 60, 90, 180, 365], id: \.self) { days in
+            Picker("Stale after", selection: Binding(
+                get: { effectiveStaleDays },
+                set: { staleDaysStored = $0 }
+            )) {
+                ForEach(staleDayOptions, id: \.self) { days in
                     Text("\(days) days").tag(days)
                 }
             }
         } label: {
-            Label("\(staleDays)d", systemImage: "clock.badge.questionmark")
+            HStack(spacing: 6) {
+                Image(systemName: "clock.badge.questionmark")
+                Text("Stale: \(effectiveStaleDays)d")
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(Capsule().fill(Color.white.opacity(0.1)))
         }
-        .onChange(of: staleDays) {
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onChange(of: staleDaysStored) {
             Task { await model.refresh() }
         }
+        .help("Devices with no Jamf check-in for this many days are stale. Default comes from your MDM profile; change it here anytime.")
     }
 }
 

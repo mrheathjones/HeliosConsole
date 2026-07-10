@@ -428,22 +428,12 @@ final class CleanupViewModel {
     // MARK: - Connection tests (Settings)
 
     func testJamfConnection() async -> Result<String, Error> {
-        do {
-            await resetClients()
-            let version = try await client().testConnection()
-            return .success("Connected — Jamf Pro \(version)")
-        } catch {
-            return .failure(error)
-        }
+        await resetClients()
+        return await CleanupConnectionTester.testJamf(settings)
     }
 
     func testProtectConnection() async -> Result<String, Error> {
-        do {
-            await resetClients()
-            try await protect().testConnection()
-            return .success("Connected to Jamf Protect")
-        } catch {
-            return .failure(error)
-        }
+        await resetClients()
+        return await CleanupConnectionTester.testProtect(settings)
     }
 }

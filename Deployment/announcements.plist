@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Helios Console — Announcements
+  Deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings
+  (External Applications / Custom Schema or Upload plist).
+
+  Preference Domain MUST match the domain Helios reads:
+      com.helios.console.announcements
+  (Matches AnnouncementService.swift `managedPreferenceDomain`, the announcements
+   schema $id, and ConfigurationManager.announcementPreferenceDomain.)
+-->
+<plist version="1.0">
+<dict>
+    <key>Announcements</key>
+    <array>
+        <dict>
+            <key>id</key>
+            <string>helios-reports-overhaul-2026-07</string>
+            <key>title</key>
+            <string>Reports, Reimagined</string>
+            <key>message</key>
+            <string>The Report Builder has been rebuilt from the ground up — faster to use, with more ways to slice your fleet, and a much better results experience.
+
+**Build reports faster**
+- Collapsible sections, with your active filters pinned to the top
+- A new *Individual Device* scope — pull one device by serial or asset tag
+
+**More ways to filter**
+- Computer Group and Device Group filters, with a searchable list of every smart and static group
+- Jamf Protect coverage (Has / Missing / Stale record) for your Macs
+- All of Cleanup's stale-device filters, right in the builder
+
+**A better results view**
+- Results open in a focused window you can search across name, serial, model, OS, and more — and sort by any column
+- Click any device to jump straight to its full detail
+
+**Export that just works**
+- One click to CSV, Excel, PDF, or Markdown — with your applied filters listed right in the file
+- Optionally include Device Enrollment (ADE) details, including serials that are in Apple Business Manager but not yet in Jamf
+
+**New: Environment Health Scorecard**
+- A dedicated report of fleet compliance plus a managed-device breakdown by OS, exportable in every format
+
+Open **Reports** to take it for a spin. Cleanup settings now live in **Settings → Cleanup**.</string>
+            <key>type</key>
+            <string>update</string>
+            <key>priority</key>
+            <string>normal</string>
+            <key>createdAt</key>
+            <string>2026-07-10T15:00:00Z</string>
+            <key>expiresAt</key>
+            <string>2026-09-10T00:00:00Z</string>
+            <key>dismissible</key>
+            <true/>
+            <key>requiredReading</key>
+            <false/>
+        </dict>
+    </array>
+</dict>
+</plist>

@@ -205,10 +205,12 @@ class MDMConfigurationManager: ObservableObject {
         var protectEnabled = false
         var protectURL: String? = nil
         var protectClientID: String? = nil
+        var protectPassword: String? = nil
         if let protectDict = defaults.dictionary(forKey: MDMKeys.jamfProtect) {
             protectEnabled = protectDict["enabled"] as? Bool ?? false
             protectURL = protectDict["url"] as? String
             protectClientID = protectDict["clientID"] as? String
+            protectPassword = protectDict["password"] as? String
         }
 
         return MDMConfiguration(
@@ -231,7 +233,8 @@ class MDMConfigurationManager: ObservableObject {
             cleanupDefaultSiteID: cleanupDefaultSiteID,
             protectEnabled: protectEnabled,
             protectURL: protectURL,
-            protectClientID: protectClientID
+            protectClientID: protectClientID,
+            protectPassword: protectPassword
         )
     }
     

@@ -258,7 +258,7 @@ final class ComputerInventoryService: ObservableObject {
         let sortParam = "\(sortField):\(sortOrder)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "\(sortField):\(sortOrder)"
         
         let endpoint = "/api/v1/computers-inventory"
-        let sections = "section=GENERAL&section=HARDWARE&section=OPERATING_SYSTEM&section=USER_AND_LOCATION&section=DISK_ENCRYPTION&section=SECURITY&section=APPLICATIONS&section=SOFTWARE_UPDATES&section=PURCHASING"
+        let sections = "section=GENERAL&section=HARDWARE&section=OPERATING_SYSTEM&section=USER_AND_LOCATION&section=DISK_ENCRYPTION&section=SECURITY&section=APPLICATIONS&section=SOFTWARE_UPDATES&section=PURCHASING&section=GROUP_MEMBERSHIPS"
         let queryParams = "\(sections)&page=\(page)&page-size=\(pageSize)&sort=\(sortParam)"
         
         guard let url = URL(string: "\(jamfURL)\(endpoint)?\(queryParams)") else {
@@ -320,7 +320,8 @@ struct ComputerInventoryItem: Codable, Identifiable, Hashable {
     let applications: [ComputerInventoryApplication]?
     let softwareUpdates: [ComputerInventorySoftwareUpdate]?
     let purchasing: ComputerInventoryPurchasing?
-    
+    let groupMemberships: [ComputerInventoryGroupMembership]?
+
     // Convenience properties
     var name: String {
         general?.name ?? "Unknown"
@@ -433,6 +434,12 @@ struct ComputerInventoryUserManagementInfo: Codable, Hashable {
 struct ComputerInventorySite: Codable, Hashable {
     let id: String?
     let name: String?
+}
+
+struct ComputerInventoryGroupMembership: Codable, Hashable {
+    let groupId: String?
+    let groupName: String?
+    let smartGroup: Bool?
 }
 
 struct ComputerInventoryEnrollmentMethod: Codable, Hashable {
