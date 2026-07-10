@@ -568,7 +568,7 @@ struct AnnouncementCard: View {
                             .foregroundColor(.gray)
                     }
                     
-                    Text(announcement.message)
+                    Text(AnnouncementMarkdownView.inlineAttributed(announcement.message))
                         .font(.system(size: 13))
                         .foregroundColor(isDark ? .white.opacity(0.7) : .primary.opacity(0.7))
                         .lineLimit(2)
@@ -694,7 +694,7 @@ struct AnnouncementDetailSheet: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text(announcement.message)
+                    AnnouncementMarkdownView(text: announcement.message)
                         .font(.system(size: 15))
                         .foregroundColor(isDark ? .white.opacity(0.9) : .primary.opacity(0.9))
                         .lineSpacing(4)

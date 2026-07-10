@@ -59,6 +59,7 @@
 		F045 /* HealthFilteredDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S045 /* HealthFilteredDeviceListView.swift */; };
 		F046 /* MobileDeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S046 /* MobileDeviceView.swift */; };
 		F047 /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S047 /* AnnouncementsView.swift */; };
+		F200 /* AnnouncementMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S200 /* AnnouncementMarkdownView.swift */; };
 		F048 /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S048 /* ReportsView.swift */; };
 		FREXP01 /* ReportsExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = SREXP01 /* ReportsExport.swift */; };
 		FRSCEXP1 /* HealthScorecardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRSCEXP1 /* HealthScorecardExport.swift */; };
@@ -167,6 +168,7 @@
 		S045 /* HealthFilteredDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthFilteredDeviceListView.swift; sourceTree = "<group>"; };
 		S046 /* MobileDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceView.swift; sourceTree = "<group>"; };
 		S047 /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
+		S200 /* AnnouncementMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementMarkdownView.swift; sourceTree = "<group>"; };
 		S048 /* ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsView.swift; sourceTree = "<group>"; };
 		SREXP01 /* ReportsExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsExport.swift; sourceTree = "<group>"; };
 		SRSCEXP1 /* HealthScorecardExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthScorecardExport.swift; sourceTree = "<group>"; };
@@ -390,6 +392,7 @@
 			isa = PBXGroup;
 			children = (
 				S047 /* AnnouncementsView.swift */,
+				S200 /* AnnouncementMarkdownView.swift */,
 			);
 			path = Announcement;
 			sourceTree = "<group>";
@@ -694,6 +697,7 @@
 				F045 /* HealthFilteredDeviceListView.swift in Sources */,
 				F046 /* MobileDeviceView.swift in Sources */,
 				F047 /* AnnouncementsView.swift in Sources */,
+				F200 /* AnnouncementMarkdownView.swift in Sources */,
 				F048 /* ReportsView.swift in Sources */,
 				FREXP01 /* ReportsExport.swift in Sources */,
 				FRSCEXP1 /* HealthScorecardExport.swift in Sources */,
