@@ -13,7 +13,6 @@ struct CleanupView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Binding var isInNestedView: Bool
     @State private var model = CleanupViewModel()
-    @State private var showSettings = false
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
@@ -23,7 +22,7 @@ struct CleanupView: View {
 
             if model.settings.isConfigured {
                 NavigationStack(path: $navigationPath) {
-                    CleanupDashboardView(showSettings: $showSettings)
+                    CleanupDashboardView()
                         .navigationDestination(for: DeviceFilter.self) { filter in
                             StaleDeviceListView(filter: filter)
                         }
@@ -44,12 +43,6 @@ struct CleanupView: View {
             }
         }
         .onAppear { isInNestedView = false }
-        .sheet(isPresented: $showSettings) {
-            NavigationStack {
-                CleanupSettingsView()
-            }
-            .environment(model)
-        }
         // Release Jamf/Protect tokens server-side when leaving cleanup or
         // backgrounding the app (abandoned tokens hold a Jamf DB connection).
         .onChange(of: scenePhase) { _, phase in

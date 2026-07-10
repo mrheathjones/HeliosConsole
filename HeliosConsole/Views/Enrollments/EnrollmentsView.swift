@@ -367,6 +367,92 @@ struct DeviceEnrollmentInstanceSearchResults: Codable {
     let results: [DeviceEnrollmentInstance]
 }
 
+// MARK: - Reports aggregation
+
+/// Device Enrollment (ADE/DEP) records aggregated across every instance,
+/// keyed by uppercased serial, plus a lookup of instance id → name.
+struct EnrollmentAggregate: Sendable {
+    let bySerial: [String: DeviceEnrollmentDevice]
+    let instanceNames: [String: String]
+    let instanceSiteIds: [String: String]
+
+    func instanceName(for device: DeviceEnrollmentDevice) -> String? {
+        guard let id = device.deviceEnrollmentProgramInstanceId else { return nil }
+        return instanceNames[id]
+    }
+
+    func instanceSiteId(for device: DeviceEnrollmentDevice) -> String? {
+        guard let id = device.deviceEnrollmentProgramInstanceId else { return nil }
+        return instanceSiteIds[id]
+    }
+}
+
+extension EnrollmentService {
+    /// Aggregate ADE devices across ALL enrollment instances without touching
+    /// the @Published state the Enrollments view relies on. Used by the Reports
+    /// "Devices" scope to attach enrollment records and surface DEP serials that
+    /// aren't in Jamf inventory.
+    func fetchAllInstancesDevices() async throws -> EnrollmentAggregate {
+        let serverURL = MDMConfigurationManager.shared.configuration.jamfURL
+        let token = try await getBearerToken(serverURL: serverURL)
+        let instances = try await instanceList(serverURL: serverURL, token: token)
+
+        var bySerial: [String: DeviceEnrollmentDevice] = [:]
+        var instanceNames: [String: String] = [:]
+        var instanceSiteIds: [String: String] = [:]
+        for instance in instances {
+            instanceNames[instance.id] = instance.name
+            instanceSiteIds[instance.id] = instance.siteId ?? ""
+            let devices = try await deviceList(instanceId: instance.id, serverURL: serverURL, token: token)
+            for device in devices {
+                let key = device.serialNumber.uppercased()
+                guard !key.isEmpty else { continue }
+                // On duplicate serials, keep the most advanced profile status.
+                if let existing = bySerial[key],
+                   Self.statusRank(existing.profileStatus) >= Self.statusRank(device.profileStatus) {
+                    continue
+                }
+                bySerial[key] = device
+            }
+        }
+        return EnrollmentAggregate(bySerial: bySerial, instanceNames: instanceNames, instanceSiteIds: instanceSiteIds)
+    }
+
+    private func instanceList(serverURL: String, token: String) async throws -> [DeviceEnrollmentInstance] {
+        guard let url = URL(string: "\(serverURL)/api/v1/device-enrollments") else { throw EnrollmentError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return [] }
+        return try JSONDecoder().decode(DeviceEnrollmentInstanceSearchResults.self, from: data).results
+    }
+
+    private func deviceList(instanceId: String, serverURL: String, token: String) async throws -> [DeviceEnrollmentDevice] {
+        guard let url = URL(string: "\(serverURL)/api/v1/device-enrollments/\(instanceId)/devices") else { throw EnrollmentError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return [] }
+        return try JSONDecoder().decode(DeviceEnrollmentSearchResults.self, from: data).results
+    }
+
+    private static func statusRank(_ status: DeviceEnrollmentDevice.ProfileStatus?) -> Int {
+        switch status {
+        case .pushed: return 4
+        case .assigned: return 3
+        case .removed: return 2
+        case .empty: return 1
+        case nil: return 0
+        }
+    }
+}
+
 // MARK: - Enrollment Errors
 
 enum EnrollmentError: Error, LocalizedError {

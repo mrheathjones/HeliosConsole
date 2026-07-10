@@ -60,6 +60,8 @@
 		F046 /* MobileDeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S046 /* MobileDeviceView.swift */; };
 		F047 /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S047 /* AnnouncementsView.swift */; };
 		F048 /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S048 /* ReportsView.swift */; };
+		FREXP01 /* ReportsExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = SREXP01 /* ReportsExport.swift */; };
+		FRSCEXP1 /* HealthScorecardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRSCEXP1 /* HealthScorecardExport.swift */; };
 		F049 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S049 /* SettingsView.swift */; };
 		F050 /* EnrollmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S050 /* EnrollmentsView.swift */; };
 		F051 /* AnimatedBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S051 /* AnimatedBackgroundView.swift */; };
@@ -105,7 +107,6 @@
 		CLF9 /* StaleDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR9 /* StaleDeviceListView.swift */; };
 		CLF10 /* CleanupActionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR10 /* CleanupActionsSheet.swift */; };
 		CLF11 /* ProtectDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR11 /* ProtectDeviceListView.swift */; };
-		CLF12 /* CleanupSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR12 /* CleanupSettingsView.swift */; };
 		CLF13 /* CleanupReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR13 /* CleanupReportModels.swift */; };
 		CLF14 /* CleanupReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR14 /* CleanupReportPDF.swift */; };
 		CLF15 /* CleanupExportMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR15 /* CleanupExportMenu.swift */; };
@@ -167,6 +168,8 @@
 		S046 /* MobileDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceView.swift; sourceTree = "<group>"; };
 		S047 /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
 		S048 /* ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsView.swift; sourceTree = "<group>"; };
+		SREXP01 /* ReportsExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsExport.swift; sourceTree = "<group>"; };
+		SRSCEXP1 /* HealthScorecardExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthScorecardExport.swift; sourceTree = "<group>"; };
 		S049 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		S050 /* EnrollmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentsView.swift; sourceTree = "<group>"; };
 		S051 /* AnimatedBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedBackgroundView.swift; sourceTree = "<group>"; };
@@ -189,7 +192,6 @@
 		CLR9 /* StaleDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaleDeviceListView.swift; sourceTree = "<group>"; };
 		CLR10 /* CleanupActionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupActionsSheet.swift; sourceTree = "<group>"; };
 		CLR11 /* ProtectDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectDeviceListView.swift; sourceTree = "<group>"; };
-		CLR12 /* CleanupSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupSettingsView.swift; sourceTree = "<group>"; };
 		CLR13 /* CleanupReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportModels.swift; sourceTree = "<group>"; };
 		CLR14 /* CleanupReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportPDF.swift; sourceTree = "<group>"; };
 		CLR15 /* CleanupExportMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExportMenu.swift; sourceTree = "<group>"; };
@@ -396,6 +398,8 @@
 			isa = PBXGroup;
 			children = (
 				S048 /* ReportsView.swift */,
+				SREXP01 /* ReportsExport.swift */,
+				SRSCEXP1 /* HealthScorecardExport.swift */,
 			);
 			path = Reports;
 			sourceTree = "<group>";
@@ -493,7 +497,6 @@
 				CLR9 /* StaleDeviceListView.swift */,
 				CLR10 /* CleanupActionsSheet.swift */,
 				CLR11 /* ProtectDeviceListView.swift */,
-				CLR12 /* CleanupSettingsView.swift */,
 				CLR14 /* CleanupReportPDF.swift */,
 				CLR15 /* CleanupExportMenu.swift */,
 			);
@@ -640,7 +643,6 @@
 				CLF9 /* StaleDeviceListView.swift in Sources */,
 				CLF10 /* CleanupActionsSheet.swift in Sources */,
 				CLF11 /* ProtectDeviceListView.swift in Sources */,
-				CLF12 /* CleanupSettingsView.swift in Sources */,
 				CLF13 /* CleanupReportModels.swift in Sources */,
 				CLF14 /* CleanupReportPDF.swift in Sources */,
 				CLF15 /* CleanupExportMenu.swift in Sources */,
@@ -693,6 +695,8 @@
 				F046 /* MobileDeviceView.swift in Sources */,
 				F047 /* AnnouncementsView.swift in Sources */,
 				F048 /* ReportsView.swift in Sources */,
+				FREXP01 /* ReportsExport.swift in Sources */,
+				FRSCEXP1 /* HealthScorecardExport.swift in Sources */,
 				F049 /* SettingsView.swift in Sources */,
 				7EB171382F7960E100105721 /* ActionLogEntry.swift in Sources */,
 				F050 /* EnrollmentsView.swift in Sources */,

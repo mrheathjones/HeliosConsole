@@ -23,9 +23,35 @@ struct SettingsView: View {
     @State private var showingResetAlert = false
     @State private var biometricTestResult: String?
     @State private var showBiometricResult = false
-    
+
+    // Cleanup settings — folded in from the former standalone Cleanup Settings
+    // sheet. These bind to the exact same keys the Cleanup feature reads, so
+    // there is no data migration.
+    @AppStorage(CleanupSettings.Key.staleDays) private var cleanupStaleDaysStored = 0
+    @AppStorage(CleanupSettings.Key.protectEnabled) private var cleanupProtectEnabled = false
+    @AppStorage(CleanupSettings.Key.protectURL) private var cleanupProtectURL = ""
+    @AppStorage(CleanupSettings.Key.protectClientID) private var cleanupProtectClientID = ""
+    @AppStorage(CleanupSettings.Key.protectAutoCleanup) private var cleanupProtectAutoCleanup = false
+    @State private var cleanupProtectPassword = ""
+    @State private var cleanupJamfTestResult: String?
+    @State private var cleanupJamfTestOK = false
+    @State private var cleanupProtectTestResult: String?
+    @State private var cleanupProtectTestOK = false
+    @State private var cleanupTesting = false
+    private let cleanupSettings = CleanupSettings()
+
     private var isDark: Bool {
         colorScheme == .dark
+    }
+
+    private var cleanupEffectiveStaleDays: Int {
+        cleanupStaleDaysStored > 0 ? cleanupStaleDaysStored : MDMConfigurationManager.shared.configuration.cleanupStaleDays
+    }
+
+    private var cleanupClientIDDisplay: String {
+        let id = cleanupSettings.jamfClientID
+        guard !id.isEmpty, id != "your-master-client-id" else { return "Not configured" }
+        return String(id.prefix(8)) + "…"
     }
     
     var body: some View {
@@ -42,6 +68,9 @@ struct SettingsView: View {
                         appearanceSection
                         securitySection
                         displaySection
+                        if MDMConfigurationManager.shared.configuration.isCleanupAdmin {
+                            cleanupSection
+                        }
                         aboutSection
                     }
                     .padding(32)
@@ -551,8 +580,151 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
     
+    // MARK: - Cleanup Section
+
+    private var cleanupSection: some View {
+        settingsCard(title: "Cleanup", icon: "trash.circle.fill", iconColor: .teal) {
+            VStack(alignment: .leading, spacing: 20) {
+                // Jamf Pro (MDM-supplied, read-only)
+                VStack(alignment: .leading, spacing: 10) {
+                    cleanupGroupHeader("Jamf Pro")
+                    cleanupInfoRow(label: "Server URL", value: cleanupSettings.normalizedJamfURL?.absoluteString ?? "Not configured")
+                    cleanupInfoRow(label: "API Client", value: cleanupClientIDDisplay)
+                    HStack(spacing: 10) {
+                        cleanupTestButton { testCleanupJamf() }
+                            .disabled(cleanupTesting || !cleanupSettings.isConfigured)
+                        if cleanupTesting { ProgressView().controlSize(.small) }
+                        if let r = cleanupJamfTestResult { cleanupResultLabel(r, ok: cleanupJamfTestOK) }
+                    }
+                    Text("Supplied by your Helios MDM configuration profile (the master API client).")
+                        .font(.system(size: 11)).foregroundColor(.gray)
+                }
+
+                Divider().background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
+
+                // Stale threshold
+                VStack(alignment: .leading, spacing: 8) {
+                    cleanupGroupHeader("Stale Threshold")
+                    Stepper(value: Binding(get: { cleanupEffectiveStaleDays }, set: { cleanupStaleDaysStored = $0 }), in: 1...730) {
+                        HStack {
+                            Text("Stale after").font(.system(size: 14, weight: .medium)).foregroundColor(isDark ? .white : .primary)
+                            Spacer()
+                            Text("\(cleanupEffectiveStaleDays) days").font(.system(size: 14)).foregroundColor(.gray)
+                        }
+                    }
+                    Text("Devices with no Jamf Pro check-in for this many days are considered stale.")
+                        .font(.system(size: 11)).foregroundColor(.gray)
+                }
+
+                Divider().background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
+
+                // Jamf Protect
+                VStack(alignment: .leading, spacing: 12) {
+                    settingsToggleRow(icon: "shield.lefthalf.filled", iconColor: .indigo, title: "Use Jamf Protect", subtitle: "Show Protect counts and delete Protect records", isOn: $cleanupProtectEnabled)
+                    if cleanupProtectEnabled {
+                        cleanupTextField(title: "Tenant URL", text: $cleanupProtectURL, prompt: "https://yourorg.protect.jamfcloud.com")
+                        cleanupTextField(title: "API Client ID", text: $cleanupProtectClientID, prompt: "Client ID")
+                        if cleanupSettings.protectPasswordIsManaged {
+                            cleanupInfoRow(label: "API Client Password", value: "Delivered by MDM")
+                        } else {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("API Client Password").font(.system(size: 12)).foregroundColor(.gray)
+                                SecureField(cleanupSettings.protectClientPassword.isEmpty ? "Paste password" : "•••••••• (saved)", text: $cleanupProtectPassword)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 13))
+                                    .padding(10)
+                                    .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                                    .cornerRadius(8)
+                                    .onSubmit { saveCleanupProtectPassword() }
+                            }
+                        }
+                        HStack(spacing: 10) {
+                            cleanupTestButton { saveCleanupProtectPassword(); testCleanupProtect() }
+                                .disabled(cleanupTesting)
+                            if let r = cleanupProtectTestResult { cleanupResultLabel(r, ok: cleanupProtectTestOK) }
+                        }
+                        settingsToggleRow(icon: "trash", iconColor: .red, title: "Auto-delete Protect record", subtitle: "When deleting a Jamf Pro record, also delete the matching Protect record", isOn: $cleanupProtectAutoCleanup)
+                    }
+                }
+            }
+        }
+        .onDisappear { saveCleanupProtectPassword() }
+    }
+
+    private func cleanupGroupHeader(_ text: String) -> some View {
+        Text(text.uppercased()).font(.system(size: 11, weight: .semibold)).foregroundColor(.gray)
+    }
+
+    private func cleanupInfoRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label).font(.system(size: 13)).foregroundColor(isDark ? .white.opacity(0.8) : .primary.opacity(0.8))
+            Spacer()
+            Text(value).font(.system(size: 13)).foregroundColor(.gray).textSelection(.enabled)
+        }
+    }
+
+    private func cleanupTextField(title: String, text: Binding<String>, prompt: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 12)).foregroundColor(.gray)
+            TextField(prompt, text: text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .padding(10)
+                .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                .cornerRadius(8)
+        }
+    }
+
+    private func cleanupTestButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("Test Connection")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Color.teal)
+                .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func cleanupResultLabel(_ text: String, ok: Bool) -> some View {
+        Label(text, systemImage: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+            .font(.system(size: 12))
+            .foregroundColor(ok ? .green : .red)
+    }
+
+    private func saveCleanupProtectPassword() {
+        guard !cleanupProtectPassword.isEmpty else { return }
+        cleanupSettings.protectClientPassword = cleanupProtectPassword
+        cleanupProtectPassword = ""
+    }
+
+    private func testCleanupJamf() {
+        cleanupTesting = true
+        cleanupJamfTestResult = nil
+        Task {
+            switch await CleanupConnectionTester.testJamf(cleanupSettings) {
+            case .success(let m): cleanupJamfTestOK = true; cleanupJamfTestResult = m
+            case .failure(let e): cleanupJamfTestOK = false; cleanupJamfTestResult = e.localizedDescription
+            }
+            cleanupTesting = false
+        }
+    }
+
+    private func testCleanupProtect() {
+        cleanupTesting = true
+        cleanupProtectTestResult = nil
+        Task {
+            switch await CleanupConnectionTester.testProtect(cleanupSettings) {
+            case .success(let m): cleanupProtectTestOK = true; cleanupProtectTestResult = m
+            case .failure(let e): cleanupProtectTestOK = false; cleanupProtectTestResult = e.localizedDescription
+            }
+            cleanupTesting = false
+        }
+    }
+
     // MARK: - Helper Views
-    
+
     private func settingsCard<Content: View>(
         title: String,
         icon: String,

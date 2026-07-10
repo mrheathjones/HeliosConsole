@@ -10,7 +10,6 @@ import SwiftUI
 
 struct CleanupDashboardView: View {
     @Environment(CleanupViewModel.self) private var model
-    @Binding var showSettings: Bool
     @AppStorage("dashboard.cleanupSitesExpanded") private var sitesExpanded = true
     /// 0 = unset → use the MDM profile's default (config = default, user-overridable).
     @AppStorage(CleanupSettings.Key.staleDays) private var staleDaysStored = 0
@@ -245,9 +244,6 @@ struct CleanupDashboardView: View {
 
             headerIconButton("arrow.clockwise", help: "Refresh", disabled: model.isLoading) {
                 Task { await model.refresh() }
-            }
-            headerIconButton("gearshape", help: "Cleanup Settings") {
-                showSettings = true
             }
         }
     }

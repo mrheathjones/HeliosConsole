@@ -118,3 +118,49 @@ final class CleanupSettings {
         return URL(string: s)
     }
 }
+
+// MARK: - Connection tests
+
+/// Standalone Jamf Pro / Jamf Protect connection tests. Builds throwaway
+/// clients from a `CleanupSettings`, so any screen (the main Settings view or
+/// the Cleanup view model) can run a test without owning a full view model.
+enum CleanupConnectionTester {
+    @MainActor
+    static func testJamf(_ settings: CleanupSettings) async -> Result<String, Error> {
+        do {
+            guard settings.isConfigured, let url = settings.normalizedJamfURL else {
+                throw JamfCleanupError.notConfigured
+            }
+            let client = JamfCleanupClient(
+                baseURL: url,
+                clientID: settings.jamfClientID,
+                clientSecret: settings.jamfClientSecret,
+                pageSize: settings.pageSize
+            )
+            let version = try await client.testConnection()
+            await client.invalidateToken()
+            return .success("Connected — Jamf Pro \(version)")
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    @MainActor
+    static func testProtect(_ settings: CleanupSettings) async -> Result<String, Error> {
+        do {
+            guard settings.isProtectConfigured, let url = settings.normalizedProtectURL else {
+                throw JamfCleanupError.protectNotConfigured
+            }
+            let client = JamfProtectClient(
+                baseURL: url,
+                clientID: settings.protectClientID,
+                password: settings.protectClientPassword
+            )
+            try await client.testConnection()
+            await client.invalidate()
+            return .success("Connected to Jamf Protect")
+        } catch {
+            return .failure(error)
+        }
+    }
+}

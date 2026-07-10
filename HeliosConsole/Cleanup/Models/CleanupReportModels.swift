@@ -99,6 +99,23 @@ struct ReportTable: Sendable {
         var id: String { label }
     }
 
+    /// A single active filter / selection criterion, surfaced as a preamble so
+    /// an exported report documents exactly what data it represents.
+    struct CriterionItem: Identifiable, Sendable {
+        let category: String
+        let detail: String
+        var id: String { category + "\u{1}" + detail }
+    }
+
+    /// An additional titled table appended after the primary one (e.g. an OS
+    /// breakdown beneath a health scorecard). Rendered by every export format.
+    struct Section: Identifiable, Sendable {
+        let title: String
+        let headers: [String]
+        let rows: [[String]]
+        var id: String { title }
+    }
+
     var title: String
     var subtitle: String
     var sectionTitle: String
@@ -106,6 +123,10 @@ struct ReportTable: Sendable {
     var summary: [SummaryItem]
     var headers: [String]
     var rows: [[String]]
+    /// Active report filters / selection criteria (preamble).
+    var criteria: [CriterionItem] = []
+    /// Extra titled tables appended after the primary table.
+    var extraSections: [Section] = []
 
     var isEmpty: Bool { rows.isEmpty }
 
@@ -113,10 +134,35 @@ struct ReportTable: Sendable {
 
     func csvData() -> Data {
         var lines: [String] = []
-        lines.append(headers.map(Self.csvEscape).joined(separator: ","))
-        for row in rows {
-            lines.append(row.map(Self.csvEscape).joined(separator: ","))
+        func put(_ fields: [String]) { lines.append(fields.map(Self.csvEscape).joined(separator: ",")) }
+
+        put(["Report", title])
+        if !subtitle.isEmpty { put(["", subtitle]) }
+        put(["Generated", CleanupFormatters.report.string(from: generatedAt)])
+
+        if !criteria.isEmpty {
+            lines.append("")
+            put(["Filters applied"])
+            for c in criteria { put([c.category, c.detail]) }
         }
+        if !summary.isEmpty {
+            lines.append("")
+            put(["Summary"])
+            for item in summary { put([item.label, item.value]) }
+        }
+
+        lines.append("")
+        if !sectionTitle.isEmpty { put([sectionTitle]) }
+        put(headers)
+        for row in rows { put(row) }
+
+        for section in extraSections {
+            lines.append("")
+            put([section.title])
+            put(section.headers)
+            for row in section.rows { put(row) }
+        }
+
         // CRLF keeps Excel happy.
         return Data(lines.joined(separator: "\r\n").utf8)
     }
@@ -137,6 +183,13 @@ struct ReportTable: Sendable {
         }
         out += "_Generated \(CleanupFormatters.report.string(from: generatedAt))_\n\n"
 
+        if !criteria.isEmpty {
+            out += "## Filters applied\n\n"
+            for c in criteria {
+                out += "- **\(c.category):** \(c.detail)\n"
+            }
+            out += "\n"
+        }
         if !summary.isEmpty {
             out += "## Summary\n\n"
             for item in summary {
@@ -145,17 +198,22 @@ struct ReportTable: Sendable {
             out += "\n"
         }
 
-        out += "## \(sectionTitle)\n\n"
-        if rows.isEmpty {
-            out += "_No devices._\n"
-            return out
-        }
-        out += "| " + headers.map(Self.mdEscape).joined(separator: " | ") + " |\n"
-        out += "| " + headers.map { _ in "---" }.joined(separator: " | ") + " |\n"
-        for row in rows {
-            out += "| " + row.map(Self.mdEscape).joined(separator: " | ") + " |\n"
+        out += Self.mdTable(title: sectionTitle, headers: headers, rows: rows, emptyNote: "_No devices._")
+        for section in extraSections {
+            out += Self.mdTable(title: section.title, headers: section.headers, rows: section.rows, emptyNote: "_No rows._")
         }
         return out
+    }
+
+    private static func mdTable(title: String, headers: [String], rows: [[String]], emptyNote: String) -> String {
+        var out = "## \(title)\n\n"
+        guard !rows.isEmpty else { return out + emptyNote + "\n\n" }
+        out += "| " + headers.map(mdEscape).joined(separator: " | ") + " |\n"
+        out += "| " + headers.map { _ in "---" }.joined(separator: " | ") + " |\n"
+        for row in rows {
+            out += "| " + row.map(mdEscape).joined(separator: " | ") + " |\n"
+        }
+        return out + "\n"
     }
 
     private static func mdEscape(_ field: String) -> String {
@@ -168,6 +226,12 @@ struct ReportTable: Sendable {
     /// Proportional column widths (summing to `total`) for PDF layout —
     /// gives identifying columns more room.
     func columnWidths(total: CGFloat) -> [CGFloat] {
+        Self.columnWidths(for: headers, total: total)
+    }
+
+    /// Proportional widths for an arbitrary header set (used per block so extra
+    /// sections lay out independently of the primary table).
+    static func columnWidths(for headers: [String], total: CGFloat) -> [CGFloat] {
         let weights = headers.map { header -> CGFloat in
             switch header {
             case ReportColumn.name.title, ReportColumn.user.title: 1.7
