@@ -63,10 +63,13 @@ class MDMConfigurationManager: ObservableObject {
         static let entra = "entra"
         static let entraCredentialDomain = "entraCredentialDomain"
         // Key names read from the *credential* domain the pointer resolves to.
-        static let entraTenantId = "entra_tenant_id"
-        static let entraClientId = "entra_client_id"
-        static let entraClientSecret = "entra_client_secret"
-        static let entraCertPEM = "entra_cert_pem"
+        // Each value accepts several spellings so an existing Entra credential
+        // plist (e.g. the erase-and-delete script's) can be reused as-is. The
+        // first non-empty match wins; canonical key is listed first.
+        static let entraTenantIdKeys = ["entra_tenant_id", "tenantID", "tenant_id", "TenantID", "entra_tenant"]
+        static let entraClientIdKeys = ["entra_client_id", "clientID", "client_id", "ClientID", "entra_client"]
+        static let entraClientSecretKeys = ["entra_client_secret", "clientSecret", "client_secret", "ClientSecret"]
+        static let entraCertPEMKeys = ["entra_cert_pem", "entra_certificate", "cert_pem", "certPEM", "entra_cert", "certificate_pem"]
     }
     
     private init() {
@@ -474,10 +477,13 @@ class MDMConfigurationManager: ObservableObject {
             print("   ⚠️ Entra: could not open credential domain \(resolvedDomain)")
             return (resolvedDomain, nil, nil, nil, nil)
         }
-        let tenant = nonEmpty(credDefaults.string(forKey: MDMKeys.entraTenantId))
-        let client = nonEmpty(credDefaults.string(forKey: MDMKeys.entraClientId))
-        let secret = nonEmpty(credDefaults.string(forKey: MDMKeys.entraClientSecret))
-        let pem = nonEmpty(credDefaults.string(forKey: MDMKeys.entraCertPEM))
+        // Accept common key-name variants so Helios can reuse an existing Entra
+        // credential plist (e.g. one already deployed for the erase-and-delete
+        // script) without duplicating the values under Helios-specific keys.
+        let tenant = firstNonEmpty(credDefaults, MDMKeys.entraTenantIdKeys)
+        let client = firstNonEmpty(credDefaults, MDMKeys.entraClientIdKeys)
+        let secret = firstNonEmpty(credDefaults, MDMKeys.entraClientSecretKeys)
+        let pem = firstNonEmpty(credDefaults, MDMKeys.entraCertPEMKeys)
         if tenant != nil && client != nil {
             print("   ✅ Entra: resolved credentials from domain \(resolvedDomain)")
         } else {
@@ -486,9 +492,14 @@ class MDMConfigurationManager: ObservableObject {
         return (resolvedDomain, tenant, client, secret, pem)
     }
 
-    private static func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
-        return value
+    /// Returns the first non-empty string among the candidate keys in `defaults`.
+    private static func firstNonEmpty(_ defaults: UserDefaults, _ keys: [String]) -> String? {
+        for key in keys {
+            if let value = defaults.string(forKey: key), !value.isEmpty {
+                return value
+            }
+        }
+        return nil
     }
 
     // MARK: - Parse Sidebar Items

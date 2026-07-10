@@ -74,6 +74,63 @@
         }
       }
     },
+    "role": {
+      "title": "Operator Role",
+      "description": "Operator role delivered by MDM. Gates the destructive Cleanup feature (Admin-only). Fails closed: a missing, blank, or unrecognized value is treated as the least-privileged User, so Cleanup stays hidden unless the value is exactly 'Admin'. May also be supplied nested under jamfPro.role.",
+      "type": "string",
+      "enum": ["Admin", "Support", "User"]
+    },
+    "cleanup": {
+      "title": "Stale-Device Cleanup",
+      "description": "Settings for the Admin-only Jamf stale-device cleanup feature.",
+      "type": "object",
+      "properties": {
+        "staleDays": {
+          "title": "Stale Threshold (days)",
+          "description": "Days without check-in before a device is considered stale.",
+          "type": "integer",
+          "default": 90
+        },
+        "defaultStaticGroupID": {
+          "title": "Default Static Group ID",
+          "description": "Jamf static group ID pre-selected in the cleanup UI (optional).",
+          "type": "string"
+        },
+        "defaultSiteID": {
+          "title": "Default Site ID",
+          "description": "Jamf site ID pre-selected in the cleanup UI (optional).",
+          "type": "string"
+        }
+      }
+    },
+    "jamfProtect": {
+      "title": "Jamf Protect",
+      "description": "Optional Jamf Protect API integration (gated).",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "title": "Enable Jamf Protect",
+          "description": "Master toggle for Jamf Protect features.",
+          "type": "boolean",
+          "default": false
+        },
+        "url": {
+          "title": "Protect URL",
+          "description": "Jamf Protect API base URL.",
+          "type": "string"
+        },
+        "clientID": {
+          "title": "Protect Client ID",
+          "description": "Jamf Protect API client ID.",
+          "type": "string"
+        },
+        "password": {
+          "title": "Protect Password",
+          "description": "Jamf Protect API password. Sensitive — managed-pref plists are world-readable; prefer delivering via Keychain and scope this profile tightly.",
+          "type": "string"
+        }
+      }
+    },
     "appleBusinessManager": {
       "title": "Apple Business Manager",
       "description": "ABM API credentials for AppleCare coverage lookups",
