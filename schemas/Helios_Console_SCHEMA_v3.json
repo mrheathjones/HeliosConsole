@@ -166,9 +166,33 @@
       "properties": {
         "credentialDomain": {
           "title": "Credential Domain",
-          "description": "Preference domain (bundle identifier) of a separate managed-preferences payload holding the Entra Graph app credentials. Helios (unsandboxed) reads it via UserDefaults(suiteName:). That domain must supply entra_tenant_id, entra_client_id, and at least one of entra_cert_pem (PEM cert+key, preferred PS256 client assertion) or entra_client_secret (fallback). The app registration needs Device.ReadWrite.All AND the 'Cloud Device Administrator' Entra role.",
+          "description": "Preference domain (bundle identifier) of a separate managed-preferences payload holding the Entra Graph app credentials. Helios (unsandboxed) reads it via UserDefaults(suiteName:). That domain must supply a tenant id, a client id, and at least one of a cert PEM (PEM cert+key, preferred PS256 client assertion) or a client secret (fallback). The app registration needs Device.ReadWrite.All AND the 'Cloud Device Administrator' Entra role.",
           "type": "string",
           "examples": ["com.helios.console.entra"]
+        },
+        "tenantIdKey": {
+          "title": "Tenant ID Key",
+          "description": "Optional. The exact key name to read the tenant id under in the credential domain. Use this to point Helios at a plist you already deploy. If omitted, Helios tries: entra_tenant_id, tenantID, tenant_id, TenantID, entra_tenant.",
+          "type": "string",
+          "examples": ["entra_tenant_id"]
+        },
+        "clientIdKey": {
+          "title": "Client ID Key",
+          "description": "Optional. The exact key name for the client id in the credential domain. If omitted, Helios tries: entra_client_id, clientID, client_id, ClientID, entra_client.",
+          "type": "string",
+          "examples": ["entra_client_id"]
+        },
+        "clientSecretKey": {
+          "title": "Client Secret Key",
+          "description": "Optional. The exact key name for the client secret in the credential domain. If omitted, Helios tries: entra_client_secret, clientSecret, client_secret, ClientSecret.",
+          "type": "string",
+          "examples": ["entra_client_secret"]
+        },
+        "certPEMKey": {
+          "title": "Certificate PEM Key",
+          "description": "Optional. The exact key name for the certificate PEM string in the credential domain. If omitted, Helios tries: entra_cert_pem, entra_certificate, cert_pem, certPEM, entra_cert, certificate_pem.",
+          "type": "string",
+          "examples": ["entra_cert_pem"]
         }
       },
       "required": ["credentialDomain"]

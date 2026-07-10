@@ -70,6 +70,12 @@ class MDMConfigurationManager: ObservableObject {
         static let entraClientIdKeys = ["entra_client_id", "clientID", "client_id", "ClientID", "entra_client"]
         static let entraClientSecretKeys = ["entra_client_secret", "clientSecret", "client_secret", "ClientSecret"]
         static let entraCertPEMKeys = ["entra_cert_pem", "entra_certificate", "cert_pem", "certPEM", "entra_cert", "certificate_pem"]
+        // Optional flat top-level overrides for the credential-domain key names
+        // (nested equivalents live under the `entra` dict: tenantIdKey, etc.).
+        static let entraTenantIdKeyOverride = "entraTenantIdKey"
+        static let entraClientIdKeyOverride = "entraClientIdKey"
+        static let entraClientSecretKeyOverride = "entraClientSecretKey"
+        static let entraCertPEMKeyOverride = "entraCertPEMKey"
     }
     
     private init() {
@@ -458,15 +464,19 @@ class MDMConfigurationManager: ObservableObject {
     // MARK: - Resolve Entra Credentials
     // The Helios profile carries only a pointer (`entraCredentialDomain`, either
     // top-level or nested under `entra`) to the preference domain that holds the
-    // real Entra Graph credentials. Because Helios is not sandboxed,
-    // UserDefaults(suiteName:) transparently reads that domain's managed prefs
-    // from /Library/Managed Preferences/<domain>.plist. Never throws; missing
+    // real Entra Graph credentials, plus optional key-name overrides so an
+    // already-deployed credential plist can be read under whatever keys it
+    // already uses. Because Helios is not sandboxed, UserDefaults(suiteName:)
+    // transparently reads that domain's managed prefs from
+    // /Library/Managed Preferences/<domain>.plist. Never throws; a missing
     // pointer or creds simply yields nils and Entra cleanup stays disabled.
     private static func loadEntraCredentials(
         from defaults: UserDefaults
     ) -> (domain: String?, tenantId: String?, clientId: String?, clientSecret: String?, certPEM: String?) {
+        let entraDict = defaults.dictionary(forKey: MDMKeys.entra)
+
         var domain = defaults.string(forKey: MDMKeys.entraCredentialDomain)
-        if domain == nil, let entraDict = defaults.dictionary(forKey: MDMKeys.entra) {
+        if domain == nil, let entraDict {
             domain = (entraDict["credentialDomain"] as? String)
                 ?? (entraDict[MDMKeys.entraCredentialDomain] as? String)
         }
@@ -477,19 +487,46 @@ class MDMConfigurationManager: ObservableObject {
             print("   ⚠️ Entra: could not open credential domain \(resolvedDomain)")
             return (resolvedDomain, nil, nil, nil, nil)
         }
-        // Accept common key-name variants so Helios can reuse an existing Entra
-        // credential plist (e.g. one already deployed for the erase-and-delete
-        // script) without duplicating the values under Helios-specific keys.
-        let tenant = firstNonEmpty(credDefaults, MDMKeys.entraTenantIdKeys)
-        let client = firstNonEmpty(credDefaults, MDMKeys.entraClientIdKeys)
-        let secret = firstNonEmpty(credDefaults, MDMKeys.entraClientSecretKeys)
-        let pem = firstNonEmpty(credDefaults, MDMKeys.entraCertPEMKeys)
+
+        // The Helios profile may explicitly dictate which key each value lives
+        // under in the credential domain (entra.tenantIdKey, entra.clientIdKey,
+        // entra.clientSecretKey, entra.certPEMKey — or the flat top-level
+        // equivalents). An override is tried first; the built-in alias list is
+        // kept as a fallback so a slightly-off override still resolves.
+        let tenant = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "tenantIdKey", flat: MDMKeys.entraTenantIdKeyOverride, fallback: MDMKeys.entraTenantIdKeys))
+        let client = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "clientIdKey", flat: MDMKeys.entraClientIdKeyOverride, fallback: MDMKeys.entraClientIdKeys))
+        let secret = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "clientSecretKey", flat: MDMKeys.entraClientSecretKeyOverride, fallback: MDMKeys.entraClientSecretKeys))
+        let pem = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "certPEMKey", flat: MDMKeys.entraCertPEMKeyOverride, fallback: MDMKeys.entraCertPEMKeys))
+
         if tenant != nil && client != nil {
             print("   ✅ Entra: resolved credentials from domain \(resolvedDomain)")
         } else {
             print("   ⚠️ Entra: pointer set to \(resolvedDomain) but tenant/client missing")
         }
         return (resolvedDomain, tenant, client, secret, pem)
+    }
+
+    /// Build the ordered key list to probe in the credential domain: an explicit
+    /// override from the Helios profile (nested under `entra`, or a flat
+    /// top-level key) first, then the built-in alias fallbacks.
+    private static func keyList(
+        _ entraDict: [String: Any]?,
+        _ defaults: UserDefaults,
+        nested: String,
+        flat: String,
+        fallback: [String]
+    ) -> [String] {
+        var keys: [String] = []
+        if let override = (entraDict?[nested] as? String) ?? defaults.string(forKey: flat),
+           !override.isEmpty {
+            keys.append(override)
+        }
+        keys.append(contentsOf: fallback)
+        return keys
     }
 
     /// Returns the first non-empty string among the candidate keys in `defaults`.
