@@ -115,7 +115,7 @@ struct DeviceView: View {
             case .restart: return "This will restart the device and notify the user. Any unsaved work may be lost."
             case .restartSilent: return "This will restart the device without notifying the user. Any unsaved work may be lost."
             case .shutdown: return "This will shut down the device. The user will need physical access to turn it back on."
-            case .returnToService: return "This will erase all data on the device and prepare it for reassignment. This action cannot be undone."
+            case .returnToService: return "This will (1) erase all data on the device, (2) remove its record from Jamf Pro once the erase is confirmed as issued, and (3) delete its device object from Microsoft Entra so it can re-register cleanly with PSSO / Company Portal. This action cannot be undone."
             case .viewLocalAdminPassword: return "This will retrieve and display the local administrator password for this device. This action is logged for security auditing."
             case .viewFileVaultKey: return "This will retrieve and display the FileVault personal recovery key for this device. This key can be used to unlock the encrypted disk. This action is logged for security auditing."
             case .sendBlankPush: return "This will send an APNs (Apple Push Notification) to the device, prompting it to check in with Jamf Pro. Use this to verify device connectivity or to trigger pending MDM commands."
@@ -1506,60 +1506,257 @@ struct DeviceView: View {
         )
     }
     
-    // MARK: - Erase Device Command
-    
+    // MARK: - Return to Service (Erase → Delete Jamf record → Delete from Entra)
+
+    /// Orchestrates the full decommission: queue the ERASE_DEVICE command,
+    /// confirm it was issued, delete the Jamf computer record, then remove the
+    /// device object(s) from Microsoft Entra. Ports the default `after-sent`
+    /// behavior of Erase_and_Delete_Devices.sh. Each stage logs independently;
+    /// the Entra stage is best-effort and never blocks the rest.
     private func sendEraseCommand() async {
+        guard let managementId = displayComputer.general?.managementId else {
+            await showError("Device management ID not available — cannot erase this device.")
+            return
+        }
+
         await MainActor.run { isExecutingCommand = true }
-        
+
+        let config = MDMConfigurationManager.shared.configuration
+        let deviceName = displayComputer.displayName
+        let serial = displayComputer.serialNumber ?? "Unknown"
+        let deviceId = displayComputer.id
+        let category = "Device Actions"
+
+        var summaryLines: [String] = []
+        var overallSuccess = true
+
         do {
             let token = try await getBearerToken()
-            let config = MDMConfigurationManager.shared.configuration
-            
-            // Use the dedicated erase endpoint for computers
-            guard let url = URL(string: "\(config.jamfURL)/api/v1/computer-inventory/\(displayComputer.id)/erase") else {
-                throw NSError(domain: "DeviceView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
-            }
-            
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 30
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            
-            // Empty body or optional PIN - we'll send empty for now
-            request.httpBody = "{}".data(using: .utf8)
-            
-            NSLog("📤 Sending Erase command to device: \(displayComputer.displayName) (id: \(displayComputer.id))")
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NSError(domain: "DeviceView", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-            }
-            
-            NSLog("📥 Erase command response status: \(httpResponse.statusCode)")
-            
-            if (200...299).contains(httpResponse.statusCode) {
-                await MainActor.run {
-                    isExecutingCommand = false
-                    commandResult = CommandResult(
-                        success: true,
-                        title: "Erase Command Sent",
-                        message: "Erase command has been queued for \(displayComputer.displayName). The device will be wiped."
+
+            // 1) Queue the erase command and capture its UUID.
+            let commandUUID = try await issueEraseCommand(managementId: managementId, token: token, jamfURL: config.jamfURL)
+            summaryLines.append("• Erase command queued.")
+            ActionLogService.shared.logAction(
+                actionName: "Erase Device", actionCategory: category,
+                deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
+                success: true, errorMessage: nil
+            )
+
+            // 2) Confirm the command was issued (accepted + sent, non-error state).
+            let issued = await verifyCommandIssued(uuid: commandUUID, token: token, jamfURL: config.jamfURL)
+
+            // 3) Delete the Jamf record only after the erase is confirmed issued.
+            if issued {
+                do {
+                    try await deleteJamfRecord(computerId: deviceId, token: token, jamfURL: config.jamfURL)
+                    summaryLines.append("• Jamf record removed.")
+                    ActionLogService.shared.logAction(
+                        actionName: "Delete Jamf Record", actionCategory: category,
+                        deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
+                        success: true, errorMessage: nil
                     )
-                    showingCommandAlert = true
+                } catch {
+                    overallSuccess = false
+                    summaryLines.append("• Jamf record NOT removed: \(error.localizedDescription)")
+                    ActionLogService.shared.logAction(
+                        actionName: "Delete Jamf Record", actionCategory: category,
+                        deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
+                        success: false, errorMessage: error.localizedDescription
+                    )
                 }
             } else {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                NSLog("❌ Erase command failed: \(errorMessage)")
-                throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server returned status \(httpResponse.statusCode): \(errorMessage)"])
+                overallSuccess = false
+                summaryLines.append("• Erase could not be confirmed as issued — Jamf record left in place. Follow up manually.")
+                ActionLogService.shared.logAction(
+                    actionName: "Delete Jamf Record", actionCategory: category,
+                    deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
+                    success: false, errorMessage: "Erase command not confirmed issued; record not deleted."
+                )
             }
-            
+
+            // 4) Entra cleanup — best effort, only when configured. Never fatal.
+            if let entra = EntraGraphService(configuration: config) {
+                let entraName = displayComputer.general?.name ?? deviceName
+                let result = await entra.deleteDevices(displayName: entraName)
+                var entraSuccess = true
+                switch result.outcome {
+                case .completed:
+                    entraSuccess = result.failed == 0
+                    summaryLines.append("• Entra: \(result.deleted) object(s) removed" + (result.failed > 0 ? ", \(result.failed) failed." : "."))
+                case .noMatch:
+                    summaryLines.append("• Entra: no matching device object.")
+                case .authFailed, .lookupFailed, .notConfigured:
+                    entraSuccess = false
+                    summaryLines.append("• Entra cleanup did not complete: \(result.message)")
+                }
+                ActionLogService.shared.logAction(
+                    actionName: "Entra Device Cleanup", actionCategory: category,
+                    deviceName: entraName, deviceSerialNumber: serial, deviceId: deviceId,
+                    success: entraSuccess, errorMessage: entraSuccess ? nil : result.message
+                )
+            } else {
+                summaryLines.append("• Entra cleanup not configured — skipped.")
+            }
+
+            await MainActor.run {
+                isExecutingCommand = false
+                commandResult = CommandResult(
+                    success: overallSuccess,
+                    title: overallSuccess ? "Return to Service Complete" : "Return to Service — Attention Needed",
+                    message: "\(deviceName):\n" + summaryLines.joined(separator: "\n")
+                )
+                showingCommandAlert = true
+            }
+
         } catch {
-            NSLog("❌ Erase command error: \(error.localizedDescription)")
+            NSLog("❌ Return to Service error: \(error.localizedDescription)")
             await showError(error.localizedDescription)
         }
+    }
+
+    /// POST an ERASE_DEVICE MDM command and return its command UUID.
+    private func issueEraseCommand(managementId: String, token: String, jamfURL: String) async throws -> String {
+        let parameters: [String: Any] = [
+            "clientData": [["managementId": managementId]],
+            "commandData": ["commandType": "ERASE_DEVICE"]
+        ]
+        let postData = try JSONSerialization.data(withJSONObject: parameters, options: [])
+
+        guard let url = URL(string: "\(jamfURL)/api/v2/mdm/commands") else {
+            throw NSError(domain: "DeviceView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = postData
+
+        NSLog("📤 Sending Erase command to \(displayComputer.displayName) (managementId: \(managementId))")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "DeviceView", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            NSLog("❌ Erase command rejected: \(errorMessage)")
+            throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Erase command rejected (HTTP \(httpResponse.statusCode)): \(errorMessage)"])
+        }
+
+        let uuid = Self.extractCommandUUID(from: data) ?? ""
+        NSLog("✅ Erase queued (command uuid: \(uuid.isEmpty ? "unknown" : uuid))")
+        return uuid
+    }
+
+    /// Confirm an erase command exists in Jamf's queue with a non-error state
+    /// (PENDING / ACKNOWLEDGED / NOT_NOW all count as "issued"). Retries a few
+    /// times to tolerate brief eventual-consistency after the POST.
+    private func verifyCommandIssued(uuid: String, token: String, jamfURL: String) async -> Bool {
+        guard !uuid.isEmpty else { return false }
+
+        for attempt in 1...3 {
+            var components = URLComponents(string: "\(jamfURL)/api/v2/mdm/commands")
+            components?.queryItems = [
+                URLQueryItem(name: "page", value: "0"),
+                URLQueryItem(name: "page-size", value: "1"),
+                URLQueryItem(name: "filter", value: "uuid==\"\(uuid)\"")
+            ]
+            guard let url = components?.url else { return false }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 30
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    let state = Self.extractCommandState(from: data)
+                    let normalized = state.uppercased()
+                        .replacingOccurrences(of: "_", with: "")
+                        .replacingOccurrences(of: " ", with: "")
+                    NSLog("🔎 Command \(uuid) state=\(state.isEmpty ? "<none>" : state) (attempt \(attempt))")
+                    switch normalized {
+                    case "", "ERROR", "FAILED":
+                        break // not yet visible or errored — retry
+                    default:
+                        return true
+                    }
+                }
+            } catch {
+                NSLog("⚠️ Verify command \(uuid) attempt \(attempt) failed: \(error.localizedDescription)")
+            }
+
+            if attempt < 3 {
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
+            }
+        }
+        return false
+    }
+
+    /// DELETE the Jamf computer-inventory record. Treats 200/204 as success.
+    private func deleteJamfRecord(computerId: String, token: String, jamfURL: String) async throws {
+        guard let url = URL(string: "\(jamfURL)/api/v1/computers-inventory/\(computerId)") else {
+            throw NSError(domain: "DeviceView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "DeviceView", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        guard httpResponse.statusCode == 204 || httpResponse.statusCode == 200 else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode): \(errorMessage)"])
+        }
+        NSLog("🗑️ Deleted Jamf record id \(computerId)")
+    }
+
+    /// Pull a command UUID from the POST /api/v2/mdm/commands response. Shape
+    /// varies by Jamf version (array of objects, or a single object).
+    private static func extractCommandUUID(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        func uuid(_ dict: [String: Any]) -> String? {
+            (dict["id"] as? String) ?? (dict["commandUuid"] as? String)
+        }
+        if let array = json as? [[String: Any]], let first = array.first {
+            return uuid(first)
+        }
+        if let dict = json as? [String: Any] {
+            if let results = dict["results"] as? [[String: Any]], let first = results.first {
+                return uuid(first)
+            }
+            return uuid(dict)
+        }
+        return nil
+    }
+
+    /// Pull the command state from GET /api/v2/mdm/commands. Prefers
+    /// `commandState`, falls back to `status`. Handles array / results / object.
+    private static func extractCommandState(from data: Data) -> String {
+        guard let json = try? JSONSerialization.jsonObject(with: data) else { return "" }
+        func state(_ dict: [String: Any]) -> String {
+            (dict["commandState"] as? String) ?? (dict["status"] as? String) ?? ""
+        }
+        if let array = json as? [[String: Any]], let first = array.first {
+            return state(first)
+        }
+        if let dict = json as? [String: Any] {
+            if let results = dict["results"] as? [[String: Any]], let first = results.first {
+                return state(first)
+            }
+            return state(dict)
+        }
+        return ""
     }
     
     // MARK: - Unlock User Account Command
