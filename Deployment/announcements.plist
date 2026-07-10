@@ -16,6 +16,41 @@
     <array>
         <dict>
             <key>id</key>
+            <string>helios-return-to-service-2026-07</string>
+            <key>title</key>
+            <string>Return to Service, Upgraded</string>
+            <key>message</key>
+            <string>Return to Service is now a complete decommission workflow — it erases the Mac, removes it from Jamf, and cleans it out of Microsoft Entra, all from one action.
+
+**One action, full cleanup**
+- Erases the Mac, then removes its Jamf computer record
+- Deletes the Mac's device object(s) from Microsoft Entra so it can re-register cleanly with Platform SSO / Company Portal
+
+**Safer by design**
+- Type **ERASE** to confirm before anything happens
+- The Jamf record is removed only *after* the device acknowledges the erase — so the wipe always lands and you never orphan an unmanaged Mac
+- A live progress window shows each step as it runs
+
+**Built for recovery**
+- Intel/T2 Macs show a 6-digit recovery PIN in the result — record it to unlock the Mac after the wipe. Apple Silicon doesn't need one, so it's hidden
+- Every step is written to **Logs** for a full audit trail
+
+Find it on any computer under **Actions → Return to Service**. Entra cleanup runs automatically when configured.</string>
+            <key>type</key>
+            <string>update</string>
+            <key>priority</key>
+            <string>normal</string>
+            <key>createdAt</key>
+            <string>2026-07-10T16:00:00Z</string>
+            <key>expiresAt</key>
+            <string>2026-09-10T00:00:00Z</string>
+            <key>dismissible</key>
+            <true/>
+            <key>requiredReading</key>
+            <false/>
+        </dict>
+        <dict>
+            <key>id</key>
             <string>helios-reports-overhaul-2026-07</string>
             <key>title</key>
             <string>Reports, Reimagined</string>
