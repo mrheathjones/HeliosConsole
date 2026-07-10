@@ -28,7 +28,21 @@ struct MDMConfiguration: Codable {
     let abmClientId: String?
     let abmKeyId: String?
     let abmPrivateKey: String?
-    
+
+    // MARK: - Role-based access + Cleanup feature (Jamf stale-device cleanup)
+    /// Operator role delivered by MDM (Admin / Support / User). The Cleanup
+    /// feature is Admin-only. Absent → treated as Admin.
+    let role: String?
+    /// Stale threshold (days without check-in) used by Cleanup.
+    let cleanupStaleDays: Int
+    let cleanupDefaultStaticGroupID: String?
+    let cleanupDefaultSiteID: String?
+
+    // Jamf Protect (optional, gated)
+    let protectEnabled: Bool
+    let protectURL: String?
+    let protectClientID: String?
+
     var isABMConfigured: Bool {
         guard let clientId = abmClientId, !clientId.isEmpty,
               let keyId = abmKeyId, !keyId.isEmpty,
@@ -36,6 +50,68 @@ struct MDMConfiguration: Codable {
             return false
         }
         return true
+    }
+
+    enum AppRole: String {
+        case admin = "Admin"
+        case support = "Support"
+        case user = "User"
+    }
+
+    /// Resolves the operator role fail-closed: a missing, blank, or
+    /// unrecognized value (including wrong case like "admin") is treated as
+    /// the least-privileged `.user`, so the destructive Cleanup feature is
+    /// never exposed by accident. Only the exact string "Admin" grants it.
+    var appRole: AppRole {
+        guard let role, let parsed = AppRole(rawValue: role) else { return .user }
+        return parsed
+    }
+
+    /// Whether the Cleanup feature should be available to this operator.
+    var isCleanupAdmin: Bool { appRole == .admin }
+
+    init(
+        jamfURL: String,
+        masterClientID: String,
+        masterClientSecret: String,
+        appTitle: String,
+        appSubtitle: String,
+        sidebarItems: [SidebarItemConfig],
+        requiredRoleName: String,
+        supportURL: String?,
+        localAdminUsername: String,
+        screenShareEnabled: Bool,
+        abmClientId: String?,
+        abmKeyId: String?,
+        abmPrivateKey: String?,
+        role: String? = nil,
+        cleanupStaleDays: Int = 90,
+        cleanupDefaultStaticGroupID: String? = nil,
+        cleanupDefaultSiteID: String? = nil,
+        protectEnabled: Bool = false,
+        protectURL: String? = nil,
+        protectClientID: String? = nil
+    ) {
+        self.jamfURL = jamfURL
+        self.masterClientID = masterClientID
+        self.masterClientSecret = masterClientSecret
+        self.appTitle = appTitle
+        self.appSubtitle = appSubtitle
+        self.sidebarItems = sidebarItems
+        self.requiredRoleName = requiredRoleName
+        self.supportURL = supportURL
+        self.localAdminUsername = localAdminUsername
+        self.screenShareEnabled = screenShareEnabled
+        self.abmClientId = abmClientId
+        self.abmKeyId = abmKeyId
+        self.abmPrivateKey = abmPrivateKey
+        self.role = role
+        self.cleanupStaleDays = cleanupStaleDays
+        self.cleanupDefaultStaticGroupID = cleanupDefaultStaticGroupID
+        self.cleanupDefaultSiteID = cleanupDefaultSiteID
+        self.protectEnabled = protectEnabled
+        self.protectURL = protectURL
+        self.protectClientID = protectClientID
     }
     
     struct SidebarItemConfig: Codable, Identifiable {
@@ -75,6 +151,9 @@ struct MDMConfiguration: Codable {
         screenShareEnabled: false,
         abmClientId: nil,
         abmKeyId: nil,
-        abmPrivateKey: nil
+        abmPrivateKey: nil,
+        // No-config (local dev) fallback shows Cleanup. Real deployments must
+        // set role=Admin in the profile; an absent key fails closed (hidden).
+        role: "Admin"
     )
 }

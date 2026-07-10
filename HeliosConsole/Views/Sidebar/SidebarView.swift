@@ -16,10 +16,11 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
     case logs = "logs"
     case reports = "reports"
     case enrollments = "enrollments"
+    case cleanup = "cleanup"
     case settings = "settings"
-    
+
     var id: String { rawValue }
-    
+
     var title: String {
         switch self {
         case .dashboard: return "Dashboard"
@@ -28,10 +29,11 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
         case .logs: return "Logs"
         case .reports: return "Reports"
         case .enrollments: return "Enrollments"
+        case .cleanup: return "Cleanup"
         case .settings: return "Settings"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .dashboard: return "square.grid.2x2"
@@ -40,6 +42,7 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
         case .logs: return "doc.text.magnifyingglass"
         case .reports: return "chart.bar.doc.horizontal"
         case .enrollments: return "person.badge.plus"
+        case .cleanup: return "wand.and.sparkles"
         case .settings: return "gearshape"
         }
     }
@@ -202,7 +205,12 @@ struct SidebarView: View {
     }
     
     private var mainNavigationItems: [NavigationDestination] {
-        [.dashboard, .devices, .announcements, .logs, .reports, .enrollments]
+        var items: [NavigationDestination] = [.dashboard, .devices, .announcements, .logs, .reports, .enrollments]
+        // Cleanup (stale-device bulk actions) is gated to the Admin role.
+        if MDMConfigurationManager.shared.configuration.isCleanupAdmin {
+            items.append(.cleanup)
+        }
+        return items
     }
 }
 

@@ -94,6 +94,22 @@
 		MB_F056 /* ThemeColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = S056 /* ThemeColors.swift */; };
 		MB_F060 /* DeviceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = S060 /* DeviceListItem.swift */; };
 		MB_F061 /* PlatformType.swift in Sources */ = {isa = PBXBuildFile; fileRef = S061 /* PlatformType.swift */; };
+		CLF1 /* CleanupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR1 /* CleanupModels.swift */; };
+		CLF2 /* JamfCleanupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR2 /* JamfCleanupClient.swift */; };
+		CLF3 /* JamfProtectClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR3 /* JamfProtectClient.swift */; };
+		CLF4 /* CleanupSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR4 /* CleanupSettings.swift */; };
+		CLF5 /* CleanupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR5 /* CleanupViewModel.swift */; };
+		CLF6 /* CleanupTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR6 /* CleanupTheme.swift */; };
+		CLF7 /* CleanupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR7 /* CleanupView.swift */; };
+		CLF8 /* CleanupDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR8 /* CleanupDashboardView.swift */; };
+		CLF9 /* StaleDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR9 /* StaleDeviceListView.swift */; };
+		CLF10 /* CleanupActionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR10 /* CleanupActionsSheet.swift */; };
+		CLF11 /* ProtectDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR11 /* ProtectDeviceListView.swift */; };
+		CLF12 /* CleanupSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR12 /* CleanupSettingsView.swift */; };
+		CLF13 /* CleanupReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR13 /* CleanupReportModels.swift */; };
+		CLF14 /* CleanupReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR14 /* CleanupReportPDF.swift */; };
+		CLF15 /* CleanupExportMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR15 /* CleanupExportMenu.swift */; };
+		CLF16 /* CleanupReportBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR16 /* CleanupReportBuilderView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -163,6 +179,22 @@
 		S060 /* DeviceListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListItem.swift; sourceTree = "<group>"; };
 		S061 /* PlatformType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformType.swift; sourceTree = "<group>"; };
 		S062 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
+		CLR1 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupModels.swift; sourceTree = "<group>"; };
+		CLR2 /* JamfCleanupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfCleanupClient.swift; sourceTree = "<group>"; };
+		CLR3 /* JamfProtectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfProtectClient.swift; sourceTree = "<group>"; };
+		CLR4 /* CleanupSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupSettings.swift; sourceTree = "<group>"; };
+		CLR5 /* CleanupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupViewModel.swift; sourceTree = "<group>"; };
+		CLR6 /* CleanupTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupTheme.swift; sourceTree = "<group>"; };
+		CLR7 /* CleanupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupView.swift; sourceTree = "<group>"; };
+		CLR8 /* CleanupDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupDashboardView.swift; sourceTree = "<group>"; };
+		CLR9 /* StaleDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaleDeviceListView.swift; sourceTree = "<group>"; };
+		CLR10 /* CleanupActionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupActionsSheet.swift; sourceTree = "<group>"; };
+		CLR11 /* ProtectDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectDeviceListView.swift; sourceTree = "<group>"; };
+		CLR12 /* CleanupSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupSettingsView.swift; sourceTree = "<group>"; };
+		CLR13 /* CleanupReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportModels.swift; sourceTree = "<group>"; };
+		CLR14 /* CleanupReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportPDF.swift; sourceTree = "<group>"; };
+		CLR15 /* CleanupExportMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExportMenu.swift; sourceTree = "<group>"; };
+		CLR16 /* CleanupReportBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportBuilderView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -204,6 +236,7 @@
 				GRP009 /* Views */,
 				MB_GRP001 /* MenuBarApp */,
 				A001 /* Assets.xcassets */,
+				CLGRP /* Cleanup */,
 			);
 			path = HeliosConsole;
 			sourceTree = "<group>";
@@ -415,6 +448,61 @@
 			);
 			sourceTree = "<group>";
 		};
+		CLGRP /* Cleanup */ = {
+			isa = PBXGroup;
+			children = (
+				CLGRP_M /* Models */,
+				CLGRP_S /* Services */,
+				CLGRP_VM /* ViewModels */,
+				CLGRP_V /* Views */,
+			);
+			path = Cleanup;
+			sourceTree = "<group>";
+		};
+		CLGRP_M /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				CLR1 /* CleanupModels.swift */,
+				CLR13 /* CleanupReportModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		CLGRP_S /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				CLR2 /* JamfCleanupClient.swift */,
+				CLR3 /* JamfProtectClient.swift */,
+				CLR4 /* CleanupSettings.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		CLGRP_VM /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				CLR5 /* CleanupViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		CLGRP_V /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				CLR6 /* CleanupTheme.swift */,
+				CLR7 /* CleanupView.swift */,
+				CLR8 /* CleanupDashboardView.swift */,
+				CLR9 /* StaleDeviceListView.swift */,
+				CLR10 /* CleanupActionsSheet.swift */,
+				CLR11 /* ProtectDeviceListView.swift */,
+				CLR12 /* CleanupSettingsView.swift */,
+				CLR14 /* CleanupReportPDF.swift */,
+				CLR15 /* CleanupExportMenu.swift */,
+				CLR16 /* CleanupReportBuilderView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -544,6 +632,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CLF1 /* CleanupModels.swift in Sources */,
+				CLF2 /* JamfCleanupClient.swift in Sources */,
+				CLF3 /* JamfProtectClient.swift in Sources */,
+				CLF4 /* CleanupSettings.swift in Sources */,
+				CLF5 /* CleanupViewModel.swift in Sources */,
+				CLF6 /* CleanupTheme.swift in Sources */,
+				CLF7 /* CleanupView.swift in Sources */,
+				CLF8 /* CleanupDashboardView.swift in Sources */,
+				CLF9 /* StaleDeviceListView.swift in Sources */,
+				CLF10 /* CleanupActionsSheet.swift in Sources */,
+				CLF11 /* ProtectDeviceListView.swift in Sources */,
+				CLF12 /* CleanupSettingsView.swift in Sources */,
+				CLF13 /* CleanupReportModels.swift in Sources */,
+				CLF14 /* CleanupReportPDF.swift in Sources */,
+				CLF15 /* CleanupExportMenu.swift in Sources */,
+				CLF16 /* CleanupReportBuilderView.swift in Sources */,
 				F001 /* HeliosConsoleApp.swift in Sources */,
 				F003 /* AppSettings.swift in Sources */,
 				7EB1713B2F7960FA00105721 /* ActionLogService.swift in Sources */,
