@@ -131,19 +131,71 @@ struct AccessConfiguration: Codable {
     /// per-item idiom ({id, enabled, displayName} — see HealthMetricSetting).
     /// Listing an id IS the grant: `enabled` omitted → true. `displayName`
     /// overrides the Actions-menu label only — confirmation-dialog safety
-    /// copy is never profile-controlled.
+    /// copy is never profile-controlled. `options` carries per-action tuning
+    /// consumed only by composite actions (see DeviceActionOptions).
     struct DeviceActionSetting: Codable {
         var id: String?
         var enabled: Bool?
         var displayName: String?
+        var options: DeviceActionOptions?
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveDisplayName: String { displayName ?? "" }
+        var effectiveOptions: DeviceActionOptions { options ?? .empty }
 
-        init(id: String? = nil, enabled: Bool? = nil, displayName: String? = nil) {
+        enum CodingKeys: String, CodingKey {
+            case id, enabled, displayName, options
+        }
+
+        init(
+            id: String? = nil,
+            enabled: Bool? = nil,
+            displayName: String? = nil,
+            options: DeviceActionOptions? = nil
+        ) {
             self.id = id
             self.enabled = enabled
             self.displayName = displayName
+            self.options = options
+        }
+
+        /// Per-field resilient decode: a malformed value (e.g. `options`
+        /// delivered as a string) degrades that field to nil instead of
+        /// failing the whole actions array — which would cascade into the
+        /// strict fail-closed path and hide the entire Actions menu over
+        /// one typo'd profile value.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try? container.decode(String.self, forKey: .id)
+            enabled = try? container.decode(Bool.self, forKey: .enabled)
+            displayName = try? container.decode(String.self, forKey: .displayName)
+            options = try? container.decode(DeviceActionOptions.self, forKey: .options)
+        }
+    }
+
+    /// The optional `options` object on an allow-list entry. Only consulted
+    /// by the `returnToService` composite today — every other action ignores
+    /// it. Each toggle defaults to true so an absent options object
+    /// reproduces the original full-decommission behavior on
+    /// already-deployed profiles. The erase itself is not optional and
+    /// always waits for acknowledgment — only the post-ack cleanup steps are
+    /// configurable here.
+    struct DeviceActionOptions: Codable {
+        /// Remove the Jamf computer record after the erase is acknowledged.
+        var deleteJamfRecord: Bool?
+        /// Delete the Entra device object after the erase is acknowledged
+        /// (auto-skipped when Entra isn't configured).
+        var deleteEntraObject: Bool?
+
+        var effectiveDeleteJamfRecord: Bool { deleteJamfRecord ?? true }
+        var effectiveDeleteEntraObject: Bool { deleteEntraObject ?? true }
+
+        /// No keys delivered — every toggle resolves to its default (true).
+        static let empty = DeviceActionOptions()
+
+        init(deleteJamfRecord: Bool? = nil, deleteEntraObject: Bool? = nil) {
+            self.deleteJamfRecord = deleteJamfRecord
+            self.deleteEntraObject = deleteEntraObject
         }
     }
 

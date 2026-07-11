@@ -27,6 +27,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
     case restart
     case restartSilent
     case shutdown
+    case wipe
     case returnToService
     // Security
     case viewLocalAdminPassword
@@ -54,7 +55,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         switch self {
         case .enableBluetooth, .disableBluetooth, .enableRemoteDesktop, .disableRemoteDesktop:
             return .deviceSettings
-        case .screenShare, .restart, .restartSilent, .shutdown, .returnToService:
+        case .screenShare, .restart, .restartSilent, .shutdown, .wipe, .returnToService:
             return .deviceActions
         case .viewLocalAdminPassword, .viewFileVaultKey:
             return .security
@@ -77,6 +78,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .restart: return "Restart Device"
         case .restartSilent: return "Restart Device (Silent)"
         case .shutdown: return "Shutdown Device"
+        case .wipe: return "Erase Device"
         case .returnToService: return "Return to Service"
         case .viewLocalAdminPassword: return "Local Admin Password"
         case .viewFileVaultKey: return "FileVault Key"
@@ -114,6 +116,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .restart: return "Restart Device?"
         case .restartSilent: return "Restart Device (Silent)?"
         case .shutdown: return "Shutdown Device?"
+        case .wipe: return "Erase Device?"
         case .returnToService: return "Return to Service?"
         case .viewLocalAdminPassword: return "View Local Admin Password?"
         case .viewFileVaultKey: return "View FileVault Recovery Key?"
@@ -132,6 +135,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .restart: return "This will restart the device and notify the user. Any unsaved work may be lost."
         case .restartSilent: return "This will restart the device without notifying the user. Any unsaved work may be lost."
         case .shutdown: return "This will shut down the device. The user will need physical access to turn it back on."
+        case .wipe: return "This will send an erase command that permanently erases all data on the device, then wait for the device to acknowledge the command. The device's Jamf Pro record and Entra device object are left in place. This action cannot be undone."
         case .returnToService: return "This will (1) erase all data on the device, (2) remove its record from Jamf Pro once the erase is confirmed as issued, and (3) delete its device object from Microsoft Entra so the device can re-enroll cleanly. This action cannot be undone."
         case .viewLocalAdminPassword: return "This will retrieve and display the local administrator password for this device. This action is logged for security auditing."
         case .viewFileVaultKey: return "This will retrieve and display the FileVault personal recovery key for this device. This key can be used to unlock the encrypted disk. This action is logged for security auditing."
@@ -149,6 +153,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .disableRemoteDesktop: return "desktopcomputer.trianglebadge.exclamationmark"
         case .restart, .restartSilent: return "arrow.clockwise.circle"
         case .shutdown: return "power"
+        case .wipe: return "externaldrive.badge.xmark"
         case .returnToService: return "arrow.counterclockwise.circle"
         case .viewLocalAdminPassword: return "key.fill"
         case .viewFileVaultKey: return "lock.shield"
@@ -164,6 +169,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .disableBluetooth, .disableRemoteDesktop: return .orange
         case .restart, .restartSilent: return .orange
         case .shutdown: return .orange
+        case .wipe: return .red
         case .returnToService: return .red
         case .viewLocalAdminPassword: return .purple
         case .viewFileVaultKey: return .green
@@ -181,6 +187,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .disableRemoteDesktop: return "Disable"
         case .restart, .restartSilent: return "Restart"
         case .shutdown: return "Shutdown"
+        case .wipe: return "Erase"
         case .returnToService: return "Erase & Return"
         case .viewLocalAdminPassword: return "View Password"
         case .viewFileVaultKey: return "View Key"
@@ -192,7 +199,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
 
     var isDestructive: Bool {
         switch self {
-        case .returnToService: return true
+        case .wipe, .returnToService: return true
         default: return false
         }
     }
@@ -213,6 +220,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .restart: return "Restart Device"
         case .restartSilent: return "Restart Device (Silent)"
         case .shutdown: return "Shutdown Device"
+        case .wipe: return "Erase Device"
         case .returnToService: return "Return to Service"
         case .viewLocalAdminPassword: return "View Local Admin Password"
         case .viewFileVaultKey: return "View FileVault Key"
@@ -226,7 +234,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         switch self {
         case .enableBluetooth, .disableBluetooth, .enableRemoteDesktop, .disableRemoteDesktop:
             return "Device Settings"
-        case .restart, .restartSilent, .shutdown, .returnToService, .screenShare:
+        case .restart, .restartSilent, .shutdown, .wipe, .returnToService, .screenShare:
             return "Device Actions"
         case .viewLocalAdminPassword, .viewFileVaultKey:
             return "Security"

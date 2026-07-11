@@ -71,6 +71,9 @@ struct DeviceView: View {
     /// Non-nil while a multi-stage flow (Return to Service) is processing;
     /// drives the progress modal and carries the current stage message.
     @State private var processingMessage: String? = nil
+    /// Title shown on the processing overlay — set by whichever long-running
+    /// flow is driving it (Return to Service vs. bare Erase Device).
+    @State private var processingTitle: String = "Return to Service"
     @State private var showingUnlockAccountSheet: Bool = false
     @State private var unlockUsername: String = ""
     @State private var showingLocalAdminPassword: Bool = false
@@ -533,7 +536,7 @@ struct DeviceView: View {
                     .padding(.top, 24)
                     .padding(.bottom, 16)
                     
-                    Text(action.message)
+                    Text(confirmationMessage(for: action))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -629,6 +632,32 @@ struct DeviceView: View {
         }
     }
     
+    /// Return to Service's confirmation copy is composed from the steps that
+    /// will actually run — it never promises a disabled or unconfigured step.
+    /// All other actions use their built-in copy. The typed-name confirmation
+    /// for destructive actions is a permanent safeguard and is never relaxed.
+    private func confirmationMessage(for action: DeviceAction) -> String {
+        guard action == .returnToService else { return action.message }
+
+        let options = actionPolicy.options(for: .returnToService)
+        var steps = ["erase all data on the device (the device must acknowledge the erase before any cleanup step runs)"]
+        if options.effectiveDeleteJamfRecord {
+            steps.append("remove its record from Jamf Pro")
+        }
+        if options.effectiveDeleteEntraObject && configManager.configuration.isEntraConfigured {
+            steps.append("delete its device object from Microsoft Entra so the device can re-enroll cleanly")
+        }
+
+        if steps.count == 1 {
+            return "This will \(steps[0]). This action cannot be undone."
+        }
+        let numbered = steps.enumerated().map { "(\($0.offset + 1)) \($0.element)" }
+        let joined = numbered.count == 2
+            ? "\(numbered[0]) and \(numbered[1])"
+            : numbered.dropLast().joined(separator: ", ") + ", and \(numbered[numbered.count - 1])"
+        return "This will \(joined). This action cannot be undone."
+    }
+
     /// Routes a granted menu action: Unlock User Account opens its own
     /// sheet; everything else goes through the confirmation overlay.
     private func trigger(_ action: DeviceAction) {
@@ -680,6 +709,8 @@ struct DeviceView: View {
             await sendRestartCommand(notifyUser: false)
         case .shutdown:
             await sendShutdownCommand()
+        case .wipe:
+            await sendWipeCommand()
         case .returnToService:
             await sendEraseCommand()
         case .viewLocalAdminPassword:
@@ -1119,7 +1150,7 @@ struct DeviceView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 18) {
-                    Text("Return to Service")
+                    Text(processingTitle)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
 
@@ -1411,16 +1442,14 @@ struct DeviceView: View {
         )
     }
     
-    // MARK: - Return to Service (Erase → Delete Jamf record → Delete from Entra)
+    // MARK: - Erase Device (bare erase — Jamf record and Entra object kept)
 
-    /// Orchestrates the full decommission: queue the ERASE_DEVICE command, WAIT
-    /// for the device to acknowledge it, delete the Jamf computer record, then
-    /// remove the device object(s) from Microsoft Entra. Ports the `after-ack`
-    /// behavior of Erase_and_Delete_Devices.sh: the Jamf record must NOT be
-    /// deleted until the erase is acknowledged, because deleting it removes the
-    /// MDM profile and unmanages the Mac — an unacknowledged command would then
-    /// never be delivered. Each stage logs independently; Entra is best-effort.
-    private func sendEraseCommand() async {
+    /// Bare erase: queue the ERASE_DEVICE command (with recovery PIN), WAIT for
+    /// the device to acknowledge it, and stop there — the Jamf computer record
+    /// and Entra device object are intentionally left in place. An erase is
+    /// never fire-and-forget, so an unacknowledged command surfaces as a
+    /// failure the operator must follow up on manually.
+    private func sendWipeCommand() async {
         guard let managementId = displayComputer.general?.managementId else {
             await showError("Device management ID not available — cannot erase this device.")
             return
@@ -1430,50 +1459,94 @@ struct DeviceView: View {
         let deviceName = displayComputer.displayName
         let serial = displayComputer.serialNumber ?? "Unknown"
         let deviceId = displayComputer.id
+
+        await MainActor.run {
+            isExecutingCommand = true
+            processingTitle = "Erase Device"
+            processingMessage = "Sending erase command to \(deviceName)…"
+        }
+
+        do {
+            let token = try await getBearerToken()
+
+            let erase = try await performEraseAndAwaitAck(
+                managementId: managementId, deviceName: deviceName,
+                serial: serial, deviceId: deviceId, token: token, config: config
+            )
+
+            var summaryLines = erase.summaryLines
+            if erase.acked {
+                summaryLines.append("• Erase acknowledged. Jamf record and Entra object intentionally left in place.")
+            } else {
+                summaryLines.append("• Erase was NOT acknowledged in time — the command remains queued for delivery and the device record is untouched. Follow up manually.")
+            }
+
+            await MainActor.run {
+                isExecutingCommand = false
+                processingMessage = nil
+                commandResult = CommandResult(
+                    success: erase.acked,
+                    title: erase.acked ? "Erase Acknowledged" : "Erase Not Acknowledged",
+                    message: "\(deviceName):\n" + summaryLines.joined(separator: "\n")
+                )
+                showingCommandAlert = true
+            }
+
+        } catch {
+            NSLog("❌ Erase Device error: \(error.localizedDescription)")
+            await MainActor.run { processingMessage = nil }
+            await showError(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Return to Service (Erase → configurable Jamf/Entra cleanup)
+
+    /// Orchestrates the decommission: queue the ERASE_DEVICE command, WAIT for
+    /// the device to acknowledge it, then run the cleanup steps the profile
+    /// enables (options on the returnToService allow-list entry; both default
+    /// ON, preserving the full decommission for already-deployed profiles).
+    /// Ports the `after-ack` behavior of Erase_and_Delete_Devices.sh — and
+    /// hardens it: NO cleanup step (Jamf delete OR Entra delete) may run until
+    /// the erase is acknowledged, because deleting the Jamf record removes the
+    /// MDM profile and unmanages the Mac — an unacknowledged command would then
+    /// never be delivered. Each stage logs independently; Entra is best-effort.
+    private func sendEraseCommand() async {
+        guard let managementId = displayComputer.general?.managementId else {
+            await showError("Device management ID not available — cannot erase this device.")
+            return
+        }
+
+        let config = MDMConfigurationManager.shared.configuration
+        let options = actionPolicy.options(for: .returnToService)
+        let deviceName = displayComputer.displayName
+        let serial = displayComputer.serialNumber ?? "Unknown"
+        let deviceId = displayComputer.id
         let category = "Device Actions"
 
         await MainActor.run {
             isExecutingCommand = true
+            processingTitle = "Return to Service"
             processingMessage = "Sending erase command to \(deviceName)…"
         }
 
         var summaryLines: [String] = []
         var overallSuccess = true
 
-        // EraseDevice always requires a 6-digit PIN in the API call, but the PIN
-        // only MATTERS on Intel/T2 Macs — there it becomes the recovery PIN
-        // needed to unlock the Mac after the wipe. Apple Silicon ignores it, so
-        // the PIN is only surfaced/logged for non-Apple-Silicon hardware. When
-        // the architecture is unknown, `isAppleSilicon` is false, so the PIN is
-        // shown (safe default).
-        let erasePIN = String(format: "%06d", Int.random(in: 0...999999))
-        let showPIN = !displayComputer.isAppleSilicon
-
         do {
             let token = try await getBearerToken()
 
-            // 1) Queue the erase command (with PIN) and capture its UUID.
-            let commandUUID = try await issueEraseCommand(managementId: managementId, pin: erasePIN, token: token, jamfURL: config.jamfURL)
-            if showPIN {
-                summaryLines.append("• Erase command queued. Recovery PIN: \(erasePIN) (needed to unlock this Intel/T2 Mac).")
-            } else {
-                summaryLines.append("• Erase command queued.")
-            }
-            ActionLogService.shared.logAction(
-                actionName: showPIN ? "Erase Device (recovery PIN \(erasePIN))" : "Erase Device",
-                actionCategory: category,
-                deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
-                success: true, errorMessage: nil
+            // 1) Erase phase: queue the command (with PIN) and wait for the
+            // device to acknowledge it.
+            let erase = try await performEraseAndAwaitAck(
+                managementId: managementId, deviceName: deviceName,
+                serial: serial, deviceId: deviceId, token: token, config: config
             )
+            summaryLines.append(contentsOf: erase.summaryLines)
+            let acked = erase.acked
 
-            // 2) WAIT until the device ACKNOWLEDGES the erase. Deleting the Jamf
-            // record unmanages the Mac (removes MDM), so it must not happen until
-            // the wipe is acknowledged/underway or the command never processes.
-            await MainActor.run { processingMessage = "Waiting for \(deviceName) to acknowledge the erase…" }
-            let acked = await waitForAcknowledgment(uuid: commandUUID, deviceName: deviceName, token: token, jamfURL: config.jamfURL)
-
-            // 3) Delete the Jamf record only after the erase is acknowledged.
-            if acked {
+            // 2) Delete the Jamf record only after the erase is acknowledged,
+            // and only when the profile hasn't disabled the step.
+            if acked && options.effectiveDeleteJamfRecord {
                 await MainActor.run { processingMessage = "Erase acknowledged. Removing Jamf record…" }
                 do {
                     try await deleteJamfRecord(computerId: deviceId, token: token, jamfURL: config.jamfURL)
@@ -1492,40 +1565,56 @@ struct DeviceView: View {
                         success: false, errorMessage: error.localizedDescription
                     )
                 }
+            } else if acked {
+                // Policy-disabled skip — not a failure.
+                summaryLines.append("• Jamf record kept (disabled by policy).")
             } else {
                 overallSuccess = false
-                summaryLines.append("• Erase was NOT acknowledged in time — Jamf record left in place so the command can still be delivered. Follow up manually.")
-                ActionLogService.shared.logAction(
-                    actionName: "Delete Jamf Record", actionCategory: category,
-                    deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
-                    success: false, errorMessage: "Erase not acknowledged; record intentionally not deleted (would unmanage the Mac)."
-                )
+                summaryLines.append("• Erase was NOT acknowledged in time — Jamf record left in place so the command can still be delivered, and Entra cleanup was also skipped. Follow up manually.")
+                // Audit the withheld delete only when one was actually
+                // planned — a policy-disabled step was never going to run.
+                if options.effectiveDeleteJamfRecord {
+                    ActionLogService.shared.logAction(
+                        actionName: "Delete Jamf Record", actionCategory: category,
+                        deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
+                        success: false, errorMessage: "Erase not acknowledged; record intentionally not deleted (would unmanage the Mac)."
+                    )
+                }
             }
 
-            // 4) Entra cleanup — best effort, only when configured. Never fatal.
-            if let entra = EntraGraphService(configuration: config) {
-                let entraName = displayComputer.general?.name ?? deviceName
-                await MainActor.run { processingMessage = "Removing '\(entraName)' from Microsoft Entra…" }
-                let result = await entra.deleteDevices(displayName: entraName)
-                var entraSuccess = true
-                switch result.outcome {
-                case .completed:
-                    entraSuccess = result.failed == 0
-                    summaryLines.append("• Entra: \(result.deleted) object(s) removed" + (result.failed > 0 ? ", \(result.failed) failed." : "."))
-                case .noMatch:
-                    summaryLines.append("• Entra: no matching device object.")
-                case .authFailed, .lookupFailed, .notConfigured:
-                    entraSuccess = false
-                    summaryLines.append("• Entra cleanup did not complete: \(result.message)")
+            // 3) Entra cleanup — HARD-gated on acknowledgment like every other
+            // cleanup step, then on the profile option. Best effort, only when
+            // configured. Never fatal.
+            if acked && options.effectiveDeleteEntraObject {
+                if let entra = EntraGraphService(configuration: config) {
+                    let entraName = displayComputer.general?.name ?? deviceName
+                    await MainActor.run { processingMessage = "Removing '\(entraName)' from Microsoft Entra…" }
+                    let result = await entra.deleteDevices(displayName: entraName)
+                    var entraSuccess = true
+                    switch result.outcome {
+                    case .completed:
+                        entraSuccess = result.failed == 0
+                        summaryLines.append("• Entra: \(result.deleted) object(s) removed" + (result.failed > 0 ? ", \(result.failed) failed." : "."))
+                    case .noMatch:
+                        summaryLines.append("• Entra: no matching device object.")
+                    case .authFailed, .lookupFailed, .notConfigured:
+                        entraSuccess = false
+                        summaryLines.append("• Entra cleanup did not complete: \(result.message)")
+                    }
+                    ActionLogService.shared.logAction(
+                        actionName: "Entra Device Cleanup", actionCategory: category,
+                        deviceName: entraName, deviceSerialNumber: serial, deviceId: deviceId,
+                        success: entraSuccess, errorMessage: entraSuccess ? nil : result.message
+                    )
+                } else {
+                    summaryLines.append("• Entra cleanup not configured — skipped.")
                 }
-                ActionLogService.shared.logAction(
-                    actionName: "Entra Device Cleanup", actionCategory: category,
-                    deviceName: entraName, deviceSerialNumber: serial, deviceId: deviceId,
-                    success: entraSuccess, errorMessage: entraSuccess ? nil : result.message
-                )
-            } else {
-                summaryLines.append("• Entra cleanup not configured — skipped.")
+            } else if acked {
+                // Policy-disabled skip — not a failure.
+                summaryLines.append("• Entra cleanup disabled by policy — skipped.")
             }
+            // Not acked: the step-2 summary line already covers the skipped
+            // Entra cleanup — no cleanup runs on an unacknowledged erase.
 
             await MainActor.run {
                 isExecutingCommand = false
@@ -1543,6 +1632,52 @@ struct DeviceView: View {
             await MainActor.run { processingMessage = nil }
             await showError(error.localizedDescription)
         }
+    }
+
+    // MARK: - Shared erase phase
+
+    /// Result of the shared erase phase: whether the device acknowledged the
+    /// erase, plus the summary lines accumulated so far.
+    private struct ErasePhaseResult { let acked: Bool; let summaryLines: [String] }
+
+    /// Issues ERASE_DEVICE (with recovery PIN) and ALWAYS waits for the device
+    /// to acknowledge — an erase is never fire-and-forget, and callers must
+    /// treat acked == false as "no further destructive steps may run".
+    private func performEraseAndAwaitAck(managementId: String, deviceName: String, serial: String, deviceId: String, token: String, config: MDMConfiguration) async throws -> ErasePhaseResult {
+        let category = "Device Actions"
+        var summaryLines: [String] = []
+
+        // EraseDevice always requires a 6-digit PIN in the API call, but the PIN
+        // only MATTERS on Intel/T2 Macs — there it becomes the recovery PIN
+        // needed to unlock the Mac after the wipe. Apple Silicon ignores it, so
+        // the PIN is only surfaced/logged for non-Apple-Silicon hardware. When
+        // the architecture is unknown, `isAppleSilicon` is false, so the PIN is
+        // shown (safe default).
+        let erasePIN = String(format: "%06d", Int.random(in: 0...999999))
+        let showPIN = !displayComputer.isAppleSilicon
+
+        // 1) Queue the erase command (with PIN) and capture its UUID.
+        let commandUUID = try await issueEraseCommand(managementId: managementId, pin: erasePIN, token: token, jamfURL: config.jamfURL)
+        if showPIN {
+            summaryLines.append("• Erase command queued. Recovery PIN: \(erasePIN) (needed to unlock this Intel/T2 Mac).")
+        } else {
+            summaryLines.append("• Erase command queued.")
+        }
+        ActionLogService.shared.logAction(
+            actionName: showPIN ? "Erase Device (recovery PIN \(erasePIN))" : "Erase Device",
+            actionCategory: category,
+            deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
+            success: true, errorMessage: nil
+        )
+
+        // 2) WAIT until the device ACKNOWLEDGES the erase. Destructive
+        // follow-up (e.g. deleting the Jamf record, which unmanages the Mac by
+        // removing MDM) must not happen until the wipe is acknowledged/underway
+        // or the command never processes.
+        await MainActor.run { processingMessage = "Waiting for \(deviceName) to acknowledge the erase…" }
+        let acked = await waitForAcknowledgment(uuid: commandUUID, deviceName: deviceName, token: token, jamfURL: config.jamfURL)
+
+        return ErasePhaseResult(acked: acked, summaryLines: summaryLines)
     }
 
     /// POST an ERASE_DEVICE MDM command (with the required 6-digit PIN) and
@@ -1587,19 +1722,22 @@ struct DeviceView: View {
     }
 
     /// Poll the erase command until the device ACKNOWLEDGES it (or it reports
-    /// COMPLETED), so the Jamf record is only deleted once the wipe is actually
-    /// underway. Returns false on NOT_NOW / ERROR / FAILED or on timeout — in
-    /// which case the caller must NOT delete the record (that would unmanage the
-    /// Mac before the command is delivered). Mirrors wait_for_ack in the script:
-    /// 180s timeout, 15s poll interval.
+    /// COMPLETED), so destructive follow-up steps only run once the wipe is
+    /// actually underway. Returns false on NOT_NOW / ERROR / FAILED or on
+    /// timeout — in which case the caller must NOT run any cleanup step
+    /// (deleting the record would unmanage the Mac before the command is
+    /// delivered). Timeout and poll interval come from the core domain
+    /// (jamfPro.eraseAckTimeoutSeconds / jamfPro.eraseAckPollIntervalSeconds;
+    /// the defaults mirror wait_for_ack in the script: 180s, 15s).
     private func waitForAcknowledgment(uuid: String, deviceName: String, token: String, jamfURL: String) async -> Bool {
         guard !uuid.isEmpty else {
             NSLog("⚠️ No command UUID to poll — cannot confirm acknowledgment")
             return false
         }
 
-        let timeoutSeconds = 180
-        let pollIntervalSeconds = 15
+        let config = MDMConfigurationManager.shared.configuration
+        let timeoutSeconds = config.eraseAckTimeoutSeconds
+        let pollIntervalSeconds = config.eraseAckPollIntervalSeconds
         var waited = 0
 
         while waited < timeoutSeconds {

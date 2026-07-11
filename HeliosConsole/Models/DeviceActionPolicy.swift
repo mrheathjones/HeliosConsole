@@ -40,6 +40,14 @@ struct DeviceActionPolicy {
         return grant.effectiveEnabled
     }
 
+    /// Per-action `options` object from the allow-list entry. Absent grant
+    /// or absent options → `.empty`, whose toggles all resolve to their
+    /// defaults — deliberately preserving the original full-decommission
+    /// behavior for profiles that never deliver an options object.
+    func options(for action: DeviceAction) -> AccessConfiguration.DeviceActionOptions {
+        grants?[action.rawValue]?.effectiveOptions ?? .empty
+    }
+
     /// Menu label: the profile's non-empty `displayName` override wins,
     /// otherwise the built-in label. Confirmation-dialog copy is never
     /// overridable (see DeviceAction).

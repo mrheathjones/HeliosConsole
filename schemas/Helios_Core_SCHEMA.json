@@ -61,6 +61,18 @@
           "title": "User Credential Lifetime (days)",
           "description": "Lifetime of per-user Jamf API client credentials provisioned by the app; expiry forces re-provisioning. Clamped 1-365.",
           "default": 90
+        },
+        "eraseAckTimeoutSeconds": {
+          "type": "integer",
+          "title": "Erase Acknowledgment Timeout (seconds)",
+          "description": "How long every erase (Erase Device / Return to Service) waits for the device to acknowledge the ERASE_DEVICE command. Cleanup steps (Jamf record delete, Entra object delete) NEVER run without acknowledgment — on timeout the flow stops. Clamped 30-1800.",
+          "default": 180
+        },
+        "eraseAckPollIntervalSeconds": {
+          "type": "integer",
+          "title": "Erase Acknowledgment Poll Interval (seconds)",
+          "description": "How often the app polls Jamf Pro for the ERASE_DEVICE acknowledgment while waiting. Clamped 5-120.",
+          "default": 15
         }
       },
       "required": [

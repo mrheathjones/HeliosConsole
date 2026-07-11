@@ -49,7 +49,7 @@
     "deviceActions": {
       "type": "object",
       "title": "Device Actions (allow-list)",
-      "description": "STRICT FAIL-CLOSED per-action allow-list for the device Actions menu. If no actions array is delivered for a platform, that platform's Actions menu is HIDDEN ENTIRELY. If the array is present, ONLY listed actions with enabled=true are shown (and executable) — an id not listed, or listed with enabled=false, is hidden AND blocked at execution. Unknown ids are ignored (logged once) so newer profiles deploy safely to older app builds; ids the schema knows but the app has not implemented yet (e.g. lock, installPackage) render nothing. displayName overrides the menu label only. LEGACY: the pre-2.1 boolean-map shape (e.g. computer.restart=true) is still decoded — explicitly delivered keys become grants — but the old per-key defaults are no longer applied; migrate to the actions array. The core domain's jamfPro.screenShareEnabled key is DEPRECATED: once an allow-list is delivered it is authoritative for screenShare too.",
+      "description": "STRICT FAIL-CLOSED per-action allow-list for the device Actions menu. If no actions array is delivered for a platform, that platform's Actions menu is HIDDEN ENTIRELY. If the array is present, ONLY listed actions with enabled=true are shown (and executable) — an id not listed, or listed with enabled=false, is hidden AND blocked at execution. Unknown ids are ignored (logged once) so newer profiles deploy safely to older app builds. The computer id \"wipe\" is now IMPLEMENTED — a bare erase (ERASE_DEVICE with recovery PIN) that ALWAYS waits for the device to acknowledge and keeps the Jamf record and Entra object; lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, and runPolicy remain reserved — granting them renders nothing. displayName overrides the menu label only. LEGACY: the pre-2.1 boolean-map shape (e.g. computer.restart=true) is still decoded — explicitly delivered keys become grants — but the old per-key defaults are no longer applied; migrate to the actions array. The core domain's jamfPro.screenShareEnabled key is DEPRECATED: once an allow-list is delivered it is authoritative for screenShare too.",
       "properties": {
         "computer": {
           "type": "object",
@@ -98,6 +98,25 @@
                     "title": "Menu Label Override",
                     "description": "Overrides the Actions-menu label ONLY. Confirmation-dialog safety copy is app-built-in and never profile-controlled. Empty = built-in label.",
                     "default": ""
+                  },
+                  "options": {
+                    "type": "object",
+                    "title": "Action Options (Return to Service)",
+                    "description": "Consulted ONLY by the returnToService action; ignored for every other id. Both toggles default true, so omitting this object keeps the original full-decommission behavior. The erase always runs first and ALWAYS waits for the device to acknowledge ERASE_DEVICE — no cleanup step runs without that acknowledgment. deleteEntraObject auto-skips when Entra isn't configured.",
+                    "properties": {
+                      "deleteJamfRecord": {
+                        "type": "boolean",
+                        "title": "Delete Jamf Pro Record",
+                        "description": "Remove the computer record from Jamf Pro after the erase is acknowledged.",
+                        "default": true
+                      },
+                      "deleteEntraObject": {
+                        "type": "boolean",
+                        "title": "Delete Entra Device Object",
+                        "description": "Delete the device object from Microsoft Entra after the erase is acknowledged, so the device can re-enroll cleanly.",
+                        "default": true
+                      }
+                    }
                   }
                 }
               },
@@ -158,9 +177,18 @@
                   "displayName": ""
                 },
                 {
-                  "id": "returnToService",
+                  "id": "wipe",
                   "enabled": false,
                   "displayName": ""
+                },
+                {
+                  "id": "returnToService",
+                  "enabled": false,
+                  "displayName": "",
+                  "options": {
+                    "deleteJamfRecord": true,
+                    "deleteEntraObject": true
+                  }
                 },
                 {
                   "id": "screenShare",
