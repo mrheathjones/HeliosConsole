@@ -77,6 +77,14 @@ struct UserInterfaceSettings: Codable {
     var showEnrollments: Bool?
     var showAnnouncements: Bool?
     var showSettings: Bool?
+    /// Marketing tagline under the wordmark on the welcome screen.
+    var tagline: String?
+    /// Footer/copyright line for the Settings About card.
+    var footerText: String?
+    /// Destination for the About card's Documentation link (empty = hidden).
+    var documentationURL: String?
+    /// Destination for the About card's Report-an-Issue link (empty = hidden).
+    var feedbackURL: String?
 
     /// Preferred appearance. Raw values match the schema enum exactly.
     enum ColorSchemePreference: String {
@@ -126,6 +134,18 @@ struct UserInterfaceSettings: Codable {
     var effectiveShowEnrollments: Bool { showEnrollments ?? true }
     var effectiveShowAnnouncements: Bool { showAnnouncements ?? true }
     var effectiveShowSettings: Bool { showSettings ?? true }
+
+    /// Welcome-screen tagline. `nil` → built-in copy.
+    var effectiveTagline: String? { nonEmptyTrimmed(tagline) }
+
+    /// About-card footer line. `nil` → composed from the product name.
+    var effectiveFooterText: String? { nonEmptyTrimmed(footerText) }
+
+    /// Documentation link. `nil` (absent or empty) hides the row.
+    var effectiveDocumentationURL: String? { nonEmptyTrimmed(documentationURL) }
+
+    /// Report-an-Issue link. `nil` (absent or empty) hides the row.
+    var effectiveFeedbackURL: String? { nonEmptyTrimmed(feedbackURL) }
 }
 
 // MARK: - sidebarItems section

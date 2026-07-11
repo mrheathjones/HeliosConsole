@@ -64,7 +64,7 @@ class AuthViewModel: ObservableObject {
     }
     
     func authenticateWithBiometrics(completion: ((Bool) -> Void)? = nil) {
-        biometricManager.authenticate(reason: "Unlock Helios Console") { [weak self] success, error in
+        biometricManager.authenticate(reason: "Unlock \(Branding.productName)") { [weak self] success, error in
             guard let self = self else { return }
             
             DispatchQueue.main.async {

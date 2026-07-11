@@ -155,7 +155,7 @@ private struct ReportPageView: View {
             Spacer(minLength: 0)
 
             HStack {
-                Text("Helios Console")
+                Text(Branding.productName)
                     .font(.system(size: 8))
                     .foregroundStyle(.secondary)
                 Spacer()

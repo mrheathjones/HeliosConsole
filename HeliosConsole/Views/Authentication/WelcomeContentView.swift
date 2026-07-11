@@ -10,6 +10,7 @@ import SwiftUI
 
 struct WelcomeContentView: View {
     @Binding var showLogin: Bool
+    @Environment(\.openURL) private var openURL
     @State private var showContent = false
     @State private var floatingOffset: CGFloat = 0
     
@@ -18,23 +19,31 @@ struct WelcomeContentView: View {
             Spacer()
             
             VStack(spacing: 20) {
+                // Hero mark: the org's logo when configured, else the
+                // built-in brand mark on the accent gradient.
                 ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.blue, Color.cyan],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    if Branding.logoURL == nil {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: Branding.accentGradient,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .frame(width: 120, height: 120)
-                        .shadow(color: Color.blue.opacity(0.5), radius: 30, x: 0, y: 10)
-                        .offset(y: floatingOffset)
-                    
-                    Image(systemName: "cube.transparent.fill")
-                        .font(.system(size: 60, weight: .light))
-                        .foregroundColor(.white)
-                        .offset(y: floatingOffset)
+                            .frame(width: 120, height: 120)
+                            .shadow(color: Branding.accentColor.opacity(0.5), radius: 30, x: 0, y: 10)
+                            .offset(y: floatingOffset)
+
+                        Image(systemName: "sun.max.fill")
+                            .font(.system(size: 60, weight: .light))
+                            .foregroundColor(.white)
+                            .offset(y: floatingOffset)
+                    } else {
+                        BrandMark(size: 120)
+                            .shadow(color: Branding.accentColor.opacity(0.5), radius: 30, x: 0, y: 10)
+                            .offset(y: floatingOffset)
+                    }
                 }
                 .onAppear {
                     withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
@@ -44,26 +53,28 @@ struct WelcomeContentView: View {
                 
                 VStack(spacing: 8) {
                     HStack(spacing: 12) {
-                        Text("Helios")
+                        Text(Branding.title)
                             .font(.system(size: 48, weight: .semibold))
                             .foregroundColor(.white)
-                        
-                        Text("Console")
-                            .font(.system(size: 48, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.blue, Color.cyan],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+
+                        if !Branding.subtitle.isEmpty {
+                            Text(Branding.subtitle)
+                                .font(.system(size: 48, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 6)
+                                .background(
+                                    LinearGradient(
+                                        colors: Branding.accentGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .cornerRadius(12)
+                                .cornerRadius(12)
+                        }
                     }
                     
-                    Text("Device Management Made Simple")
+                    Text(Branding.tagline)
                         .font(.system(size: 18, weight: .regular))
                         .foregroundColor(.gray)
                 }
@@ -97,30 +108,35 @@ struct WelcomeContentView: View {
                     .frame(height: 56)
                     .background(
                         LinearGradient(
-                            colors: [Color.blue, Color.cyan],
+                            colors: Branding.accentGradient,
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .cornerRadius(12)
-                    .shadow(color: Color.blue.opacity(0.5), radius: 20, x: 0, y: 10)
+                    .shadow(color: Branding.accentColor.opacity(0.5), radius: 20, x: 0, y: 10)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 
-                Button(action: {}) {
-                    Text("Learn More")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.blue)
-                        .frame(maxWidth: 400)
-                        .frame(height: 56)
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                        )
+                // Only rendered when the ui domain delivers a
+                // documentationURL — a button with nowhere to go is worse
+                // than no button.
+                if let learnMoreURL = Branding.documentationURL {
+                    Button(action: { openURL(learnMoreURL) }) {
+                        Text("Learn More")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.blue)
+                            .frame(maxWidth: 400)
+                            .frame(height: 56)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(ScaleButtonStyle())
                 }
-                .buttonStyle(ScaleButtonStyle())
             }
             .opacity(showContent ? 1 : 0)
             .offset(y: showContent ? 0 : 40)

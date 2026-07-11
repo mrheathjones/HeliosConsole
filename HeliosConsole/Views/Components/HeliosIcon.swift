@@ -198,12 +198,12 @@ struct HeliosLogoWithText: View {
             HeliosIcon(size: iconSize)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text("Helios")
+                Text(Branding.title)
                     .font(.system(size: titleFontSize, weight: .semibold))
                     .foregroundColor(isDark ? .white : .primary)
-                
-                if showSubtitle {
-                    Text("Console")
+
+                if showSubtitle && !Branding.subtitle.isEmpty {
+                    Text(Branding.subtitle)
                         .font(.system(size: subtitleFontSize, weight: .medium))
                         .foregroundColor(.gray)
                 }
@@ -216,12 +216,12 @@ struct HeliosLogoWithText: View {
             HeliosIcon(size: iconSize)
             
             VStack(spacing: 4) {
-                Text("Helios")
+                Text(Branding.title)
                     .font(.system(size: titleFontSize, weight: .bold))
                     .foregroundColor(isDark ? .white : .primary)
-                
-                if showSubtitle {
-                    Text("Console")
+
+                if showSubtitle && !Branding.subtitle.isEmpty {
+                    Text(Branding.subtitle)
                         .font(.system(size: subtitleFontSize, weight: .medium))
                         .foregroundColor(.gray)
                 }

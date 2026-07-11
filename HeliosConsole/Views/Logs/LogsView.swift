@@ -70,7 +70,7 @@ struct LogsView: View {
                     }
                 }
                 
-                Text("Audit trail of all MDM actions performed from Helios Console")
+                Text("Audit trail of all MDM actions performed from \(Branding.productName)")
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
             }
@@ -178,7 +178,7 @@ struct LogsView: View {
                 filterChip("All Sources", isSelected: selectedSource == nil) {
                     selectedSource = nil
                 }
-                filterChip("Helios Console", icon: "sun.max.fill", isSelected: selectedSource == .heliosConsole) {
+                filterChip(Branding.productName, icon: "sun.max.fill", isSelected: selectedSource == .heliosConsole) {
                     selectedSource = selectedSource == .heliosConsole ? nil : .heliosConsole
                 }
                 filterChip("Jamf Policy", icon: "server.rack", isSelected: selectedSource == .jamfPolicy) {

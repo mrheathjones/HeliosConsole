@@ -102,23 +102,25 @@ struct LoginView: View {
     
     private var logoHeader: some View {
         HStack(spacing: 12) {
-            Text("Helios")
+            Text(Branding.title)
                 .font(.system(size: 36, weight: .semibold))
                 .foregroundColor(.white)
-            
-            Text("Console")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 4)
-                .background(brandGradient)
-                .cornerRadius(10)
+
+            if !Branding.subtitle.isEmpty {
+                Text(Branding.subtitle)
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
+                    .background(brandGradient)
+                    .cornerRadius(10)
+            }
         }
     }
-    
+
     private var brandGradient: some View {
         LinearGradient(
-            colors: [Color.blue, Color.cyan],
+            colors: Branding.accentGradient,
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -243,20 +245,26 @@ struct LoginView: View {
     
     // MARK: - Help Section
     
+    /// Shown only when the ui domain delivers a supportURL — the schema
+    /// contract is "leave empty to hide", so there is no placeholder
+    /// fallback.
+    @ViewBuilder
     private var helpSection: some View {
-        HStack(spacing: 4) {
-            Text("Need help?")
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
-            
-            Button(action: openSupportURL) {
-                Text("Contact support")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.blue)
+        if Branding.supportURL != nil {
+            HStack(spacing: 4) {
+                Text("Need help?")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+
+                Button(action: openSupportURL) {
+                    Text("Contact support")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .opacity(showContent ? 1 : 0)
         }
-        .opacity(showContent ? 1 : 0)
     }
     
     // MARK: - Actions
@@ -268,10 +276,8 @@ struct LoginView: View {
     
     /// Opens support URL using SwiftUI's Environment openURL action
     private func openSupportURL() {
-        let urlString = MDMConfigurationManager.shared.configuration.supportURL ?? "https://support.yourcompany.com"
-        if let url = URL(string: urlString) {
-            openURL(url)
-        }
+        guard let url = Branding.supportURL else { return }
+        openURL(url)
     }
     
     private func isValidEmail(_ email: String) -> Bool {

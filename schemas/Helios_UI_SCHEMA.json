@@ -81,6 +81,30 @@
           "title": "Show Settings",
           "description": "Show the Settings area in the app.",
           "default": true
+        },
+        "tagline": {
+          "type": "string",
+          "title": "Tagline",
+          "description": "Marketing tagline under the wordmark on the welcome screen. Empty = built-in copy.",
+          "default": ""
+        },
+        "footerText": {
+          "type": "string",
+          "title": "Footer Text",
+          "description": "Footer/copyright line on the Settings About card. Empty = composed from the product name and current year.",
+          "default": ""
+        },
+        "documentationURL": {
+          "type": "string",
+          "title": "Documentation URL",
+          "description": "Destination for the About card's Documentation link and the welcome screen's Learn More button. Empty = those affordances are hidden.",
+          "default": ""
+        },
+        "feedbackURL": {
+          "type": "string",
+          "title": "Feedback URL",
+          "description": "Destination for the About card's Report an Issue link. Empty = the row is hidden.",
+          "default": ""
         }
       }
     },

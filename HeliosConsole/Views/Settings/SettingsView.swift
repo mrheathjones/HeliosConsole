@@ -14,6 +14,7 @@
 //
 
 import SwiftUI
+import AppKit
 import LocalAuthentication
 
 struct SettingsView: View {
@@ -88,7 +89,7 @@ struct SettingsView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(isDark ? .white : .primary)
                 
-                Text("Configure Helios Console preferences")
+                Text("Configure \(Branding.productName) preferences")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
@@ -502,31 +503,17 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // App info
                 HStack(spacing: 16) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.blue, Color.purple],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 64, height: 64)
-                        
-                        Image(systemName: "sun.max.fill")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(.white)
-                    }
-                    
+                    BrandMark(size: 64)
+
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Helios Console")
+                        Text(Branding.productName)
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(isDark ? .white : .primary)
-                        
-                        Text("Version 1.0.0 (Build 1)")
+
+                        Text(appVersionString)
                             .font(.system(size: 13))
                             .foregroundColor(.gray)
-                        
+
                         Text("macOS Device Management")
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
@@ -536,28 +523,41 @@ struct SettingsView: View {
                 Divider()
                     .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
                 
-                // Links
+                // Links — each row only renders when the ui domain
+                // delivers its destination URL (dead buttons help no one).
                 VStack(spacing: 12) {
-                    aboutLinkRow(icon: "book.fill", title: "Documentation", color: .blue)
-                    aboutLinkRow(icon: "questionmark.circle.fill", title: "Help & Support", color: .green)
-                    aboutLinkRow(icon: "exclamationmark.bubble.fill", title: "Report an Issue", color: .orange)
-                    aboutLinkRow(icon: "star.fill", title: "Rate Helios", color: .yellow)
+                    if let url = Branding.documentationURL {
+                        aboutLinkRow(icon: "book.fill", title: "Documentation", color: .blue, url: url)
+                    }
+                    if let url = Branding.supportURL {
+                        aboutLinkRow(icon: "questionmark.circle.fill", title: "Help & Support", color: .green, url: url)
+                    }
+                    if let url = Branding.feedbackURL {
+                        aboutLinkRow(icon: "exclamationmark.bubble.fill", title: "Report an Issue", color: .orange, url: url)
+                    }
                 }
-                
+
                 Divider()
                     .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
-                
-                // Copyright
-                Text("© 2026 Helios Console. All rights reserved.")
+
+                // Copyright (ui domain footerText, or composed default)
+                Text(Branding.footerText)
                     .font(.system(size: 11))
                     .foregroundColor(.gray)
             }
         }
     }
     
-    private func aboutLinkRow(icon: String, title: String, color: Color) -> some View {
+    /// Real product version from the bundle — never a hard-coded string.
+    private var appVersionString: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "Version \(version) (Build \(build))"
+    }
+
+    private func aboutLinkRow(icon: String, title: String, color: Color, url: URL) -> some View {
         Button {
-            // Handle link tap
+            NSWorkspace.shared.open(url)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)

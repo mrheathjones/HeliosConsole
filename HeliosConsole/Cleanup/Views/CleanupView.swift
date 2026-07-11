@@ -71,7 +71,7 @@ struct CleanupView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
 
-            Text("Cleanup uses Helios's Jamf Pro master API client. Configure it in your MDM configuration profile.")
+            Text("Cleanup uses \(Branding.title)'s Jamf Pro master API client. Configure it in your MDM configuration profile.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
