@@ -190,7 +190,7 @@ class EnrollmentService: ObservableObject {
             
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.timeoutInterval = 30
+            request.timeoutInterval = NetworkTuning.connectionTimeout
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             
@@ -253,7 +253,7 @@ class EnrollmentService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
         
@@ -292,7 +292,7 @@ class EnrollmentService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 15
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
@@ -422,7 +422,7 @@ extension EnrollmentService {
         guard let url = URL(string: "\(serverURL)/api/v1/device-enrollments") else { throw EnrollmentError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 15
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -434,7 +434,7 @@ extension EnrollmentService {
         guard let url = URL(string: "\(serverURL)/api/v1/device-enrollments/\(instanceId)/devices") else { throw EnrollmentError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)

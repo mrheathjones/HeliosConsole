@@ -226,9 +226,57 @@ class AnnouncementService: ObservableObject {
     
     /// Key in UserDefaults for dismissed announcement IDs
     private let dismissedKey = "helios_dismissed_announcements"
-    
+
     /// Key in UserDefaults for read announcement IDs
     private let readKey = "helios_read_announcements"
+
+    // MARK: - Managed behavior keys (announcements domain)
+    // Read live from the managed domain so a re-pushed profile takes
+    // effect on the next refresh. Defaults match
+    // schemas/Helios_Announcements_SCHEMA.json.
+
+    private var managedDefaults: UserDefaults? {
+        UserDefaults(suiteName: managedPreferenceDomain)
+    }
+
+    private func managedBool(_ key: String, default defaultValue: Bool) -> Bool {
+        guard let defaults = managedDefaults, defaults.object(forKey: key) != nil else {
+            return defaultValue
+        }
+        return defaults.bool(forKey: key)
+    }
+
+    /// Master switch — false hides/empties announcements entirely.
+    var announcementsEnabled: Bool {
+        managedBool("announcementsEnabled", default: true)
+    }
+
+    /// Whether the machine-wide local JSON file may act as a source.
+    /// Schema default is FALSE — the file is a testing convenience, not a
+    /// production channel.
+    var allowLocalFile: Bool {
+        managedBool("allowLocalFile", default: false)
+    }
+
+    /// Whether users may dismiss dismissible announcements.
+    var allowUserDismiss: Bool {
+        managedBool("allowUserDismiss", default: true)
+    }
+
+    /// Whether unread-count badges should be shown.
+    var showUnreadBadge: Bool {
+        managedBool("showUnreadBadge", default: true)
+    }
+
+    /// Auto-refresh cadence in MINUTES (schema: default 60, 0 = manual
+    /// refresh only, max 1440).
+    var refreshIntervalMinutes: Int {
+        guard let defaults = managedDefaults,
+              defaults.object(forKey: "refreshInterval") != nil else {
+            return 60
+        }
+        return min(max(defaults.integer(forKey: "refreshInterval"), 0), 1440)
+    }
     
     // MARK: - Private Properties
     
@@ -285,9 +333,10 @@ class AnnouncementService: ObservableObject {
         updateUnreadCount()
     }
     
-    /// Dismiss an announcement (only if dismissible)
+    /// Dismiss an announcement (only if dismissible AND the profile's
+    /// allowUserDismiss switch permits it)
     func dismiss(_ announcement: Announcement) {
-        guard announcement.dismissible else { return }
+        guard allowUserDismiss, announcement.dismissible else { return }
         dismissedIDs.insert(announcement.id)
         saveDismissedIDs()
         loadAnnouncements() // Reload to filter out dismissed
@@ -390,18 +439,31 @@ class AnnouncementService: ObservableObject {
     private func loadAnnouncements() {
         isLoading = true
         error = nil
-        
+
+        // Master switch (announcements domain): disabled = no announcements
+        // from any source.
+        guard announcementsEnabled else {
+            self.announcements = []
+            self.activeSource = .none
+            self.lastRefresh = Date()
+            self.isLoading = false
+            updateUnreadCount()
+            return
+        }
+
         var loadedAnnouncements: [Announcement] = []
         var source: AnnouncementSource = .none
-        
+
         // 1. Try to load from managed preferences (MDM) - highest priority
         if let managedAnnouncements = loadFromManagedPreferences(), !managedAnnouncements.isEmpty {
             loadedAnnouncements.append(contentsOf: managedAnnouncements)
             source = .mdm
         }
-        
-        // 2. Try to load from local file - second priority (if MDM didn't provide any)
-        if loadedAnnouncements.isEmpty, let fileAnnouncements = loadFromLocalFile(), !fileAnnouncements.isEmpty {
+
+        // 2. Local file - second priority (if MDM didn't provide any), and
+        // only when the profile explicitly allows the local-file source.
+        if loadedAnnouncements.isEmpty, allowLocalFile,
+           let fileAnnouncements = loadFromLocalFile(), !fileAnnouncements.isEmpty {
             loadedAnnouncements.append(contentsOf: fileAnnouncements)
             source = .localFile
         }
@@ -584,18 +646,23 @@ class AnnouncementService: ObservableObject {
     }
     
     private func startAutoRefresh() {
-        // Refresh every 5 minutes
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        // Cadence from the announcements domain's refreshInterval (minutes;
+        // schema default 60, 0 = manual refresh only).
+        let minutes = refreshIntervalMinutes
+        guard minutes > 0 else { return }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(minutes * 60), repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.loadAnnouncements()
             }
         }
     }
-    
+
     private func startFileMonitoring() {
-        let filePath = Self.localAnnouncementsFilePath
+        // The local file is only a source when the profile allows it — no
+        // point watching a directory we will never read.
+        guard allowLocalFile else { return }
         let directoryPath = Self.localAnnouncementsDirectory
-        
+
         // Monitor the directory for changes
         let fd = open(directoryPath, O_EVTONLY)
         guard fd >= 0 else { return }

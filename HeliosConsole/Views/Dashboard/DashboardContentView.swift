@@ -379,10 +379,37 @@ struct DashboardContentView: View {
     private var dashboardContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
-                environmentHealthSection
+                // features domain: healthScorecard.enabled hides the whole
+                // scorecard section.
+                if MDMConfigurationManager.shared.configuration
+                    .features?.effectiveHealthScorecard.effectiveEnabled != false {
+                    environmentHealthSection
+                }
                 managedDevicesSection
             }
             .padding(40)
+        }
+    }
+
+    /// Platforms whose dashboard device-count card the features domain
+    /// allows (computers.showDashboardCard + mobileDevices.showDashboardCards
+    /// per platform; all default true).
+    private var visibleDashboardPlatforms: [PlatformType] {
+        let features = MDMConfigurationManager.shared.configuration.features
+        let mobileCards = features?.effectiveMobileDevices.effectiveShowDashboardCards
+        return PlatformType.displayCases.filter { platform in
+            switch platform {
+            case .macOS:
+                return features?.effectiveComputers.effectiveShowDashboardCard ?? true
+            case .iOS:
+                return mobileCards?.effectiveIOS ?? true
+            case .iPadOS:
+                return mobileCards?.effectiveIPadOS ?? true
+            case .visionOS:
+                return mobileCards?.effectiveVisionOS ?? true
+            default:
+                return true
+            }
         }
     }
     
@@ -446,13 +473,7 @@ struct DashboardContentView: View {
     }
     
     private func healthColor(for percentage: Double) -> Color {
-        if percentage >= 90 {
-            return .green
-        } else if percentage >= 70 {
-            return .yellow
-        } else {
-            return .red
-        }
+        HealthThresholds.color(forPercentage: percentage)
     }
     
     // MARK: - Managed Devices Section
@@ -500,8 +521,11 @@ struct DashboardContentView: View {
                 .buttonStyle(ScaleButtonStyle())
             }
             
-            // Responsive device cards grid — self-sizing via preference key
+            // Responsive device cards grid — self-sizing via preference key.
+            // Platform cards are gated by the features domain (see
+            // visibleDashboardPlatforms).
             ResponsiveDeviceGrid(
+                platforms: visibleDashboardPlatforms,
                 deviceCounts: deviceCounts,
                 isLoadingPlatform: isLoadingPlatform,
                 onPlatformTap: { platform in
@@ -757,16 +781,17 @@ private struct ResponsiveHealthGrid: View {
 
 /// Measures available width first, then renders the device card grid.
 private struct ResponsiveDeviceGrid: View {
+    let platforms: [PlatformType]
     let deviceCounts: [PlatformType: Int]
     let isLoadingPlatform: (PlatformType) -> Bool
     let onPlatformTap: (PlatformType) -> Void
-    
+
     var body: some View {
         WidthReader { width in
             let config = ResponsiveGridConfig.devicesGrid(for: width)
-            
+
             LazyVGrid(columns: config.columns, spacing: config.compactMode ? 12 : 16) {
-                ForEach(PlatformType.displayCases) { platform in
+                ForEach(platforms) { platform in
                     DeviceCountCard(
                         platform: platform,
                         count: deviceCounts[platform] ?? 0,

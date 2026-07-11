@@ -210,7 +210,7 @@ final class MobileDeviceInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
         
@@ -259,21 +259,19 @@ final class MobileDeviceInventoryService: ObservableObject {
         let sortParam = "\(sortField):\(sortOrder)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "\(sortField):\(sortOrder)"
         
         let endpoint = "/api/v2/mobile-devices/detail"
-        
-        // Include key sections for health metrics and inventory display
-        let sections = [
-            "section=GENERAL",
-            "section=HARDWARE",
-            "section=USER_AND_LOCATION",
-            "section=SECURITY",
-            "section=NETWORK",
-            "section=PURCHASING",
-            "section=APPLICATIONS",
-            "section=CERTIFICATES",
-            "section=PROFILES",
-            "section=GROUPS",
-            "section=EXTENSION_ATTRIBUTES"
-        ].joined(separator: "&")
+
+        // Sections come from features.mobileDevices.inventorySections
+        // (default = the full list the detail views render). Sanitized:
+        // Jamf section names are UPPER_SNAKE; anything else would 400 the
+        // whole fetch.
+        let sectionNames = MDMConfigurationManager.shared.configuration
+            .features?.effectiveMobileDevices.effectiveInventorySections
+            ?? FeaturesConfiguration.MobileDevicesSettings.defaultInventorySections
+        let sections = sectionNames
+            .map { $0.uppercased().filter { $0.isLetter || $0 == "_" } }
+            .filter { !$0.isEmpty }
+            .map { "section=\($0)" }
+            .joined(separator: "&")
         
         let queryParams = "\(sections)&page=\(page)&page-size=\(pageSize)&sort=\(sortParam)"
         
@@ -285,7 +283,7 @@ final class MobileDeviceInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 60  // Longer timeout for detail endpoint
+        request.timeoutInterval = NetworkTuning.requestTimeout  // Longer timeout for detail endpoint
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         

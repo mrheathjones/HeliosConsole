@@ -97,7 +97,7 @@ struct AnnouncementsView: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
-                    if announcementService.unreadCount > 0 {
+                    if announcementService.unreadCount > 0 && announcementService.showUnreadBadge {
                         HStack(spacing: 6) {
                             Circle()
                                 .fill(Color.orange)
@@ -323,7 +323,7 @@ struct AnnouncementsView: View {
                             announcementService.markAsRead(announcement)
                             selectedAnnouncement = announcement
                         },
-                        onDismiss: announcement.dismissible ? {
+                        onDismiss: (announcement.dismissible && announcementService.allowUserDismiss) ? {
                             withAnimation {
                                 announcementService.dismiss(announcement)
                             }

@@ -210,7 +210,7 @@ final class ComputerInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
         
@@ -258,7 +258,17 @@ final class ComputerInventoryService: ObservableObject {
         let sortParam = "\(sortField):\(sortOrder)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "\(sortField):\(sortOrder)"
         
         let endpoint = "/api/v1/computers-inventory"
-        let sections = "section=GENERAL&section=HARDWARE&section=OPERATING_SYSTEM&section=USER_AND_LOCATION&section=DISK_ENCRYPTION&section=SECURITY&section=APPLICATIONS&section=SOFTWARE_UPDATES&section=PURCHASING&section=GROUP_MEMBERSHIPS"
+        // Sections come from features.computers.inventorySections (default =
+        // the full list the detail views render). Sanitized: Jamf section
+        // names are UPPER_SNAKE; anything else would 400 the whole fetch.
+        let sectionNames = MDMConfigurationManager.shared.configuration
+            .features?.effectiveComputers.effectiveInventorySections
+            ?? FeaturesConfiguration.ComputersSettings.defaultInventorySections
+        let sections = sectionNames
+            .map { $0.uppercased().filter { $0.isLetter || $0 == "_" } }
+            .filter { !$0.isEmpty }
+            .map { "section=\($0)" }
+            .joined(separator: "&")
         let queryParams = "\(sections)&page=\(page)&page-size=\(pageSize)&sort=\(sortParam)"
         
         guard let url = URL(string: "\(jamfURL)\(endpoint)?\(queryParams)") else {
@@ -269,7 +279,7 @@ final class ComputerInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         
