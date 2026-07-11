@@ -1,0 +1,162 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "com.herojoneslabs.helios.console.core",
+  "title": "Helios Console — Core",
+  "description": "Connection & integrations tier of the Helios Console managed configuration. Preference domain: com.herojoneslabs.helios.console.core — deploy as its own Jamf Pro 'Application & Custom Settings' configuration profile, scoped to ALL managed Macs running Helios. This domain holds the non-secret connection settings: the Jamf Pro server + master API client identity, the optional Apple Business Manager and Jamf Protect integrations, the Microsoft Entra credential POINTER, and local administration settings. SECURITY: this domain carries NO secrets — the Jamf Pro master client secret, ABM private key, and Jamf Protect password are delivered separately in com.herojoneslabs.helios.console.credentials so they can be scoped and rotated independently; masterClientID and the other IDs here are not secret. The entra block only points at a separate admin-chosen managed-preferences domain that holds the Graph credentials — no Entra secrets live here either. Values delivered here are FORCED and override in-app Settings; profile changes take effect at app relaunch.",
+  "type": "object",
+  "properties": {
+    "configurationVersion": {
+      "type": "string",
+      "title": "Configuration Version",
+      "description": "Schema version for compatibility checking (informational — the loader logs it, nothing else reads it)",
+      "default": "2.0"
+    },
+    "jamfPro": {
+      "type": "object",
+      "title": "Jamf Pro Connection",
+      "description": "Jamf Pro server connection and master API client identity. REQUIRED — Helios cannot operate without serverURL and masterClientID. The matching OAuth client secret is NOT set here; it is delivered as jamfProClientSecret in the com.herojoneslabs.helios.console.credentials profile.",
+      "properties": {
+        "serverURL": {
+          "type": "string",
+          "title": "Jamf Pro Server URL",
+          "description": "Full HTTPS base URL, no trailing slash. e.g. https://yourorg.jamfcloud.com",
+          "minLength": 1
+        },
+        "masterClientID": {
+          "type": "string",
+          "title": "Master API Client ID",
+          "description": "OAuth client_id of the Jamf API Client used by Helios. Not secret. The paired client_secret is delivered via the com.herojoneslabs.helios.console.credentials profile (jamfProClientSecret).",
+          "minLength": 1
+        },
+        "requiredRoleName": {
+          "type": "string",
+          "title": "Required Jamf API Role Name",
+          "description": "Name of the Jamf API Role used when provisioning per-user API clients. Load-bearing — per-user API client provisioning targets this role name; only change it if the role in Jamf Pro is renamed.",
+          "default": "SVC_WATCHER_USER"
+        },
+        "screenShareEnabled": {
+          "type": "boolean",
+          "title": "Enable Screen Share",
+          "description": "Show the Screen Share action in DeviceView. Absent key means disabled.",
+          "default": false
+        },
+        "connectionTimeout": {
+          "type": "integer",
+          "title": "Connection Timeout (seconds)",
+          "default": 30
+        },
+        "requestTimeout": {
+          "type": "integer",
+          "title": "Request Timeout (seconds)",
+          "default": 60
+        }
+      },
+      "required": [
+        "serverURL",
+        "masterClientID"
+      ]
+    },
+    "appleBusinessManager": {
+      "type": "object",
+      "title": "Apple Business Manager (optional)",
+      "description": "Optional Apple Business Manager API connection. Omit this block entirely if the ABM integration is not used. The PEM private key is NOT set here; it is delivered as abmPrivateKey in the com.herojoneslabs.helios.console.credentials profile — ABM is considered configured only when clientID, keyID, and that private key are all present.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "title": "Enable ABM",
+          "description": "Enable the Apple Business Manager integration. Absent key means disabled.",
+          "default": false
+        },
+        "clientID": {
+          "type": "string",
+          "title": "ABM API Client ID",
+          "description": "Apple Business Manager API client identifier. Not secret."
+        },
+        "keyID": {
+          "type": "string",
+          "title": "ABM Key ID",
+          "description": "Key ID of the ABM API private key. Not secret — the PEM itself lives in com.herojoneslabs.helios.console.credentials (abmPrivateKey)."
+        }
+      }
+    },
+    "jamfProtect": {
+      "type": "object",
+      "title": "Jamf Protect (optional)",
+      "description": "Optional Jamf Protect tenant connection for the Cleanup feature's Protect cards and independent Protect-record deletion. Omit this block entirely if Jamf Protect is not used. The API password is NOT set here; it MAY be delivered as jamfProtectPassword in the com.herojoneslabs.helios.console.credentials profile (which locks the in-app field) — if it is delivered nowhere, the app falls back to in-app entry stored in the Keychain (com.herojoneslabs.helios.console.protect.password).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "title": "Enable Jamf Protect",
+          "description": "Enable the Jamf Protect integration. Absent key means disabled.",
+          "default": false
+        },
+        "url": {
+          "type": "string",
+          "title": "Jamf Protect Tenant URL",
+          "description": "Full HTTPS tenant URL. e.g. https://yourorg.protect.jamfcloud.com"
+        },
+        "clientID": {
+          "type": "string",
+          "title": "Jamf Protect API Client ID",
+          "description": "Jamf Protect API client identifier. Not secret."
+        }
+      }
+    },
+    "entra": {
+      "type": "object",
+      "title": "Microsoft Entra Device Cleanup (optional)",
+      "description": "Entra (Graph) cleanup for the Return to Service action. When present, Return to Service also deletes the erased Mac's Entra device object(s) by displayName so it can re-register cleanly with PSSO / Company Portal. This block only POINTS to a SEPARATE preference domain holding the Graph credentials — the secrets are NOT stored here — so you can reuse an Entra credential plist you already deploy without duplicating it. The Entra app registration needs the Device.ReadWrite.All application permission AND the 'Cloud Device Administrator' Entra role (without the role, Graph returns 403 on delete and the app logs it, non-fatal). Omit this block to disable Entra cleanup.",
+      "properties": {
+        "credentialDomain": {
+          "type": "string",
+          "title": "Credential Domain (bundle identifier)",
+          "description": "Preference domain of the separate managed-preferences payload holding the Entra Graph credentials (e.g. com.herojoneslabs.helios.console.entra). The domain name is entirely admin-chosen — the value shown is only an example, and an already-deployed credential domain can be reused as-is: renaming the example does not require renaming your deployed credential plist domain, just keep this pointer matching whatever domain you actually deploy. Helios (unsandboxed) reads it via UserDefaults(suiteName:) from /Library/Managed Preferences/<domain>.plist. That domain must supply a tenant id, a client id, and at least one of a certificate PEM string (preferred — Helios signs a PS256 client assertion) or a client secret (fallback)."
+        },
+        "tenantIdKey": {
+          "type": "string",
+          "title": "Tenant ID Key (optional)",
+          "description": "Exact key name to read the tenant id under in the credential domain — lets Helios reuse an existing plist as-is. If omitted, Helios tries: entra_tenant_id, tenantID, tenant_id, TenantID, entra_tenant."
+        },
+        "clientIdKey": {
+          "type": "string",
+          "title": "Client ID Key (optional)",
+          "description": "Exact key name for the client id in the credential domain. If omitted, Helios tries: entra_client_id, clientID, client_id, ClientID, entra_client."
+        },
+        "clientSecretKey": {
+          "type": "string",
+          "title": "Client Secret Key (optional)",
+          "description": "Exact key name for the client secret in the credential domain. If omitted, Helios tries: entra_client_secret, clientSecret, client_secret, ClientSecret."
+        },
+        "certPEMKey": {
+          "type": "string",
+          "title": "Certificate PEM Key (optional)",
+          "description": "Exact key name for the certificate PEM string in the credential domain. Must be the PEM string itself, not a file path (Helios runs in user context and cannot read a root-owned PEM file). If omitted, Helios tries: entra_cert_pem, entra_certificate, cert_pem, certPEM, entra_cert, certificate_pem."
+        }
+      },
+      "required": [
+        "credentialDomain"
+      ]
+    },
+    "localAdministration": {
+      "type": "object",
+      "title": "Local Administration",
+      "description": "Local administrator account settings used by the LAPS password lookup in DeviceView.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "title": "Enabled",
+          "default": true
+        },
+        "username": {
+          "type": "string",
+          "title": "Local Admin Username",
+          "description": "Short name of the managed local administrator account whose LAPS password Helios looks up.",
+          "default": "macadmin"
+        }
+      }
+    }
+  },
+  "required": [
+    "jamfPro"
+  ]
+}

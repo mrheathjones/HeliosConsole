@@ -5,7 +5,7 @@
 //  Routes deep links from the menu bar companion app into navigation actions.
 //  
 //  Transport: The menu bar app writes a pending request to the main app's
-//  UserDefaults (com.helios.console). The main app checks for pending requests
+//  UserDefaults (com.herojoneslabs.helios.console). The main app checks for pending requests
 //  when it becomes active and routes them into the navigation hierarchy.
 //
 //  UserDefaults keys:
@@ -16,7 +16,7 @@
 import SwiftUI
 import os.log
 
-private let logger = Logger(subsystem: "com.helios.console", category: "DeepLink")
+private let logger = Logger(subsystem: "com.herojoneslabs.helios.console", category: "DeepLink")
 
 // MARK: - Deep Link Request
 
@@ -38,7 +38,7 @@ class DeepLinkRouter: ObservableObject {
     /// The current pending navigation request. Views observe this and clear it after handling.
     @Published var pendingRequest: DeepLinkRequest?
     
-    private static let suiteName = "com.helios.console"
+    private static let suiteName = "com.herojoneslabs.helios.console"
     private static let deviceTypeKey = "DeepLink_DeviceType"
     private static let deviceIDKey = "DeepLink_DeviceID"
     

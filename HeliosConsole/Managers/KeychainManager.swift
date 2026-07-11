@@ -13,12 +13,18 @@ class KeychainManager {
     
     private init() {}
     
+    /// Keychain account names, rebranded 2026-07 from the old `com.helios.*`
+    /// prefix to the `com.herojoneslabs.helios.console.*` root (same pattern as
+    /// the Protect item, `com.herojoneslabs.helios.console.protect.password`).
+    /// Items stored under the old names are orphaned, not migrated — users
+    /// re-authenticate once after updating (see docs/ConfigProfileMigration.md
+    /// §9); the uninstall script removes both spellings.
     private enum Keys {
-        static let authToken = "com.helios.authToken"
-        static let userEmail = "com.helios.userEmail"
-        static let userName = "com.helios.userName"
-        static let refreshToken = "com.helios.refreshToken"
-        static let jamfCredentials = "com.helios.jamfCredentials"
+        static let authToken = "com.herojoneslabs.helios.console.authToken"
+        static let userEmail = "com.herojoneslabs.helios.console.userEmail"
+        static let userName = "com.herojoneslabs.helios.console.userName"
+        static let refreshToken = "com.herojoneslabs.helios.console.refreshToken"
+        static let jamfCredentials = "com.herojoneslabs.helios.console.jamfCredentials"
     }
     
     @discardableResult

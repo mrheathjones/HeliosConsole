@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "com.helios.console.whatsNew",
+  "$id": "com.herojoneslabs.helios.console.whatsNew",
   "title": "Helios Console – What's New Configuration",
   "description": "Controls the 'What's New' screen shown after login. When this payload is present, the sheet is displayed once per unique version string. Remove the payload entirely to disable the feature.",
   "type": "object",

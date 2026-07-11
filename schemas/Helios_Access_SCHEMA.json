@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "com.herojoneslabs.helios.console.access",
+  "title": "Helios Console — Access",
+  "description": "RBAC and destructive-capability configuration for the Helios Console macOS app. Preference domain MUST be com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile, SCOPED TO ADMIN MACS ONLY (never to all managed Macs). FAIL-CLOSED GUARANTEE: a Mac that does NOT receive this profile runs as role=User — the destructive Cleanup feature is hidden and the default device-action allow-list applies — so under-scoping is safe; over-scoping is not. PAIRED SCOPING: a profile from this schema that grants role=Admin must be scoped to the same Macs as any write-capable variant of the com.herojoneslabs.helios.console.credentials profile (see docs/ConfigProfileMigration.md). SECURITY: managed-preference plists are world-readable on disk — every value delivered here is visible to any local user of the Mac.",
+  "type": "object",
+  "properties": {
+    "configurationVersion": {
+      "type": "string",
+      "title": "Configuration Version",
+      "description": "Schema/profile version stamp (informational — the app logs it, nothing else reads it).",
+      "default": "2.0"
+    },
+    "role": {
+      "type": "string",
+      "title": "Operator Role",
+      "description": "Role-based access control. The destructive Cleanup feature is shown ONLY when this is exactly \"Admin\"; Support, User, blank, missing, or a typo all hide it (fail-closed). There is deliberately NO default: a Mac that never receives this profile stays at role=User. Scope this profile so only intended admins receive role=Admin.",
+      "enum": ["Admin", "Support", "User"]
+    },
+    "cleanup": {
+      "type": "object",
+      "title": "Cleanup (Stale Device) Settings",
+      "description": "Defaults for the Admin-only Cleanup feature. staleDays is the DEFAULT stale threshold; users can change it in-app unless you re-deliver this profile to reset it.",
+      "properties": {
+        "staleDays": {
+          "type": "integer",
+          "title": "Stale Threshold (days)",
+          "description": "Days without check-in before a device counts as stale. Deliver as an integer; the app also tolerates a string value (e.g. \"90\") because some deployed profiles ship it that way.",
+          "default": 90
+        },
+        "defaultStaticGroupID": {
+          "type": "string",
+          "title": "Default Static Group ID",
+          "description": "Jamf static group ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
+          "default": ""
+        },
+        "defaultSiteID": {
+          "type": "string",
+          "title": "Default Site ID",
+          "description": "Jamf site ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
+          "default": ""
+        }
+      }
+    },
+    "deviceActions": {
+      "type": "object",
+      "title": "Device Actions (allow-list)",
+      "description": "Per-action allow-list for device commands. Parsed and exposed by the app's configuration layer; view-level enforcement status is documented in docs/ConfigProfileMigration.md. Omitted keys fall back to the defaults below (destructive actions default to false).",
+      "properties": {
+        "computer": {
+          "type": "object",
+          "title": "Computer Actions",
+          "properties": {
+            "sendBlankPush": { "type": "boolean", "default": true },
+            "restart": { "type": "boolean", "default": true },
+            "shutdown": { "type": "boolean", "default": true },
+            "lock": { "type": "boolean", "default": false },
+            "wipe": { "type": "boolean", "default": false },
+            "enableRemoteDesktop": { "type": "boolean", "default": true },
+            "disableRemoteDesktop": { "type": "boolean", "default": true },
+            "enableBluetooth": { "type": "boolean", "default": true },
+            "disableBluetooth": { "type": "boolean", "default": true },
+            "viewRecoveryLockPassword": { "type": "boolean", "default": false },
+            "viewFileVaultKey": { "type": "boolean", "default": true },
+            "viewLocalAdminPassword": { "type": "boolean", "default": true },
+            "unlockUserAccount": { "type": "boolean", "default": true },
+            "renewMDMProfile": { "type": "boolean", "default": false },
+            "sendCustomCommand": { "type": "boolean", "default": false },
+            "updateInventory": { "type": "boolean", "default": false },
+            "installPackage": { "type": "boolean", "default": false },
+            "runPolicy": { "type": "boolean", "default": false }
+          }
+        },
+        "mobileDevice": {
+          "type": "object",
+          "title": "Mobile Device Actions",
+          "properties": {
+            "sendBlankPush": { "type": "boolean", "default": true },
+            "restart": { "type": "boolean", "default": true },
+            "shutdown": { "type": "boolean", "default": true },
+            "lock": { "type": "boolean", "default": true },
+            "wipe": { "type": "boolean", "default": false },
+            "clearPasscode": { "type": "boolean", "default": true },
+            "enableLostMode": { "type": "boolean", "default": true },
+            "disableLostMode": { "type": "boolean", "default": true },
+            "playLostModeSound": { "type": "boolean", "default": true },
+            "updateInventory": { "type": "boolean", "default": true },
+            "renewMDMProfile": { "type": "boolean", "default": true },
+            "enableActivationLock": { "type": "boolean", "default": false },
+            "clearActivationLock": { "type": "boolean", "default": false }
+          }
+        }
+      }
+    }
+  }
+}

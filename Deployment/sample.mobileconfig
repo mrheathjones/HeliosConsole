@@ -1,54 +1,170 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+     Helios Console — managed configuration sample (v2 domain split).
+
+     This ONE profile carries FIVE payloads, one per Helios preference
+     domain, so it can be installed manually on a test Mac. In Jamf Pro,
+     deploy these as FIVE SEPARATE Application & Custom Settings profiles
+     instead — each domain has its own schema in schemas/ and its own
+     scope (core/credentials/features/ui -> all managed Macs; access ->
+     admin Macs ONLY). This single-file form exists for local/manual
+     testing only. See docs/ConfigProfileMigration.md.
+-->
 <plist version="1.0">
 <dict>
 	<key>PayloadContent</key>
 	<array>
+
+		<!-- ============================================================
+		     1/5  CORE — connection & integrations (no secrets).
+		     Jamf scope: ALL managed Macs running Helios.
+		     ============================================================ -->
 		<dict>
 			<key>PayloadType</key>
-			<string>com.helios.console</string>
+			<string>com.herojoneslabs.helios.console.core</string>
 			<key>PayloadIdentifier</key>
-			<string>com.helios.console.config</string>
+			<string>com.herojoneslabs.helios.console.core.config</string>
 			<key>PayloadUUID</key>
-			<string>7C1E9A20-0001-4B3C-9D22-AAAAAAAAAAAA</string>
+			<string>D575AB84-5E89-437F-8514-0887D14D54E3</string>
 			<key>PayloadDisplayName</key>
-			<string>Helios Console — Settings</string>
+			<string>Helios Console — Core</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>PayloadEnabled</key>
 			<true/>
 
-			<!-- Jamf Pro connection (master API client). -->
+			<!-- Jamf Pro connection (master API client identity).
+			     The matching client SECRET is in the credentials payload. -->
 			<key>jamfPro</key>
 			<dict>
 				<key>serverURL</key>
 				<string>https://yourorg.jamfcloud.com</string>
 				<key>masterClientID</key>
 				<string>REPLACE-WITH-MASTER-CLIENT-ID</string>
-				<key>masterClientSecret</key>
-				<string>REPLACE-WITH-MASTER-CLIENT-SECRET</string>
 				<key>requiredRoleName</key>
 				<string>SVC_WATCHER_USER</string>
 				<key>screenShareEnabled</key>
 				<false/>
 			</dict>
 
-			<!-- Role-based access. Cleanup (destructive bulk actions) shows
-			     ONLY for the exact value "Admin". Anything else hides it.
-			     Scope THIS profile so only admin Macs get role=Admin. -->
+			<!-- Local admin (LAPS lookup) account. -->
+			<key>localAdministration</key>
+			<dict>
+				<key>enabled</key>
+				<true/>
+				<key>username</key>
+				<string>macadmin</string>
+			</dict>
+
+			<!-- Optional Apple Business Manager connection. The PEM
+			     private key goes in the credentials payload (abmPrivateKey). -->
+			<!--
+			<key>appleBusinessManager</key>
+			<dict>
+				<key>enabled</key>
+				<true/>
+				<key>clientID</key>
+				<string>REPLACE-WITH-ABM-CLIENT-ID</string>
+				<key>keyID</key>
+				<string>REPLACE-WITH-ABM-KEY-ID</string>
+			</dict>
+			-->
+
+			<!-- Optional Jamf Protect tenant. The API password goes in
+			     the credentials payload (jamfProtectPassword) or is
+			     entered in-app (Keychain) — never here. -->
+			<!--
+			<key>jamfProtect</key>
+			<dict>
+				<key>enabled</key>
+				<true/>
+				<key>url</key>
+				<string>https://yourorg.protect.jamfcloud.com</string>
+				<key>clientID</key>
+				<string>REPLACE-WITH-PROTECT-CLIENT-ID</string>
+			</dict>
+			-->
+
+			<!-- Optional Microsoft Entra cleanup POINTER. Points at a
+			     separate managed domain holding the Graph credentials.
+			     The credential domain name is admin-chosen — the value
+			     below is only an example. An already-deployed credential
+			     domain can be reused as-is; the identifier rebrand does
+			     NOT require renaming your deployed credential plist
+			     domain, just keep this pointer matching it. -->
+			<!--
+			<key>entra</key>
+			<dict>
+				<key>credentialDomain</key>
+				<string>com.herojoneslabs.helios.console.entra</string>
+			</dict>
+			-->
+		</dict>
+
+		<!-- ============================================================
+		     2/5  CREDENTIALS — secrets only (rotate independently).
+		     Jamf scope: ALL managed Macs running Helios (pair a
+		     write-capable secret with the Admin access profile — same
+		     Macs, see docs/ConfigProfileMigration.md).
+		     WARNING: managed-pref plists are world-readable on disk.
+		     ============================================================ -->
+		<dict>
+			<key>PayloadType</key>
+			<string>com.herojoneslabs.helios.console.credentials</string>
+			<key>PayloadIdentifier</key>
+			<string>com.herojoneslabs.helios.console.credentials.config</string>
+			<key>PayloadUUID</key>
+			<string>469A647D-BA39-4503-8002-E0539CD03628</string>
+			<key>PayloadDisplayName</key>
+			<string>Helios Console — Credentials</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadEnabled</key>
+			<true/>
+
+			<!-- OAuth client_secret for jamfPro.masterClientID (core). -->
+			<key>jamfProClientSecret</key>
+			<string>REPLACE-WITH-jamf-pro-client-secret</string>
+
+			<!-- Optional: PEM private key for the ABM connection (core). -->
+			<!--
+			<key>abmPrivateKey</key>
+			<string>REPLACE-WITH-abm-private-key-pem</string>
+			-->
+
+			<!-- Optional: Jamf Protect API password. If delivered, the
+			     in-app field locks; if omitted, in-app entry + Keychain
+			     (com.herojoneslabs.helios.console.protect.password). -->
+			<!--
+			<key>jamfProtectPassword</key>
+			<string>REPLACE-WITH-jamf-protect-password</string>
+			-->
+		</dict>
+
+		<!-- ============================================================
+		     3/5  ACCESS — RBAC & destructive capability. FAIL-CLOSED:
+		     a Mac without this payload runs as role=User (Cleanup hidden).
+		     Jamf scope: ADMIN MACS ONLY — never all managed Macs.
+		     ============================================================ -->
+		<dict>
+			<key>PayloadType</key>
+			<string>com.herojoneslabs.helios.console.access</string>
+			<key>PayloadIdentifier</key>
+			<string>com.herojoneslabs.helios.console.access.config</string>
+			<key>PayloadUUID</key>
+			<string>94C2FE23-F28E-4ABB-B93B-5444B108C5F4</string>
+			<key>PayloadDisplayName</key>
+			<string>Helios Console — Access</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadEnabled</key>
+			<true/>
+
+			<!-- Cleanup (destructive bulk actions) shows ONLY for the
+			     exact value "Admin". Anything else hides it. -->
 			<key>role</key>
 			<string>Admin</string>
-
-			<!-- User interface / branding. -->
-			<key>userInterface</key>
-			<dict>
-				<key>appTitle</key>
-				<string>Helios</string>
-				<key>appSubtitle</key>
-				<string>Console</string>
-				<key>supportURL</key>
-				<string>https://support.yourcompany.com</string>
-			</dict>
 
 			<!-- Cleanup defaults (Admin-only feature). -->
 			<key>cleanup</key>
@@ -60,31 +176,77 @@
 				<!-- <key>defaultSiteID</key><string>1</string> -->
 			</dict>
 
-			<!-- Optional Jamf Protect tenant. The password may be delivered
-			     here (locks the in-app field) or omitted and entered in-app. -->
-			<!--
-			<key>jamfProtect</key>
+			<!-- Optional per-action allow-list (deviceActions.computer /
+			     deviceActions.mobileDevice) — omitted keys use the schema
+			     defaults; see schemas/Helios_Access_SCHEMA.json. -->
+		</dict>
+
+		<!-- ============================================================
+		     4/5  FEATURES — feature modules & tuning (no secrets).
+		     Jamf scope: ALL managed Macs running Helios.
+		     Omitted keys fall back to the schema defaults — deliver only
+		     what you want to change (see schemas/Helios_Features_SCHEMA.json).
+		     ============================================================ -->
+		<dict>
+			<key>PayloadType</key>
+			<string>com.herojoneslabs.helios.console.features</string>
+			<key>PayloadIdentifier</key>
+			<string>com.herojoneslabs.helios.console.features.config</string>
+			<key>PayloadUUID</key>
+			<string>8969577E-3514-46BE-AC96-FAF63E152582</string>
+			<key>PayloadDisplayName</key>
+			<string>Helios Console — Features</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadEnabled</key>
+			<true/>
+
+			<!-- Example override; everything else keeps its default. -->
+			<key>computers</key>
 			<dict>
-				<key>enabled</key>
-				<true/>
-				<key>url</key>
-				<string>https://yourorg.protect.jamfcloud.com</string>
-				<key>clientID</key>
-				<string>REPLACE-WITH-PROTECT-CLIENT-ID</string>
-				<key>password</key>
-				<string>REPLACE-WITH-PROTECT-PASSWORD</string>
+				<key>inventoryRefreshInterval</key>
+				<integer>15</integer>
 			</dict>
-			-->
+		</dict>
+
+		<!-- ============================================================
+		     5/5  UI — branding & UX (no secrets).
+		     Jamf scope: ALL managed Macs running Helios.
+		     ============================================================ -->
+		<dict>
+			<key>PayloadType</key>
+			<string>com.herojoneslabs.helios.console.ui</string>
+			<key>PayloadIdentifier</key>
+			<string>com.herojoneslabs.helios.console.ui.config</string>
+			<key>PayloadUUID</key>
+			<string>19AC9CBA-9B2D-4983-B005-316499AD4286</string>
+			<key>PayloadDisplayName</key>
+			<string>Helios Console — UI</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadEnabled</key>
+			<true/>
+
+			<!-- User interface / branding. -->
+			<key>userInterface</key>
+			<dict>
+				<key>appTitle</key>
+				<string>Helios</string>
+				<key>appSubtitle</key>
+				<string>Console</string>
+				<key>supportURL</key>
+				<string>https://support.yourcompany.com</string>
+			</dict>
 		</dict>
 	</array>
 	<key>PayloadDisplayName</key>
-	<string>Helios Console</string>
+	<string>Helios Console (all 5 domains — testing only)</string>
 	<key>PayloadIdentifier</key>
-	<string>com.helios.console</string>
+	<string>com.herojoneslabs.helios.console.domains</string>
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>7C1E9A20-0000-4B3C-9D22-BBBBBBBBBBBB</string>
+	<string>9AD44C81-328D-47DF-8965-58BAB0C79F1D</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 	<key>PayloadScope</key>

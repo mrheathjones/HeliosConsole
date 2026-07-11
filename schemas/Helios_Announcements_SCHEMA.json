@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "com.helios.console.announcements",
+  "$id": "com.herojoneslabs.helios.console.announcements",
   "title": "Helios Console Announcements",
   "description": "MDM configuration schema for Helios Console announcements - deployed as a separate configuration profile",
   "type": "object",

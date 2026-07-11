@@ -25,7 +25,7 @@ final class CleanupSettings {
     }
 
     /// Keychain account for the Jamf Protect API password.
-    static let protectPasswordKeychainKey = "com.helios.protect.password"
+    static let protectPasswordKeychainKey = "com.herojoneslabs.helios.console.protect.password"
 
     private var mdm: MDMConfiguration { MDMConfigurationManager.shared.configuration }
 
@@ -37,11 +37,12 @@ final class CleanupSettings {
     var pageSize: Int { 100 }
 
     var isConfigured: Bool {
+        // The composed configuration never carries placeholder values —
+        // absent managed domains yield empty strings — so plain non-empty
+        // checks are sufficient.
         !mdm.jamfURL.isEmpty
             && !mdm.masterClientID.isEmpty
-            && mdm.masterClientID != "your-master-client-id"
             && !mdm.masterClientSecret.isEmpty
-            && mdm.masterClientSecret != "your-master-client-secret"
     }
 
     // MARK: - Stale threshold (MDM default, user-overridable)

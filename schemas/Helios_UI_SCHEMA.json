@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "com.herojoneslabs.helios.console.ui",
+  "title": "Helios Console — Branding & UX",
+  "description": "Managed configuration for Helios Console branding and user-experience settings. Preference domain MUST be com.herojoneslabs.helios.console.ui — deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings (External Applications / Custom Schema) scoped to ALL managed Macs running Helios. This domain carries NO secrets and no destructive capability; it is safe to scope broadly. Values are FORCED and take effect at the next app relaunch. NOTE: sidebarItems and authentication are parsed and exposed by the app but not yet enforced in views — see docs/ConfigProfileMigration.md for the enforcement-status table.",
+  "type": "object",
+  "properties": {
+    "configurationVersion": {
+      "type": "string",
+      "title": "Configuration Version",
+      "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
+      "default": "2.0"
+    },
+    "userInterface": {
+      "type": "object",
+      "title": "User Interface",
+      "description": "Branding and top-level UI visibility switches.",
+      "properties": {
+        "appTitle": {
+          "type": "string",
+          "title": "App Title",
+          "description": "Primary app title shown in branding surfaces.",
+          "default": "Helios"
+        },
+        "appSubtitle": {
+          "type": "string",
+          "title": "App Subtitle",
+          "description": "Secondary title shown under the app title.",
+          "default": "Console"
+        },
+        "supportURL": {
+          "type": "string",
+          "title": "Support URL",
+          "description": "Help/support link surfaced in the app (e.g. on the login screen). Leave empty to hide. e.g. https://support.yourcompany.com",
+          "default": ""
+        },
+        "companyName": {
+          "type": "string",
+          "title": "Company Name",
+          "description": "Organization name used in branding surfaces. Leave empty for none.",
+          "default": ""
+        },
+        "logoURL": {
+          "type": "string",
+          "title": "Logo URL",
+          "description": "HTTPS URL to a custom organization logo image. Leave empty to use the built-in branding.",
+          "default": ""
+        },
+        "accentColor": {
+          "type": "string",
+          "title": "Accent Color (hex)",
+          "description": "Accent color as a 6-digit hex value, e.g. #007AFF.",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "default": "#007AFF"
+        },
+        "defaultColorScheme": {
+          "type": "string",
+          "title": "Default Color Scheme",
+          "description": "Preferred appearance for the app. 'system' follows the macOS appearance.",
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ],
+          "default": "system"
+        },
+        "showEnrollments": {
+          "type": "boolean",
+          "title": "Show Enrollments",
+          "description": "Show the Enrollments area in the app.",
+          "default": true
+        },
+        "showAnnouncements": {
+          "type": "boolean",
+          "title": "Show Announcements",
+          "description": "Show the Announcements area in the app.",
+          "default": true
+        },
+        "showSettings": {
+          "type": "boolean",
+          "title": "Show Settings",
+          "description": "Show the Settings area in the app.",
+          "default": true
+        }
+      }
+    },
+    "sidebarItems": {
+      "type": "array",
+      "title": "Sidebar Items (optional override)",
+      "description": "Optional custom sidebar item list. Leave empty to use the app's built-in sidebar. Renamed from the legacy top-level key 'SidebarItems' — camelCase is required in this domain. Currently parsed but not yet enforced (SidebarView builds its own list); see docs/ConfigProfileMigration.md.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "ID",
+            "description": "Unique identifier for the sidebar item."
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon",
+            "description": "SF Symbol name for the sidebar item."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Display title for the sidebar item."
+          },
+          "isEnabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether the item is shown.",
+            "default": true
+          },
+          "order": {
+            "type": "integer",
+            "title": "Order",
+            "description": "Sort order (ascending)."
+          }
+        }
+      },
+      "default": []
+    },
+    "authentication": {
+      "type": "object",
+      "title": "Authentication",
+      "description": "Sign-in behavior preferences. Currently parsed but not yet enforced in views; see docs/ConfigProfileMigration.md.",
+      "properties": {
+        "requireBiometric": {
+          "type": "boolean",
+          "title": "Require Biometric",
+          "description": "Require Touch ID / biometric authentication to use the app.",
+          "default": false
+        },
+        "allowBiometricSetup": {
+          "type": "boolean",
+          "title": "Allow Biometric Setup",
+          "description": "Allow users to enable biometric unlock in-app.",
+          "default": true
+        },
+        "sessionTimeout": {
+          "type": "integer",
+          "title": "Session Timeout (min, 0 = none)",
+          "description": "Idle session timeout in minutes. 0 disables the timeout.",
+          "minimum": 0,
+          "default": 0
+        },
+        "allowRememberMe": {
+          "type": "boolean",
+          "title": "Allow Remember Me",
+          "description": "Allow the sign-in screen to remember the last operator.",
+          "default": true
+        }
+      }
+    }
+  }
+}

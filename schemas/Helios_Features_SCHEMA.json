@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "com.herojoneslabs.helios.console.features",
+  "title": "Helios Console — Features",
+  "description": "Feature-module and tuning configuration for the Helios Console macOS apps (main console + menu bar). Preference domain: com.herojoneslabs.helios.console.features. Deploy as a Jamf Pro 'Application & Custom Settings' payload scoped to ALL managed Macs. This tier carries no secrets and no destructive capability, so broad scoping is safe. NOTE: these keys are parsed and exposed by the app's config layer; per-view enforcement status is tracked in docs/ConfigProfileMigration.md. Values take effect at app relaunch.",
+  "type": "object",
+  "properties": {
+    "configurationVersion": {
+      "type": "string",
+      "title": "Configuration Version",
+      "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
+      "default": "2.0"
+    },
+    "computers": {
+      "type": "object",
+      "title": "Computers",
+      "properties": {
+        "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+        "fetchInventory": { "type": "boolean", "title": "Fetch Inventory", "default": true },
+        "showDashboardCard": { "type": "boolean", "title": "Show Dashboard Card", "default": true },
+        "enableAPIActions": { "type": "boolean", "title": "Enable API Actions", "default": true },
+        "enableReports": { "type": "boolean", "title": "Enable Reports", "default": true },
+        "inventoryRefreshInterval": { "type": "integer", "title": "Inventory Refresh Interval (min)", "default": 15 },
+        "inventorySections": {
+          "type": "array",
+          "title": "Inventory Sections",
+          "items": { "type": "string" },
+          "default": ["GENERAL", "HARDWARE", "OPERATING_SYSTEM", "USER_AND_LOCATION", "STORAGE", "SECURITY", "DISK_ENCRYPTION", "CONFIGURATION_PROFILES", "GROUP_MEMBERSHIPS", "SOFTWARE_UPDATES"]
+        }
+      }
+    },
+    "mobileDevices": {
+      "type": "object",
+      "title": "Mobile Devices",
+      "properties": {
+        "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+        "fetchInventory": { "type": "boolean", "title": "Fetch Inventory", "default": true },
+        "showDashboardCards": {
+          "type": "object",
+          "title": "Show Dashboard Cards",
+          "properties": {
+            "iOS": { "type": "boolean", "default": true },
+            "iPadOS": { "type": "boolean", "default": true },
+            "visionOS": { "type": "boolean", "default": true }
+          }
+        },
+        "enableAPIActions": { "type": "boolean", "title": "Enable API Actions", "default": true },
+        "enableReports": { "type": "boolean", "title": "Enable Reports", "default": true },
+        "inventoryRefreshInterval": { "type": "integer", "title": "Inventory Refresh Interval (min)", "default": 15 },
+        "inventorySections": {
+          "type": "array",
+          "title": "Inventory Sections",
+          "items": { "type": "string" },
+          "default": ["GENERAL", "HARDWARE", "USER_AND_LOCATION", "SECURITY", "CONFIGURATION_PROFILES", "GROUP_MEMBERSHIPS"]
+        }
+      }
+    },
+    "healthScorecard": {
+      "type": "object",
+      "title": "Health Scorecard",
+      "properties": {
+        "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+        "metrics": {
+          "type": "array",
+          "title": "Scorecard Metrics",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "title": "Metric ID" },
+              "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+              "displayName": { "type": "string", "title": "Display Name" },
+              "thresholds": {
+                "type": "object",
+                "title": "Thresholds",
+                "properties": {
+                  "critical": { "type": "integer", "title": "Critical (%)" },
+                  "warning": { "type": "integer", "title": "Warning (%)" }
+                }
+              },
+              "checkedInDays": { "type": "integer", "title": "Checked-In Window (days)" },
+              "platforms": { "type": "array", "items": { "type": "string" }, "title": "Platforms" }
+            }
+          },
+          "default": [
+            { "id": "checkedIn", "enabled": true, "displayName": "Recent Check-Ins", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "managed", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "supervised", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "fileVaultEnabled", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS"] },
+            { "id": "firewallEnabled", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS"] },
+            { "id": "gatekeeperEnabled", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS"] },
+            { "id": "sipEnabled", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS"] },
+            { "id": "softwareUpdateCompliance", "enabled": true, "displayName": "", "thresholds": { "critical": 50, "warning": 80 }, "checkedInDays": 7, "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] }
+          ]
+        }
+      }
+    },
+    "deviceHealth": {
+      "type": "object",
+      "title": "Device Health",
+      "properties": {
+        "metrics": {
+          "type": "array",
+          "title": "Device Health Metrics",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "title": "Metric ID" },
+              "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+              "displayName": { "type": "string", "title": "Display Name" },
+              "category": { "type": "string", "title": "Category", "enum": ["management", "security", "status", "compliance"] },
+              "platforms": { "type": "array", "items": { "type": "string" }, "title": "Platforms" }
+            }
+          },
+          "default": [
+            { "id": "managementStatus", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "supervisionStatus", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "mdmCapability", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS"] },
+            { "id": "userApprovedMDM", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS"] },
+            { "id": "bootstrapToken", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS"] },
+            { "id": "fileVault", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"] },
+            { "id": "firewall", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"] },
+            { "id": "gatekeeper", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"] },
+            { "id": "sip", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"] },
+            { "id": "secureToken", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"] },
+            { "id": "recoveryLock", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"] },
+            { "id": "activationLock", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "remoteDesktop", "enabled": true, "displayName": "", "category": "status", "platforms": ["macOS"] },
+            { "id": "softwareUpdate", "enabled": true, "displayName": "", "category": "compliance", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "lastCheckIn", "enabled": true, "displayName": "", "category": "status", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] },
+            { "id": "appleCare", "enabled": true, "displayName": "", "category": "status", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"] }
+          ]
+        }
+      }
+    },
+    "reports": {
+      "type": "object",
+      "title": "Reports",
+      "properties": {
+        "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+        "availableReports": {
+          "type": "array",
+          "title": "Available Reports",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "title": "Report ID" },
+              "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+              "displayName": { "type": "string", "title": "Display Name" },
+              "category": { "type": "string", "title": "Category" },
+              "platforms": { "type": "array", "items": { "type": "string" }, "title": "Platforms" },
+              "exportFormats": { "type": "array", "items": { "type": "string" }, "title": "Export Formats" }
+            }
+          },
+          "default": [
+            { "id": "deviceInventory", "enabled": true, "displayName": "", "category": "inventory", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"], "exportFormats": ["csv", "json"] },
+            { "id": "securityCompliance", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"], "exportFormats": ["csv", "json"] },
+            { "id": "softwareUpdates", "enabled": true, "displayName": "", "category": "compliance", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"], "exportFormats": ["csv", "json"] },
+            { "id": "applicationInventory", "enabled": true, "displayName": "", "category": "inventory", "platforms": ["macOS", "iOS", "iPadOS"], "exportFormats": ["csv", "json"] },
+            { "id": "appleCareStatus", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"], "exportFormats": ["csv", "json"] },
+            { "id": "certificateExpiration", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS", "iOS", "iPadOS"], "exportFormats": ["csv", "json"] },
+            { "id": "fileVaultStatus", "enabled": true, "displayName": "", "category": "security", "platforms": ["macOS"], "exportFormats": ["csv", "json"] },
+            { "id": "configurationProfiles", "enabled": true, "displayName": "", "category": "management", "platforms": ["macOS", "iOS", "iPadOS", "visionOS"], "exportFormats": ["csv", "json"] }
+          ]
+        }
+      }
+    }
+  }
+}

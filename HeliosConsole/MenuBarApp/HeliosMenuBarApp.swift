@@ -24,7 +24,7 @@ import SwiftUI
 import AppKit
 import os.log
 
-private let logger = Logger(subsystem: "com.helios.console.menubar", category: "MenuBarApp")
+private let logger = Logger(subsystem: "com.herojoneslabs.helios.console.menubar", category: "MenuBarApp")
 
 // MARK: - App Entry Point
 
@@ -152,7 +152,6 @@ struct MenuBarContentView: View {
         let config = MDMConfigurationManager.shared.configuration
         let hasCredentials = !config.jamfURL.isEmpty
             && !config.masterClientID.isEmpty
-            && config.masterClientID != "your-master-client-id"
         return HStack(spacing: 4) {
             Circle()
                 .fill(hasCredentials ? .green : .orange)
@@ -357,7 +356,7 @@ struct MenuBarContentView: View {
 /// Activate the main Helios Console app if running, or launch it if not.
 /// Never spawns a duplicate instance.
 private func activateOrLaunchMainApp() {
-    let bundleID = "com.helios.console"
+    let bundleID = "com.herojoneslabs.helios.console"
     
     // Check if the main app is already running
     let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
@@ -496,7 +495,7 @@ private struct MenuBarResultRow: View {
         }
 
         // Write deep link to shared UserDefaults so the main app picks it up on activation
-        let suiteName = "com.helios.console"
+        let suiteName = "com.herojoneslabs.helios.console"
         if let defaults = UserDefaults(suiteName: suiteName) {
             defaults.set(type, forKey: "DeepLink_DeviceType")
             defaults.set(id, forKey: "DeepLink_DeviceID")
@@ -506,7 +505,7 @@ private struct MenuBarResultRow: View {
         
         // Post a cross-process notification so the main app picks it up immediately
         DistributedNotificationCenter.default().postNotificationName(
-            Notification.Name("com.helios.console.deeplink"),
+            Notification.Name("com.herojoneslabs.helios.console.deeplink"),
             object: nil,
             userInfo: nil,
             deliverImmediately: true

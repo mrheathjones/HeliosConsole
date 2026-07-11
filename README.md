@@ -51,14 +51,29 @@ xcodebuild build -project HeliosConsole.xcodeproj -scheme HeliosConsole \
 
 ## Configuration
 
-The app reads MDM configuration from four sources in priority order:
-**MDM profile → UserDefaults → app defaults → hardcoded placeholders**.
-For local development, the placeholder credentials in `HeliosConsoleApp.swift`
-(`https://yourinstance.jamfcloud.com`, `your-client-id`, `your-client-secret`) let you run
-against mock data without a live Jamf instance. **Never commit real credentials** — supply them
-via an MDM configuration profile at runtime.
+The app reads managed configuration from **five preference domains**, each delivered as its
+own Jamf *Application & Custom Settings* profile (read via `UserDefaults(suiteName:)` by both
+targets; changes take effect at relaunch):
 
-Schemas for the MDM configuration and announcements payloads live in [`schemas/`](schemas/).
+| Domain | Contents | Scope |
+| --- | --- | --- |
+| `com.herojoneslabs.helios.console.core` | Jamf Pro connection, ABM / Jamf Protect / Entra pointer, local admin | All managed Macs |
+| `com.herojoneslabs.helios.console.credentials` | Secrets only (rotate independently) | All managed Macs |
+| `com.herojoneslabs.helios.console.access` | `role`, Cleanup, device-action allow-list (fail-closed) | **Admin Macs only** |
+| `com.herojoneslabs.helios.console.features` | Feature modules & tuning | All managed Macs |
+| `com.herojoneslabs.helios.console.ui` | Branding & UX | All managed Macs |
+
+Per-domain schemas live in [`schemas/`](schemas/) (plus the separate announcements domain);
+deployment steps are in [`Deployment/README.md`](Deployment/README.md) and the full
+old-key → new-domain migration story is in
+[`docs/ConfigProfileMigration.md`](docs/ConfigProfileMigration.md).
+
+For local development there are **no seeded placeholder credentials anymore** (the old
+placeholder-seeding path and the dead `ConfigurationManager`/`AppConfiguration` layer were
+removed) — write values straight into the suite domains, e.g.
+`defaults write com.herojoneslabs.helios.console.core jamfPro -dict serverURL "https://yourorg.jamfcloud.com" …`,
+or use mock auth. **Never commit real credentials** — supply them via the credentials profile
+at runtime.
 
 ## Repository workflow
 
