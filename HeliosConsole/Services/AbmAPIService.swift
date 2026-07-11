@@ -372,7 +372,7 @@ class ABMAPIService: ObservableObject {
             "client_id": clientId,
             "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
             "client_assertion": jwt,
-            "scope": "business.api"
+            "scope": MDMConfigurationManager.shared.configuration.abmOAuthScope
         ]
         
         let bodyString = body.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }.joined(separator: "&")

@@ -318,7 +318,9 @@ struct FeaturesConfiguration: Codable {
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveDisplayName: String { displayName ?? "" }
         var effectiveThresholds: Thresholds { thresholds ?? .empty }
-        var effectiveCheckedInDays: Int { checkedInDays ?? 7 }
+        /// Clamped 1...3650 — an absurd profile value must not break
+        /// Calendar date math downstream.
+        var effectiveCheckedInDays: Int { min(max(checkedInDays ?? 7, 1), 3650) }
         var effectivePlatforms: [String] { platforms ?? [] }
         var effectiveMinimumOSVersions: MinimumOSVersions { minimumOSVersions ?? .empty }
 

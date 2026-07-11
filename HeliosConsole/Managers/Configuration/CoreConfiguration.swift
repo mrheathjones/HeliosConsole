@@ -138,10 +138,13 @@ struct CoreConfiguration: Codable {
         var effectiveScreenShareEnabled: Bool { screenShareEnabled ?? false }
 
         /// Connection timeout with the documented default applied.
-        var effectiveConnectionTimeout: Int { connectionTimeout ?? 30 }
+        /// Clamped 5...600 s — a profile typo (0, negative, huge) must
+        /// never brick every network call app-wide.
+        var effectiveConnectionTimeout: Int { min(max(connectionTimeout ?? 30, 5), 600) }
 
         /// Request timeout with the documented default applied.
-        var effectiveRequestTimeout: Int { requestTimeout ?? 60 }
+        /// Clamped 5...3600 s (see effectiveConnectionTimeout).
+        var effectiveRequestTimeout: Int { min(max(requestTimeout ?? 60, 5), 3600) }
 
         /// VPN-IP extension attribute — nil when not configured (feature off).
         var effectiveVPNIPExtensionAttributeName: String? {
@@ -190,6 +193,15 @@ struct CoreConfiguration: Codable {
                 switch self {
                 case .business: return "https://api-business.apple.com/v1"
                 case .school: return "https://api-school.apple.com/v1"
+                }
+            }
+
+            /// OAuth scope paired with the host — ASM tokens must be
+            /// requested with school.api or the API rejects them.
+            var oauthScope: String {
+                switch self {
+                case .business: return "business.api"
+                case .school: return "school.api"
                 }
             }
         }

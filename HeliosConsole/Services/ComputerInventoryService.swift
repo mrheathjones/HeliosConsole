@@ -276,7 +276,7 @@ final class ComputerInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = NetworkTuning.connectionTimeout
+        request.timeoutInterval = NetworkTuning.requestTimeout  // heavy paginated fetch
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         

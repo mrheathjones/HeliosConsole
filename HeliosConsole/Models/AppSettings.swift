@@ -228,7 +228,14 @@ class AppSettings: ObservableObject {
     }
     
     func resetToDefaults() {
-        appearanceMode = .dark
+        // Reseed appearance from the ui domain's defaultColorScheme (same
+        // rule as first launch) rather than forcing dark.
+        switch MDMConfigurationManager.shared.configuration
+            .userInterfaceExtras?.effectiveColorScheme ?? .system {
+        case .light: appearanceMode = .light
+        case .dark: appearanceMode = .dark
+        case .system: appearanceMode = .system
+        }
         biometricsEnabled = false
         showDeviceIcons = true
         defaultItemsPerPage = 25

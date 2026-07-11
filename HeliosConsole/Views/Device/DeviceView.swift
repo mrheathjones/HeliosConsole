@@ -1718,6 +1718,30 @@ struct DeviceView: View {
     // MARK: - Unlock User Account Command
     
     private func sendUnlockAccountCommand(username: String) async {
+        // Defense in depth (same invariant as executeAction): the sheet is
+        // only reachable via the policy-filtered menu, but enforcement must
+        // never live only in the UI.
+        guard actionPolicy.isAllowed(.unlockUserAccount) else {
+            await MainActor.run {
+                commandResult = CommandResult(
+                    success: false,
+                    title: "Action Not Permitted",
+                    message: "\"Unlock User Account\" is not enabled by your administrator."
+                )
+                showingCommandAlert = true
+            }
+            ActionLogService.shared.logAction(
+                actionName: DeviceAction.unlockUserAccount.logName,
+                actionCategory: DeviceAction.unlockUserAccount.logCategory,
+                deviceName: displayComputer.displayName,
+                deviceSerialNumber: displayComputer.serialNumber ?? "Unknown",
+                deviceId: displayComputer.id,
+                success: false,
+                errorMessage: "Blocked by deviceActions policy (access profile)"
+            )
+            return
+        }
+
         guard let managementId = displayComputer.general?.managementId else {
             await showError("Device management ID not available")
             return

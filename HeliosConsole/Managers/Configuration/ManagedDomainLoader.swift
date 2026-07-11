@@ -57,7 +57,7 @@ enum ManagedDomainLoader {
     ]
     static let featuresKeys = [
         "configurationVersion", "computers", "mobileDevices",
-        "healthScorecard", "deviceHealth", "reports"
+        "healthScorecard", "deviceHealth", "reports", "actionLog"
     ]
     static let uiKeys = [
         "configurationVersion", "userInterface", "sidebarItems",

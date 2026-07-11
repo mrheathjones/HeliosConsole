@@ -47,6 +47,9 @@ struct MDMConfiguration: Codable {
     /// business → api-business.apple.com, school → api-school.apple.com).
     let abmAPIBaseURL: String
 
+    /// OAuth scope matching abmAPIBaseURL (business.api / school.api).
+    let abmOAuthScope: String
+
     /// Azure endpoints for the Entra cleanup flow (core entra.cloudInstance:
     /// global / usgov / china).
     let entraAuthorityHost: String
@@ -200,6 +203,7 @@ struct MDMConfiguration: Codable {
         vpnIPExtensionAttribute: String? = nil,
         userCredentialLifetimeDays: Int = 90,
         abmAPIBaseURL: String = "https://api-business.apple.com/v1",
+        abmOAuthScope: String = "business.api",
         entraAuthorityHost: String = "login.microsoftonline.com",
         entraGraphHost: String = "graph.microsoft.com",
         abmClientId: String?,
@@ -238,6 +242,7 @@ struct MDMConfiguration: Codable {
         self.vpnIPExtensionAttribute = vpnIPExtensionAttribute
         self.userCredentialLifetimeDays = userCredentialLifetimeDays
         self.abmAPIBaseURL = abmAPIBaseURL
+        self.abmOAuthScope = abmOAuthScope
         self.entraAuthorityHost = entraAuthorityHost
         self.entraGraphHost = entraGraphHost
         self.abmClientId = abmClientId
@@ -335,6 +340,7 @@ struct MDMConfiguration: Codable {
             vpnIPExtensionAttribute: jamfPro?.effectiveVPNIPExtensionAttributeName,
             userCredentialLifetimeDays: jamfPro?.effectiveUserCredentialLifetimeDays ?? 90,
             abmAPIBaseURL: (core?.appleBusinessManager?.effectiveServiceType ?? .business).apiBaseURL,
+            abmOAuthScope: (core?.appleBusinessManager?.effectiveServiceType ?? .business).oauthScope,
             entraAuthorityHost: (core?.entra?.effectiveCloudInstance ?? .global).authorityHost,
             entraGraphHost: (core?.entra?.effectiveCloudInstance ?? .global).graphHost,
             abmClientId: abmClientId,

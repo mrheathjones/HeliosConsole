@@ -229,7 +229,7 @@ struct AnnouncementsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         filterPill("All", filter: .all)
-                        filterPill("Unread", filter: .unread, badge: announcementService.unreadCount)
+                        filterPill("Unread", filter: .unread, badge: announcementService.showUnreadBadge ? announcementService.unreadCount : 0)
                         filterPill("Critical", filter: .critical, color: .red)
                         
                         Divider()
