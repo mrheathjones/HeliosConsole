@@ -23,7 +23,9 @@ struct MDMConfiguration: Codable {
     let supportURL: String?
     let localAdminUsername: String
     
-    // Screen Share feature (enabled via Config Profile)
+    // DEPRECATED: the access domain's deviceActions allow-list is
+    // authoritative for the screenShare action; no view reads this flag
+    // anymore. Kept only until the core key is removed in a later major.
     // NOTE: The extension attribute name "EA_VPN_IP_ADDRESS" is currently hardcoded.
     // A future enhancement will make this configurable via Config Profile.
     let screenShareEnabled: Bool
@@ -134,6 +136,31 @@ struct MDMConfiguration: Codable {
 
     /// Whether the Cleanup feature should be available to this operator.
     var isCleanupAdmin: Bool { appRole == .admin }
+
+    // MARK: - Device action policies (strict fail-closed)
+
+    /// Policy for the computer (macOS) Actions menu: access-domain
+    /// allow-list + features-domain enableAPIActions kill switch. No
+    /// allow-list delivered → DeviceActionPolicy denies everything and the
+    /// Actions menu is hidden. NOTE: once an allow-list is delivered it is
+    /// authoritative for Screen Share too — the legacy core-domain
+    /// `jamfPro.screenShareEnabled` key is deprecated and ignored.
+    var computerActionPolicy: DeviceActionPolicy {
+        DeviceActionPolicy(
+            grants: deviceActions?.computer?.grantsByID,
+            apiActionsEnabled: features?.effectiveComputers.effectiveEnableAPIActions ?? true
+        )
+    }
+
+    /// Policy for mobile-device actions. No mobile actions menu exists yet
+    /// (MobileDeviceView's "More" button is a stub); any future menu must be
+    /// built from this policy from day one.
+    var mobileDeviceActionPolicy: DeviceActionPolicy {
+        DeviceActionPolicy(
+            grants: deviceActions?.mobileDevice?.grantsByID,
+            apiActionsEnabled: features?.effectiveMobileDevices.effectiveEnableAPIActions ?? true
+        )
+    }
 
     init(
         jamfURL: String,

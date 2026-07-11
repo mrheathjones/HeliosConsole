@@ -74,8 +74,8 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 | `healthScorecard.*` | features | `healthScorecard.*` (unchanged) | Parsed, **NOT yet enforced** in views |
 | `deviceHealth.*` | features | `deviceHealth.*` (unchanged) | Parsed, **NOT yet enforced** in views |
 | `reports.*` | features | `reports.*` (unchanged) | Parsed, **NOT yet enforced** in views |
-| `deviceActions.computer.*` (18 bools) | **access** | `deviceActions.computer.*` (keys + defaults unchanged) | Parsed, **NOT yet enforced** in views |
-| `deviceActions.mobileDevice.*` (13 bools) | **access** | `deviceActions.mobileDevice.*` (keys + defaults unchanged) | Parsed, **NOT yet enforced** in views |
+| `deviceActions.computer.*` (18 bools) | **access** | **`deviceActions.computer.actions`** — array of `{id, enabled, displayName}` (SHAPE CHANGED; legacy boolean map still decoded, delivered keys only) | **ENFORCED** — DeviceView actionsMenu + executeAction (strict fail-closed allow-list) |
+| `deviceActions.mobileDevice.*` (13 bools) | **access** | **`deviceActions.mobileDevice.actions`** — same array shape | Parsed + policy exposed (`mobileDeviceActionPolicy`) — no mobile actions menu exists yet |
 | `userInterface.supportURL` | ui | `userInterface.supportURL` | **ENFORCED** — LoginView |
 | `userInterface.appTitle` / `appSubtitle` | ui | same keys (`appSubtitle` default now `"Console"`) | Parsed (read into config), **no view consumes them today** |
 | `userInterface.companyName` / `logoURL` / `accentColor` / `defaultColorScheme` / `showEnrollments` / `showAnnouncements` / `showSettings` | ui | same keys | Parsed, **NOT yet enforced** in views |
@@ -98,6 +98,8 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 | `jamfProtect.enabled` | `true` | `false` (absent key means disabled) |
 | `role` | `"Admin"` | **no default** — missing/blank/typo → `User`, Cleanup hidden (fail-closed) |
 | `cleanup.staleDays` | `30` | `90` |
+| `deviceActions` (whole block) | absent → per-key defaults (routine actions on) | **absent → Actions menu HIDDEN** — strict fail-closed allow-list; only listed ids with `enabled=true` appear. New ids: `restartSilent`, `returnToService`, `screenShare`, `unlockUserAccount`. Legacy boolean-map profiles: delivered keys are honored, undelivered keys are NO LONGER defaulted on |
+| `jamfPro.screenShareEnabled` (core) | gate for the Screen Share menu item | **DEPRECATED** — the access `deviceActions` allow-list is authoritative for `screenShare`; the core key is ignored and will be removed in a later major |
 | `userInterface.appSubtitle` | `"Console - Admin"` | `"Console"` |
 | `configurationVersion` | `"1.0"` | `"2.0"` |
 

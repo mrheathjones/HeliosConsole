@@ -13,6 +13,7 @@ struct DeviceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @ObservedObject private var actionLogService = ActionLogService.shared
+    @ObservedObject private var configManager = MDMConfigurationManager.shared
     @State private var selectedSection: DeviceSection = .overview
     @State private var searchText: String = ""
     
@@ -80,145 +81,13 @@ struct DeviceView: View {
     @State private var fileVaultKeyStatus: String = ""
     @State private var fileVaultEncryptionState: String = ""
     
-    enum DeviceAction {
-        case enableBluetooth
-        case disableBluetooth
-        case enableRemoteDesktop
-        case disableRemoteDesktop
-        case restart
-        case restartSilent
-        case shutdown
-        case returnToService
-        case viewLocalAdminPassword
-        case viewFileVaultKey
-        case sendBlankPush
-        case screenShare
-        
-        var title: String {
-            switch self {
-            case .enableBluetooth: return "Enable Bluetooth?"
-            case .disableBluetooth: return "Disable Bluetooth?"
-            case .enableRemoteDesktop: return "Enable Remote Desktop?"
-            case .disableRemoteDesktop: return "Disable Remote Desktop?"
-            case .restart: return "Restart Device?"
-            case .restartSilent: return "Restart Device (Silent)?"
-            case .shutdown: return "Shutdown Device?"
-            case .returnToService: return "Return to Service?"
-            case .viewLocalAdminPassword: return "View Local Admin Password?"
-            case .viewFileVaultKey: return "View FileVault Recovery Key?"
-            case .sendBlankPush: return "Send Blank Push?"
-            case .screenShare: return "Screen Share?"
-            }
-        }
-        
-        var message: String {
-            switch self {
-            case .enableBluetooth: return "This will enable Bluetooth on the device."
-            case .disableBluetooth: return "This will disable Bluetooth on the device. Any connected Bluetooth devices (keyboards, mice, trackpads, headsets) will be disconnected."
-            case .enableRemoteDesktop: return "This will enable Remote Desktop (Screen Sharing) on the device, allowing remote connections."
-            case .disableRemoteDesktop: return "This will disable Remote Desktop (Screen Sharing) on the device. Any active remote sessions will be disconnected."
-            case .restart: return "This will restart the device and notify the user. Any unsaved work may be lost."
-            case .restartSilent: return "This will restart the device without notifying the user. Any unsaved work may be lost."
-            case .shutdown: return "This will shut down the device. The user will need physical access to turn it back on."
-            case .returnToService: return "This will (1) erase all data on the device, (2) remove its record from Jamf Pro once the erase is confirmed as issued, and (3) delete its device object from Microsoft Entra so it can re-register cleanly with PSSO / Company Portal. This action cannot be undone."
-            case .viewLocalAdminPassword: return "This will retrieve and display the local administrator password for this device. This action is logged for security auditing."
-            case .viewFileVaultKey: return "This will retrieve and display the FileVault personal recovery key for this device. This key can be used to unlock the encrypted disk. This action is logged for security auditing."
-            case .sendBlankPush: return "This will send an APNs (Apple Push Notification) to the device, prompting it to check in with Jamf Pro. Use this to verify device connectivity or to trigger pending MDM commands."
-            case .screenShare: return "This will open a screen sharing session to the device using Apple's built-in Screen Sharing app. If the device is on VPN, the VPN IP address will be used."
-            }
-        }
-        
-        var icon: String {
-            switch self {
-            case .enableBluetooth: return "antenna.radiowaves.left.and.right"
-            case .disableBluetooth: return "antenna.radiowaves.left.and.right.slash"
-            case .enableRemoteDesktop: return "desktopcomputer.and.arrow.down"
-            case .disableRemoteDesktop: return "desktopcomputer.trianglebadge.exclamationmark"
-            case .restart, .restartSilent: return "arrow.clockwise.circle"
-            case .shutdown: return "power"
-            case .returnToService: return "arrow.counterclockwise.circle"
-            case .viewLocalAdminPassword: return "key.fill"
-            case .viewFileVaultKey: return "lock.shield"
-            case .sendBlankPush: return "bell.badge"
-            case .screenShare: return "shared.with.you"
-            }
-        }
-        
-        var iconColor: Color {
-            switch self {
-            case .enableBluetooth, .enableRemoteDesktop: return .blue
-            case .disableBluetooth, .disableRemoteDesktop: return .orange
-            case .restart, .restartSilent: return .orange
-            case .shutdown: return .orange
-            case .returnToService: return .red
-            case .viewLocalAdminPassword: return .purple
-            case .viewFileVaultKey: return .green
-            case .sendBlankPush: return .blue
-            case .screenShare: return .cyan
-            }
-        }
-        
-        var confirmButtonTitle: String {
-            switch self {
-            case .enableBluetooth: return "Enable"
-            case .disableBluetooth: return "Disable"
-            case .enableRemoteDesktop: return "Enable"
-            case .disableRemoteDesktop: return "Disable"
-            case .restart, .restartSilent: return "Restart"
-            case .shutdown: return "Shutdown"
-            case .returnToService: return "Erase & Return"
-            case .viewLocalAdminPassword: return "View Password"
-            case .viewFileVaultKey: return "View Key"
-            case .sendBlankPush: return "Send Push"
-            case .screenShare: return "Connect"
-            }
-        }
-        
-        var isDestructive: Bool {
-            switch self {
-            case .returnToService: return true
-            default: return false
-            }
-        }
-        
-        var isWarning: Bool {
-            switch self {
-            case .disableBluetooth, .disableRemoteDesktop, .restart, .restartSilent, .shutdown, .viewLocalAdminPassword, .viewFileVaultKey: return true
-            default: return false
-            }
-        }
-        
-        var logName: String {
-            switch self {
-            case .enableBluetooth: return "Enable Bluetooth"
-            case .disableBluetooth: return "Disable Bluetooth"
-            case .enableRemoteDesktop: return "Enable Remote Desktop"
-            case .disableRemoteDesktop: return "Disable Remote Desktop"
-            case .restart: return "Restart Device"
-            case .restartSilent: return "Restart Device (Silent)"
-            case .shutdown: return "Shutdown Device"
-            case .returnToService: return "Return to Service"
-            case .viewLocalAdminPassword: return "View Local Admin Password"
-            case .viewFileVaultKey: return "View FileVault Key"
-            case .sendBlankPush: return "Send Blank Push"
-            case .screenShare: return "Screen Share"
-            }
-        }
-        
-        var logCategory: String {
-            switch self {
-            case .enableBluetooth, .disableBluetooth, .enableRemoteDesktop, .disableRemoteDesktop:
-                return "Device Settings"
-            case .restart, .restartSilent, .shutdown, .returnToService, .screenShare:
-                return "Device Actions"
-            case .viewLocalAdminPassword, .viewFileVaultKey:
-                return "Security"
-            case .sendBlankPush:
-                return "Inventory"
-            }
-        }
+    /// Policy for this device's Actions menu (strict fail-closed — see
+    /// DeviceActionPolicy). Recomputed on configuration reload via
+    /// `configManager`.
+    private var actionPolicy: DeviceActionPolicy {
+        configManager.configuration.computerActionPolicy
     }
-    
+
     struct CommandResult {
         let success: Bool
         let title: String
@@ -760,7 +629,42 @@ struct DeviceView: View {
         }
     }
     
+    /// Routes a granted menu action: Unlock User Account opens its own
+    /// sheet; everything else goes through the confirmation overlay.
+    private func trigger(_ action: DeviceAction) {
+        if action == .unlockUserAccount {
+            showingUnlockAccountSheet = true
+            return
+        }
+        pendingAction = action
+        showingActionConfirmation = true
+    }
+
     private func executeAction(_ action: DeviceAction) async {
+        // Defense in depth: the menu already filters by policy, but never
+        // rely on UI alone — re-check the grant before any command fires,
+        // and audit-log the denial.
+        guard actionPolicy.isAllowed(action) else {
+            await MainActor.run {
+                commandResult = CommandResult(
+                    success: false,
+                    title: "Action Not Permitted",
+                    message: "\"\(action.logName)\" is not enabled by your administrator."
+                )
+                showingCommandAlert = true
+            }
+            ActionLogService.shared.logAction(
+                actionName: action.logName,
+                actionCategory: action.logCategory,
+                deviceName: displayComputer.displayName,
+                deviceSerialNumber: displayComputer.serialNumber ?? "Unknown",
+                deviceId: displayComputer.id,
+                success: false,
+                errorMessage: "Blocked by deviceActions policy (access profile)"
+            )
+            return
+        }
+
         switch action {
         case .enableBluetooth:
             await sendBluetoothCommand(enable: true)
@@ -787,6 +691,11 @@ struct DeviceView: View {
         case .screenShare:
             await launchScreenShare()
             return // Screen Share handles its own logging
+        case .unlockUserAccount:
+            // Never routed here (trigger() opens the sheet directly), but
+            // keep the switch exhaustive and safe.
+            await MainActor.run { showingUnlockAccountSheet = true }
+            return
         }
         
         // Centralized logging for all MDM commands (except Screen Share which logs internally)
@@ -1121,8 +1030,12 @@ struct DeviceView: View {
                 .buttonStyle(.plain)
                 .disabled(isLoadingDetails)
                 
-                // Actions menu with MDM commands
-                actionsMenu
+                // Actions menu with MDM commands. Strict fail-closed: when
+                // the access profile grants no device actions, the button
+                // itself is not rendered.
+                if actionPolicy.hasAnyVisibleAction {
+                    actionsMenu
+                }
             }
         }
         .padding(.horizontal, 32)
@@ -1132,129 +1045,28 @@ struct DeviceView: View {
     
     // MARK: - Actions Menu
     
+    /// Menu contents are driven entirely by the access profile's
+    /// deviceActions allow-list: only granted actions render, sections with
+    /// no granted action disappear, and the profile's displayName override
+    /// (menu label only) is honored. Grouping/order stay app-defined.
     private var actionsMenu: some View {
         Menu {
-            // Device Settings section
-            Section("Device Settings") {
-                Button {
-                    pendingAction = .enableBluetooth
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Enable Bluetooth", systemImage: "antenna.radiowaves.left.and.right")
+            ForEach(DeviceAction.MenuSection.allCases, id: \.self) { section in
+                let visibleActions = DeviceAction.allCases.filter {
+                    $0.menuSection == section && actionPolicy.isAllowed($0)
                 }
-                
-                Button {
-                    pendingAction = .disableBluetooth
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Disable Bluetooth", systemImage: "antenna.radiowaves.left.and.right.slash")
-                }
-                
-                Button {
-                    pendingAction = .enableRemoteDesktop
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Enable Remote Desktop", systemImage: "desktopcomputer.and.arrow.down")
-                }
-                
-                Button {
-                    pendingAction = .disableRemoteDesktop
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Disable Remote Desktop", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
-                }
-            }
-            
-            Divider()
-            
-            // Device Actions section
-            Section("Device Actions") {
-                if MDMConfigurationManager.shared.configuration.screenShareEnabled {
-                    Button {
-                        pendingAction = .screenShare
-                        showingActionConfirmation = true
-                    } label: {
-                        Label("Screen Share", systemImage: "shared.with.you")
+                if !visibleActions.isEmpty {
+                    Section(section.title) {
+                        ForEach(visibleActions) { action in
+                            Button(role: action.isDestructive ? .destructive : nil) {
+                                trigger(action)
+                            } label: {
+                                Label(actionPolicy.menuLabel(for: action), systemImage: action.menuIcon)
+                            }
+                        }
                     }
                 }
-                
-                Button {
-                    pendingAction = .restart
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Restart Device", systemImage: "arrow.clockwise.circle")
-                }
-                
-                Button {
-                    pendingAction = .restartSilent
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Restart Device (Silent)", systemImage: "arrow.clockwise.circle.fill")
-                }
-                
-                Button {
-                    pendingAction = .shutdown
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Shutdown Device", systemImage: "power")
-                }
-                
-                Button(role: .destructive) {
-                    pendingAction = .returnToService
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Return to Service", systemImage: "arrow.counterclockwise.circle")
-                }
             }
-            
-            Divider()
-            
-            // Security section
-            Section("Security") {
-                Button {
-                    pendingAction = .viewLocalAdminPassword
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Local Admin Password", systemImage: "key.fill")
-                }
-                
-                Button {
-                    pendingAction = .viewFileVaultKey
-                    showingActionConfirmation = true
-                } label: {
-                    Label("FileVault Key", systemImage: "lock.shield")
-                }
-            }
-            
-            Divider()
-            
-            // User Management section
-            Section("User Management") {
-                Button {
-                    showingUnlockAccountSheet = true
-                } label: {
-                    Label("Unlock User Account", systemImage: "person.badge.key")
-                }
-            }
-            
-            Divider()
-            
-            // Inventory section
-            Section("Inventory") {
-                Button {
-                    // TODO: Implement
-                } label: {
-                    Label("Update Inventory", systemImage: "arrow.triangle.2.circlepath")
-                }
-                
-                Button {
-                    pendingAction = .sendBlankPush
-                    showingActionConfirmation = true
-                } label: {
-                    Label("Send Blank Push", systemImage: "bell.badge")
-                }
-            }
-            
         } label: {
             HStack(spacing: 6) {
                 if isExecutingCommand {

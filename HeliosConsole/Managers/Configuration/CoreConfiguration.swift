@@ -105,7 +105,9 @@ struct CoreConfiguration: Codable {
         /// clients. Load-bearing — provisioning targets this role name.
         var requiredRoleName: String?
 
-        /// Whether the Screen Share action is shown in DeviceView.
+        /// DEPRECATED — the access domain's deviceActions allow-list is
+        /// authoritative for the screenShare action; this key is ignored by
+        /// the app and will be removed in a later major.
         var screenShareEnabled: Bool?
 
         /// URLSession connection timeout in seconds.
@@ -120,7 +122,7 @@ struct CoreConfiguration: Codable {
             return name.isEmpty ? "SVC_WATCHER_USER" : name
         }
 
-        /// Screen Share flag — absent key means disabled.
+        /// DEPRECATED Screen Share flag (see `screenShareEnabled`).
         var effectiveScreenShareEnabled: Bool { screenShareEnabled ?? false }
 
         /// Connection timeout with the documented default applied.

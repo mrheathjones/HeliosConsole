@@ -195,7 +195,7 @@ struct ActionPlan: Sendable {
     }
 }
 
-enum DeviceAction: String, Sendable {
+enum CleanupAction: String, Sendable {
     case unmanage = "Unmanage"
     case addToGroup = "Add to Group"
     case moveToSite = "Move to Site"
@@ -206,7 +206,7 @@ enum DeviceAction: String, Sendable {
 struct ActionResult: Identifiable, Sendable {
     let id = UUID()
     let deviceName: String
-    let action: DeviceAction
+    let action: CleanupAction
     let success: Bool
     let message: String
 }

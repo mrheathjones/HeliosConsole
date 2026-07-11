@@ -36,8 +36,8 @@
         },
         "screenShareEnabled": {
           "type": "boolean",
-          "title": "Enable Screen Share",
-          "description": "Show the Screen Share action in DeviceView. Absent key means disabled.",
+          "title": "Enable Screen Share (DEPRECATED)",
+          "description": "DEPRECATED as of access schema 2.1 — the access domain's deviceActions allow-list is authoritative for the screenShare action and this key is ignored by the app. Will be removed in a later major. Migrate the grant to deviceActions.computer.actions[id=screenShare] in the access profile.",
           "default": false
         },
         "connectionTimeout": {
