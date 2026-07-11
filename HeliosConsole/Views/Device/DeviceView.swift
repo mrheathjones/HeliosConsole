@@ -66,7 +66,7 @@ struct DeviceView: View {
     @State private var showingCommandAlert: Bool = false
     @State private var showingActionConfirmation: Bool = false
     @State private var pendingAction: DeviceAction?
-    /// Typed confirmation for destructive actions (must match the device name).
+    /// Typed confirmation for destructive actions (operator must type ERASE).
     @State private var confirmationText: String = ""
     /// Non-nil while a multi-stage flow (Return to Service) is processing;
     /// drives the progress modal and carries the current stage message.
@@ -74,6 +74,11 @@ struct DeviceView: View {
     /// Title shown on the processing overlay — set by whichever long-running
     /// flow is driving it (Return to Service vs. bare Erase Device).
     @State private var processingTitle: String = "Return to Service"
+    /// Snapshot of the Return to Service plan taken when the confirmation
+    /// dialog opens: the executed steps must be exactly the steps the
+    /// operator confirmed, even if a profile re-push lands mid-dialog.
+    @State private var pendingRTSOptions: AccessConfiguration.DeviceActionOptions? = nil
+    @State private var pendingRTSEntraConfigured: Bool = false
     @State private var showingUnlockAccountSheet: Bool = false
     @State private var unlockUsername: String = ""
     @State private var showingLocalAdminPassword: Bool = false
@@ -639,23 +644,40 @@ struct DeviceView: View {
     private func confirmationMessage(for action: DeviceAction) -> String {
         guard action == .returnToService else { return action.message }
 
-        let options = actionPolicy.options(for: .returnToService)
-        var steps = ["erase all data on the device (the device must acknowledge the erase before any cleanup step runs)"]
+        // Use the plan snapshotted when the dialog opened (trigger(_:)) so
+        // the copy and the execution can never diverge mid-dialog.
+        let options = pendingRTSOptions ?? actionPolicy.options(for: .returnToService)
+        let entraConfigured = pendingRTSOptions != nil
+            ? pendingRTSEntraConfigured
+            : configManager.configuration.isEntraConfigured
+
+        var cleanupSteps: [String] = []
         if options.effectiveDeleteJamfRecord {
-            steps.append("remove its record from Jamf Pro")
+            cleanupSteps.append("remove its record from Jamf Pro")
         }
-        if options.effectiveDeleteEntraObject && configManager.configuration.isEntraConfigured {
-            steps.append("delete its device object from Microsoft Entra so the device can re-enroll cleanly")
+        if options.effectiveDeleteEntraObject && entraConfigured {
+            cleanupSteps.append("delete its device object from Microsoft Entra so the device can re-enroll cleanly")
         }
 
-        if steps.count == 1 {
-            return "This will \(steps[0]). This action cannot be undone."
+        // Disclose what the policy deliberately keeps, so an operator who
+        // knows RTS as "full decommission" isn't surprised post-erase.
+        var kept: [String] = []
+        if !options.effectiveDeleteJamfRecord { kept.append("Jamf Pro record") }
+        if !options.effectiveDeleteEntraObject { kept.append("Entra device object") }
+        let keptSentence = kept.isEmpty
+            ? ""
+            : " The device's \(kept.joined(separator: " and ")) will be kept."
+
+        if cleanupSteps.isEmpty {
+            return "This will erase all data on the device and wait for the device to acknowledge the erase — no cleanup steps will run.\(keptSentence) This action cannot be undone."
         }
+
+        let steps = ["erase all data on the device (the device must acknowledge the erase before any cleanup step runs)"] + cleanupSteps
         let numbered = steps.enumerated().map { "(\($0.offset + 1)) \($0.element)" }
         let joined = numbered.count == 2
             ? "\(numbered[0]) and \(numbered[1])"
             : numbered.dropLast().joined(separator: ", ") + ", and \(numbered[numbered.count - 1])"
-        return "This will \(joined). This action cannot be undone."
+        return "This will \(joined).\(keptSentence) This action cannot be undone."
     }
 
     /// Routes a granted menu action: Unlock User Account opens its own
@@ -664,6 +686,11 @@ struct DeviceView: View {
         if action == .unlockUserAccount {
             showingUnlockAccountSheet = true
             return
+        }
+        if action == .returnToService {
+            // Freeze the plan the confirmation dialog will describe.
+            pendingRTSOptions = actionPolicy.options(for: .returnToService)
+            pendingRTSEntraConfigured = configManager.configuration.isEntraConfigured
         }
         pendingAction = action
         showingActionConfirmation = true
@@ -1517,7 +1544,12 @@ struct DeviceView: View {
         }
 
         let config = MDMConfigurationManager.shared.configuration
-        let options = actionPolicy.options(for: .returnToService)
+        // Execute exactly the plan the operator confirmed (snapshotted when
+        // the dialog opened); fall back to the live policy defensively.
+        let options = pendingRTSOptions ?? actionPolicy.options(for: .returnToService)
+        let entraConfiguredAtConfirm = pendingRTSOptions != nil
+            ? pendingRTSEntraConfigured
+            : config.isEntraConfigured
         let deviceName = displayComputer.displayName
         let serial = displayComputer.serialNumber ?? "Unknown"
         let deviceId = displayComputer.id
@@ -1544,12 +1576,17 @@ struct DeviceView: View {
             summaryLines.append(contentsOf: erase.summaryLines)
             let acked = erase.acked
 
+            // The ack wait can outlive the original bearer token — cleanup
+            // uses a fresh one (falling back to the original if the refresh
+            // fails; the delete then surfaces its own auth error).
+            let cleanupToken = acked ? ((try? await getBearerToken()) ?? token) : token
+
             // 2) Delete the Jamf record only after the erase is acknowledged,
             // and only when the profile hasn't disabled the step.
             if acked && options.effectiveDeleteJamfRecord {
                 await MainActor.run { processingMessage = "Erase acknowledged. Removing Jamf record…" }
                 do {
-                    try await deleteJamfRecord(computerId: deviceId, token: token, jamfURL: config.jamfURL)
+                    try await deleteJamfRecord(computerId: deviceId, token: cleanupToken, jamfURL: config.jamfURL)
                     summaryLines.append("• Erase acknowledged; Jamf record removed.")
                     ActionLogService.shared.logAction(
                         actionName: "Delete Jamf Record", actionCategory: category,
@@ -1570,7 +1607,20 @@ struct DeviceView: View {
                 summaryLines.append("• Jamf record kept (disabled by policy).")
             } else {
                 overallSuccess = false
-                summaryLines.append("• Erase was NOT acknowledged in time — Jamf record left in place so the command can still be delivered, and Entra cleanup was also skipped. Follow up manually.")
+                // Compose the timeout line from the confirmed plan — never
+                // invite the operator to manually run a step the profile
+                // deliberately disabled.
+                var notAckedLine = "• Erase was NOT acknowledged in time — the command remains queued for delivery"
+                var skipped: [String] = []
+                if options.effectiveDeleteJamfRecord {
+                    skipped.append("the Jamf record was intentionally left in place (deleting it now would unmanage the Mac)")
+                }
+                if options.effectiveDeleteEntraObject && entraConfiguredAtConfirm {
+                    skipped.append("Entra cleanup was skipped")
+                }
+                if !skipped.isEmpty { notAckedLine += "; " + skipped.joined(separator: " and ") }
+                notAckedLine += ". Follow up manually."
+                summaryLines.append(notAckedLine)
                 // Audit the withheld delete only when one was actually
                 // planned — a policy-disabled step was never going to run.
                 if options.effectiveDeleteJamfRecord {
@@ -1585,7 +1635,7 @@ struct DeviceView: View {
             // 3) Entra cleanup — HARD-gated on acknowledgment like every other
             // cleanup step, then on the profile option. Best effort, only when
             // configured. Never fatal.
-            if acked && options.effectiveDeleteEntraObject {
+            if acked && options.effectiveDeleteEntraObject && entraConfiguredAtConfirm {
                 if let entra = EntraGraphService(configuration: config) {
                     let entraName = displayComputer.general?.name ?? deviceName
                     await MainActor.run { processingMessage = "Removing '\(entraName)' from Microsoft Entra…" }
@@ -1609,6 +1659,10 @@ struct DeviceView: View {
                 } else {
                     summaryLines.append("• Entra cleanup not configured — skipped.")
                 }
+            } else if acked && options.effectiveDeleteEntraObject {
+                // Option on, but Entra wasn't configured when the operator
+                // confirmed — nothing was promised, nothing runs.
+                summaryLines.append("• Entra cleanup not configured — skipped.")
             } else if acked {
                 // Policy-disabled skip — not a failure.
                 summaryLines.append("• Entra cleanup disabled by policy — skipped.")
@@ -1664,7 +1718,7 @@ struct DeviceView: View {
             summaryLines.append("• Erase command queued.")
         }
         ActionLogService.shared.logAction(
-            actionName: showPIN ? "Erase Device (recovery PIN \(erasePIN))" : "Erase Device",
+            actionName: showPIN ? "Erase Command Queued (recovery PIN \(erasePIN))" : "Erase Command Queued",
             actionCategory: category,
             deviceName: deviceName, deviceSerialNumber: serial, deviceId: deviceId,
             success: true, errorMessage: nil
@@ -1739,8 +1793,12 @@ struct DeviceView: View {
         let timeoutSeconds = config.eraseAckTimeoutSeconds
         let pollIntervalSeconds = config.eraseAckPollIntervalSeconds
         var waited = 0
+        // The configurable wait (up to 30 min) can outlive the bearer token,
+        // so the poll refreshes it on a 401 instead of silently retrying
+        // with a dead token until timeout.
+        var token = token
 
-        while waited < timeoutSeconds {
+        while true {
             await MainActor.run {
                 processingMessage = "Waiting for \(deviceName) to acknowledge the erase…  (\(waited)s)"
             }
@@ -1777,15 +1835,26 @@ struct DeviceView: View {
                             break // PENDING / empty — keep waiting
                         }
                     } else {
-                        NSLog("⚠️ Ack poll failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1))")
+                        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                        NSLog("⚠️ Ack poll failed (HTTP \(code))")
+                        if code == 401, let fresh = try? await getBearerToken() {
+                            token = fresh
+                            NSLog("🔑 Bearer token refreshed for ack polling")
+                        }
                     }
                 } catch {
                     NSLog("⚠️ Ack poll error for \(uuid): \(error.localizedDescription)")
                 }
             }
 
-            try? await Task.sleep(nanoseconds: UInt64(pollIntervalSeconds) * 1_000_000_000)
-            waited += pollIntervalSeconds
+            // Exit only after a poll AT the timeout boundary: sleep exactly
+            // the remaining window (never past it), then poll once more —
+            // an ack landing during the final sleep is not missed, and a
+            // poll interval larger than the timeout cannot overshoot it.
+            if waited >= timeoutSeconds { break }
+            let sleepSeconds = min(pollIntervalSeconds, timeoutSeconds - waited)
+            try? await Task.sleep(nanoseconds: UInt64(sleepSeconds) * 1_000_000_000)
+            waited += sleepSeconds
         }
 
         NSLog("⏱️ Timed out after \(timeoutSeconds)s waiting for ack of \(uuid)")

@@ -160,16 +160,41 @@ struct AccessConfiguration: Codable {
         }
 
         /// Per-field resilient decode: a malformed value (e.g. `options`
-        /// delivered as a string) degrades that field to nil instead of
-        /// failing the whole actions array — which would cascade into the
-        /// strict fail-closed path and hide the entire Actions menu over
-        /// one typo'd profile value.
+        /// delivered as a string) degrades that field instead of failing the
+        /// whole actions array — which would cascade into the strict
+        /// fail-closed path and hide the entire Actions menu over one typo'd
+        /// profile value. Degradation direction matters on this surface:
+        /// a present-but-undecodable `enabled` is a DENY (never a grant),
+        /// and a present-but-undecodable `options` disables every cleanup
+        /// step (never "run everything"). Absent keys keep their normal
+        /// defaults (listing an id IS the grant).
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try? container.decode(String.self, forKey: .id)
-            enabled = try? container.decode(Bool.self, forKey: .enabled)
+
+            if container.contains(.enabled) {
+                if let value = try? container.decode(Bool.self, forKey: .enabled) {
+                    enabled = value
+                } else {
+                    enabled = false
+                    NSLog("⚠️ deviceActions: malformed 'enabled' for id '%@' — treated as DISABLED (fail-closed)", (try? container.decode(String.self, forKey: .id)) ?? "?")
+                }
+            } else {
+                enabled = nil
+            }
+
             displayName = try? container.decode(String.self, forKey: .displayName)
-            options = try? container.decode(DeviceActionOptions.self, forKey: .options)
+
+            if container.contains(.options) {
+                if let value = try? container.decode(DeviceActionOptions.self, forKey: .options) {
+                    options = value
+                } else {
+                    options = DeviceActionOptions(deleteJamfRecord: false, deleteEntraObject: false)
+                    NSLog("⚠️ deviceActions: malformed 'options' for id '%@' — all cleanup steps DISABLED (fail-closed)", (try? container.decode(String.self, forKey: .id)) ?? "?")
+                }
+            } else {
+                options = nil
+            }
         }
     }
 
@@ -193,9 +218,33 @@ struct AccessConfiguration: Codable {
         /// No keys delivered — every toggle resolves to its default (true).
         static let empty = DeviceActionOptions()
 
+        enum CodingKeys: String, CodingKey {
+            case deleteJamfRecord, deleteEntraObject
+        }
+
         init(deleteJamfRecord: Bool? = nil, deleteEntraObject: Bool? = nil) {
             self.deleteJamfRecord = deleteJamfRecord
             self.deleteEntraObject = deleteEntraObject
+        }
+
+        /// Per-field fail-closed decode: an absent toggle keeps its default
+        /// (true), but a present-but-undecodable toggle resolves to FALSE —
+        /// the non-destructive direction (skip the cleanup step) — and one
+        /// typo'd key never discards its correctly-typed sibling.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            deleteJamfRecord = Self.decodeToggle(container, .deleteJamfRecord)
+            deleteEntraObject = Self.decodeToggle(container, .deleteEntraObject)
+        }
+
+        private static func decodeToggle(
+            _ container: KeyedDecodingContainer<CodingKeys>,
+            _ key: CodingKeys
+        ) -> Bool? {
+            guard container.contains(key) else { return nil }
+            if let value = try? container.decode(Bool.self, forKey: key) { return value }
+            NSLog("⚠️ deviceActions.options: malformed '%@' — treated as FALSE (skip step, fail-closed)", key.rawValue)
+            return false
         }
     }
 
