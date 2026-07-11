@@ -39,6 +39,7 @@ struct FeaturesConfiguration: Codable {
     let healthScorecard: HealthScorecardSettings?
     let deviceHealth: DeviceHealthSettings?
     let reports: ReportsSettings?
+    let actionLog: ActionLogSettings?
 
     // MARK: - Effective accessors (defaults per schemas/Helios_Features_SCHEMA.json)
 
@@ -48,6 +49,7 @@ struct FeaturesConfiguration: Codable {
     var effectiveHealthScorecard: HealthScorecardSettings { healthScorecard ?? .empty }
     var effectiveDeviceHealth: DeviceHealthSettings { deviceHealth ?? .empty }
     var effectiveReports: ReportsSettings { reports ?? .empty }
+    var effectiveActionLog: ActionLogSettings { actionLog ?? .empty }
 
     /// Normalizes and validates a configured section list for a Jamf
     /// inventory endpoint: upper-cases + trims each entry, keeps only the
@@ -86,8 +88,25 @@ struct FeaturesConfiguration: Codable {
         mobileDevices: nil,
         healthScorecard: nil,
         deviceHealth: nil,
-        reports: nil
+        reports: nil,
+        actionLog: nil
     )
+
+    // MARK: - Action Log
+
+    /// Retention policy for the local MDM-action audit trail. Without a
+    /// cap the log file grows forever (it previously had NO limit).
+    struct ActionLogSettings: Codable {
+        /// Days to keep entries; 0 = keep forever.
+        let retentionDays: Int?
+        /// Maximum number of entries; 0 = unlimited.
+        let maxEntries: Int?
+
+        var effectiveRetentionDays: Int { max(0, retentionDays ?? 365) }
+        var effectiveMaxEntries: Int { max(0, maxEntries ?? 10000) }
+
+        static let empty = ActionLogSettings(retentionDays: nil, maxEntries: nil)
+    }
 
     // MARK: - Computers
 

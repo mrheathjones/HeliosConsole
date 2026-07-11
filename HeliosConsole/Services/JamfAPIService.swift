@@ -515,8 +515,9 @@ class JamfAPIService {
         
         NSLog("✅ Generated client credentials")
         
-        // Default expiration to 90 days
-        let expirationDate = Calendar.current.date(byAdding: .day, value: 90, to: Date())
+        // Expiration from core jamfPro.userCredentialLifetimeDays (default 90)
+        let lifetimeDays = MDMConfigurationManager.shared.configuration.userCredentialLifetimeDays
+        let expirationDate = Calendar.current.date(byAdding: .day, value: lifetimeDays, to: Date())
         
         return JamfCredentials(
             clientID: clientId,
@@ -816,7 +817,7 @@ class JamfAPIService {
         // Generate mock credentials
         let clientID = "client_" + UUID().uuidString.prefix(12).lowercased()
         let clientSecret = "secret_" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        let expiresAt = Calendar.current.date(byAdding: .day, value: 90, to: Date())
+        let expiresAt = Calendar.current.date(byAdding: .day, value: MDMConfigurationManager.shared.configuration.userCredentialLifetimeDays, to: Date())
         
         return JamfCredentials(
             clientID: clientID,

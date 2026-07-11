@@ -132,7 +132,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .restart: return "This will restart the device and notify the user. Any unsaved work may be lost."
         case .restartSilent: return "This will restart the device without notifying the user. Any unsaved work may be lost."
         case .shutdown: return "This will shut down the device. The user will need physical access to turn it back on."
-        case .returnToService: return "This will (1) erase all data on the device, (2) remove its record from Jamf Pro once the erase is confirmed as issued, and (3) delete its device object from Microsoft Entra so it can re-register cleanly with PSSO / Company Portal. This action cannot be undone."
+        case .returnToService: return "This will (1) erase all data on the device, (2) remove its record from Jamf Pro once the erase is confirmed as issued, and (3) delete its device object from Microsoft Entra so the device can re-enroll cleanly. This action cannot be undone."
         case .viewLocalAdminPassword: return "This will retrieve and display the local administrator password for this device. This action is logged for security auditing."
         case .viewFileVaultKey: return "This will retrieve and display the FileVault personal recovery key for this device. This key can be used to unlock the encrypted disk. This action is logged for security auditing."
         case .sendBlankPush: return "This will send an APNs (Apple Push Notification) to the device, prompting it to check in with Jamf Pro. Use this to verify device connectivity or to trigger pending MDM commands."

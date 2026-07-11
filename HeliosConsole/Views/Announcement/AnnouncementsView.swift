@@ -180,21 +180,24 @@ struct AnnouncementsView: View {
                                 .font(.caption)
                         }
                         
+                        #if DEBUG
+                        // Testing helpers never ship to production builds.
                         Divider()
-                        
+
                         Section("Testing") {
                             Button {
                                 announcementService.addSampleAnnouncements()
                             } label: {
                                 Label("Add Sample Announcements", systemImage: "plus.circle")
                             }
-                            
+
                             Button {
                                 announcementService.clearLocalAnnouncements()
                             } label: {
                                 Label("Clear Test Announcements", systemImage: "trash")
                             }
                         }
+                        #endif
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 14, weight: .medium))
@@ -429,6 +432,8 @@ struct AnnouncementsView: View {
             }
             .padding(.top, 8)
             
+            #if DEBUG
+            // Testing helper never ships to production builds.
             Button {
                 announcementService.addSampleAnnouncements()
             } label: {
@@ -441,6 +446,7 @@ struct AnnouncementsView: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 16)
+            #endif
             
             Spacer()
         }

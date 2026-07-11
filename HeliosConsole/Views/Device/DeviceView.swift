@@ -715,8 +715,11 @@ struct DeviceView: View {
     // MARK: - Screen Share
     
     private func launchScreenShare() async {
-        // Prefer VPN IP if available (EA_VPN_IP_ADDRESS is hardcoded — future: config profile)
-        let vpnIP = getExtensionAttributeValue("EA_VPN_IP_ADDRESS")
+        // Prefer the VPN IP when the profile names the extension attribute
+        // that carries it (core jamfPro.vpnIPExtensionAttributeName;
+        // unset = use the reported LAN IP).
+        let vpnIP = configManager.configuration.vpnIPExtensionAttribute
+            .flatMap { getExtensionAttributeValue($0) }
         let hasVPN = vpnIP != nil && !vpnIP!.isEmpty && vpnIP!.uppercased() != "N/A"
         let targetIP = hasVPN ? vpnIP! : (displayComputer.ipAddress ?? "")
         
@@ -2529,8 +2532,10 @@ struct DeviceView: View {
     // MARK: - IP Address Card (VPN or Regular)
     
     private var ipAddressCard: some View {
-        // Check for VPN IP extension attribute first
-        let vpnIP = getExtensionAttributeValue("EA_VPN_IP_ADDRESS")
+        // Check for the configured VPN IP extension attribute first
+        // (core jamfPro.vpnIPExtensionAttributeName; unset = LAN IP only).
+        let vpnIP = configManager.configuration.vpnIPExtensionAttribute
+            .flatMap { getExtensionAttributeValue($0) }
         // Only consider VPN valid if it has a value that's not empty or "N/A"
         let hasVPN = vpnIP != nil && !vpnIP!.isEmpty && vpnIP!.uppercased() != "N/A"
         

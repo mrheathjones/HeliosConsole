@@ -67,6 +67,7 @@ class ActionLogService: ObservableObject {
         )
         
         logs.insert(entry, at: 0) // Newest first
+        applyRetention()
         saveToDisk()
         NSLog("📋 ActionLogService: Logged '%@' on '%@' — %@", actionName, deviceName, success ? "Success" : "Failed")
     }
@@ -153,6 +154,25 @@ class ActionLogService: ObservableObject {
         return csv
     }
     
+    /// Enforce the features-domain retention policy
+    /// (features actionLog.retentionDays / maxEntries; 0 = unlimited).
+    /// The audit trail previously grew without bound.
+    private func applyRetention() {
+        let settings = MDMConfigurationManager.shared.configuration
+            .features?.effectiveActionLog
+            ?? FeaturesConfiguration.ActionLogSettings.empty
+
+        let days = settings.effectiveRetentionDays
+        if days > 0, let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) {
+            logs.removeAll { $0.timestamp < cutoff }
+        }
+
+        let cap = settings.effectiveMaxEntries
+        if cap > 0 && logs.count > cap {
+            logs.removeLast(logs.count - cap) // logs are newest-first
+        }
+    }
+
     // MARK: - Private Persistence
     
     private func ensureDirectoryExists() {
@@ -171,6 +191,9 @@ class ActionLogService: ObservableObject {
             decoder.dateDecodingStrategy = .iso8601
             logs = try decoder.decode([ActionLogEntry].self, from: data)
             NSLog("✅ ActionLogService: Loaded %d log entries from disk", logs.count)
+            let before = logs.count
+            applyRetention()
+            if logs.count != before { saveToDisk() }
         } catch {
             NSLog("❌ ActionLogService: Failed to load logs: %@", error.localizedDescription)
         }

@@ -172,7 +172,11 @@ struct ABMDeviceListResponse: Codable {
 class ABMAPIService: ObservableObject {
     static let shared = ABMAPIService()
     
-    private let baseURL = "https://api-business.apple.com/v1"
+    /// AxM API host — Apple Business Manager or Apple School Manager,
+    /// selected by core appleBusinessManager.serviceType.
+    private var baseURL: String {
+        MDMConfigurationManager.shared.configuration.abmAPIBaseURL
+    }
     private let tokenURL = "https://account.apple.com/auth/oauth2/token"
     
     @Published var isConfigured: Bool = false

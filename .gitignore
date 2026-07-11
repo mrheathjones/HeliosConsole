@@ -34,3 +34,6 @@ DerivedData/
 
 # Distribution packages
 dist/
+
+# Machine-local deployment overrides (org/machine-specific values)
+Deployment/build-pkg.local.sh

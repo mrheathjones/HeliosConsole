@@ -32,9 +32,25 @@ struct MDMConfiguration: Codable {
     // DEPRECATED: the access domain's deviceActions allow-list is
     // authoritative for the screenShare action; no view reads this flag
     // anymore. Kept only until the core key is removed in a later major.
-    // NOTE: The extension attribute name "EA_VPN_IP_ADDRESS" is currently hardcoded.
-    // A future enhancement will make this configurable via Config Profile.
     let screenShareEnabled: Bool
+
+    /// Jamf Extension Attribute name holding a device's VPN IP (core
+    /// jamfPro.vpnIPExtensionAttributeName). nil = VPN-IP lookup disabled;
+    /// Screen Share and the IP card use the reported LAN IP.
+    let vpnIPExtensionAttribute: String?
+
+    /// Lifetime (days) for per-user Jamf API credentials provisioned by the
+    /// app (core jamfPro.userCredentialLifetimeDays, default 90).
+    let userCredentialLifetimeDays: Int
+
+    /// AxM API base URL (core appleBusinessManager.serviceType:
+    /// business → api-business.apple.com, school → api-school.apple.com).
+    let abmAPIBaseURL: String
+
+    /// Azure endpoints for the Entra cleanup flow (core entra.cloudInstance:
+    /// global / usgov / china).
+    let entraAuthorityHost: String
+    let entraGraphHost: String
     
     // Apple Business Manager API (optional)
     let abmClientId: String?
@@ -181,6 +197,11 @@ struct MDMConfiguration: Codable {
         connectionTimeoutSeconds: Int = 30,
         requestTimeoutSeconds: Int = 60,
         screenShareEnabled: Bool,
+        vpnIPExtensionAttribute: String? = nil,
+        userCredentialLifetimeDays: Int = 90,
+        abmAPIBaseURL: String = "https://api-business.apple.com/v1",
+        entraAuthorityHost: String = "login.microsoftonline.com",
+        entraGraphHost: String = "graph.microsoft.com",
         abmClientId: String?,
         abmKeyId: String?,
         abmPrivateKey: String?,
@@ -214,6 +235,11 @@ struct MDMConfiguration: Codable {
         self.connectionTimeoutSeconds = connectionTimeoutSeconds
         self.requestTimeoutSeconds = requestTimeoutSeconds
         self.screenShareEnabled = screenShareEnabled
+        self.vpnIPExtensionAttribute = vpnIPExtensionAttribute
+        self.userCredentialLifetimeDays = userCredentialLifetimeDays
+        self.abmAPIBaseURL = abmAPIBaseURL
+        self.entraAuthorityHost = entraAuthorityHost
+        self.entraGraphHost = entraGraphHost
         self.abmClientId = abmClientId
         self.abmKeyId = abmKeyId
         self.abmPrivateKey = abmPrivateKey
@@ -300,12 +326,17 @@ struct MDMConfiguration: Codable {
             appTitle: uiSettings?.effectiveAppTitle ?? "Helios",
             appSubtitle: uiSettings?.effectiveAppSubtitle ?? "Console",
             sidebarItems: sidebarItems,
-            requiredRoleName: jamfPro?.effectiveRequiredRoleName ?? "SVC_WATCHER_USER",
+            requiredRoleName: jamfPro?.effectiveRequiredRoleName ?? "HeliosConsoleAPIRole",
             supportURL: uiSettings?.effectiveSupportURL,
             localAdminUsername: core?.localAdministration?.effectiveUsername ?? "macadmin",
             connectionTimeoutSeconds: jamfPro?.effectiveConnectionTimeout ?? 30,
             requestTimeoutSeconds: jamfPro?.effectiveRequestTimeout ?? 60,
             screenShareEnabled: jamfPro?.effectiveScreenShareEnabled ?? false,
+            vpnIPExtensionAttribute: jamfPro?.effectiveVPNIPExtensionAttributeName,
+            userCredentialLifetimeDays: jamfPro?.effectiveUserCredentialLifetimeDays ?? 90,
+            abmAPIBaseURL: (core?.appleBusinessManager?.effectiveServiceType ?? .business).apiBaseURL,
+            entraAuthorityHost: (core?.entra?.effectiveCloudInstance ?? .global).authorityHost,
+            entraGraphHost: (core?.entra?.effectiveCloudInstance ?? .global).graphHost,
             abmClientId: abmClientId,
             abmKeyId: abmKeyId,
             abmPrivateKey: abmPrivateKey,
@@ -372,7 +403,7 @@ struct MDMConfiguration: Codable {
         appTitle: "Helios",
         appSubtitle: "Console",
         sidebarItems: defaultSidebarItems,
-        requiredRoleName: "SVC_WATCHER_USER",
+        requiredRoleName: "HeliosConsoleAPIRole",
         supportURL: nil,
         localAdminUsername: "macadmin",
         screenShareEnabled: false,
