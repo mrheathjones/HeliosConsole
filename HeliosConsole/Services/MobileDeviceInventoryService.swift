@@ -260,16 +260,14 @@ final class MobileDeviceInventoryService: ObservableObject {
         
         let endpoint = "/api/v2/mobile-devices/detail"
 
-        // Sections come from features.mobileDevices.inventorySections
-        // (default = the full list the detail views render). Sanitized:
-        // Jamf section names are UPPER_SNAKE; anything else would 400 the
-        // whole fetch.
-        let sectionNames = MDMConfigurationManager.shared.configuration
-            .features?.effectiveMobileDevices.effectiveInventorySections
-            ?? FeaturesConfiguration.MobileDevicesSettings.defaultInventorySections
+        // Sections come from features.mobileDevices.inventorySections,
+        // validated against the values /api/v2/mobile-devices/detail
+        // accepts. The mobile vocabulary differs from computers (PROFILES /
+        // GROUPS, not CONFIGURATION_PROFILES / GROUP_MEMBERSHIPS); an
+        // invalid section 400s the whole fetch. Falls back to the default.
+        let sectionNames = (MDMConfigurationManager.shared.configuration
+            .features?.effectiveMobileDevices ?? .empty).validatedInventorySections
         let sections = sectionNames
-            .map { $0.uppercased().filter { $0.isLetter || $0 == "_" } }
-            .filter { !$0.isEmpty }
             .map { "section=\($0)" }
             .joined(separator: "&")
         

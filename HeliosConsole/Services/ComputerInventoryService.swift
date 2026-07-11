@@ -258,15 +258,12 @@ final class ComputerInventoryService: ObservableObject {
         let sortParam = "\(sortField):\(sortOrder)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "\(sortField):\(sortOrder)"
         
         let endpoint = "/api/v1/computers-inventory"
-        // Sections come from features.computers.inventorySections (default =
-        // the full list the detail views render). Sanitized: Jamf section
-        // names are UPPER_SNAKE; anything else would 400 the whole fetch.
-        let sectionNames = MDMConfigurationManager.shared.configuration
-            .features?.effectiveComputers.effectiveInventorySections
-            ?? FeaturesConfiguration.ComputersSettings.defaultInventorySections
+        // Sections come from features.computers.inventorySections, validated
+        // against the values /api/v1/computers-inventory accepts (an invalid
+        // one 400s the whole request). Falls back to the default list.
+        let sectionNames = (MDMConfigurationManager.shared.configuration
+            .features?.effectiveComputers ?? .empty).validatedInventorySections
         let sections = sectionNames
-            .map { $0.uppercased().filter { $0.isLetter || $0 == "_" } }
-            .filter { !$0.isEmpty }
             .map { "section=\($0)" }
             .joined(separator: "&")
         let queryParams = "\(sections)&page=\(page)&page-size=\(pageSize)&sort=\(sortParam)"
