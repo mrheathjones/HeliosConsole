@@ -49,7 +49,7 @@
     "deviceActions": {
       "type": "object",
       "title": "Device Actions (allow-list)",
-      "description": "STRICT FAIL-CLOSED per-action allow-list for the device Actions menu. If no actions array is delivered for a platform, that platform's Actions menu is HIDDEN ENTIRELY. If the array is present, ONLY listed actions with enabled=true are shown (and executable) — an id not listed, or listed with enabled=false, is hidden AND blocked at execution. Unknown ids are ignored (logged once) so newer profiles deploy safely to older app builds. The computer id \"wipe\" is now IMPLEMENTED — a bare erase (ERASE_DEVICE with recovery PIN) that ALWAYS waits for the device to acknowledge and keeps the Jamf record and Entra object; lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, and runPolicy remain reserved — granting them renders nothing. displayName overrides the menu label only. LEGACY: the pre-2.1 boolean-map shape (e.g. computer.restart=true) is still decoded — explicitly delivered keys become grants — but the old per-key defaults are no longer applied; migrate to the actions array. The core domain's jamfPro.screenShareEnabled key is DEPRECATED: once an allow-list is delivered it is authoritative for screenShare too.",
+      "description": "STRICT FAIL-CLOSED per-action allow-list for the device Actions menu. If no actions array is delivered for a platform, that platform's Actions menu is HIDDEN ENTIRELY. If the array is present, ONLY listed actions with enabled=true are shown (and executable) — an id not listed, or listed with enabled=false, is hidden AND blocked at execution. Unknown ids are ignored (logged once) so newer profiles deploy safely to older app builds. The computer id \"wipe\" is now IMPLEMENTED — a bare erase (ERASE_DEVICE with recovery PIN) that ALWAYS waits for the device to acknowledge and keeps the Jamf record and Entra object; lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, and runPolicy remain reserved — granting them renders nothing. displayName overrides the menu label only. LEGACY: the app still decodes the pre-2.1 boolean-map shape (e.g. computer.restart=true) when no actions array is delivered — explicitly delivered keys become grants, and the old per-key defaults are no longer applied — but this schema (2.1+) exposes ONLY the actions array; computer/mobileDevice reject any other property, so profiles built or edited from this schema cannot reintroduce the old flat keys. Migrate deployed legacy profiles to the actions array. The core domain's jamfPro.screenShareEnabled key is DEPRECATED: once an allow-list is delivered it is authoritative for screenShare too.",
       "properties": {
         "computer": {
           "type": "object",
@@ -202,7 +202,8 @@
                 }
               ]
             }
-          }
+          },
+          "additionalProperties": false
         },
         "mobileDevice": {
           "type": "object",
@@ -280,7 +281,8 @@
                 }
               ]
             }
-          }
+          },
+          "additionalProperties": false
         }
       }
     }
