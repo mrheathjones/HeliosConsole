@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema version for compatibility checking (informational — the loader logs it, nothing else reads it)",
-      "default": "2.1"
+      "default": "2.2"
     },
     "jamfPro": {
       "type": "object",
