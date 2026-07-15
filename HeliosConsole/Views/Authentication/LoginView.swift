@@ -31,8 +31,10 @@ struct LoginView: View {
         }
         .onAppear {
             showContent = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                emailFieldFocused = true
+            if viewModel.signInMethod == .email {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    emailFieldFocused = true
+                }
             }
         }
     }
@@ -70,8 +72,18 @@ struct LoginView: View {
         VStack(spacing: 32) {
             headerSection
             errorSection
-            emailInputSection
-            continueButton
+            if viewModel.signInMethod == .entra {
+                if viewModel.isEntraSignInConfigured {
+                    entraSignInSection
+                } else {
+                    // FAIL-CLOSED: entra selected but unusable — show the
+                    // configuration error, never the weaker email form.
+                    configurationErrorSection
+                }
+            } else {
+                emailInputSection
+                continueButton
+            }
             helpSection
         }
         .frame(maxWidth: 480)
@@ -92,14 +104,21 @@ struct LoginView: View {
         VStack(spacing: 12) {
             logoHeader
             
-            Text(viewModel.hasSeenWelcome ? "Welcome back" : "Sign in with your email")
+            Text(headerSubtitle)
                 .font(.system(size: 16))
                 .foregroundColor(.gray)
         }
         .opacity(showContent ? 1 : 0)
         .offset(y: showContent ? 0 : -20)
     }
-    
+
+    private var headerSubtitle: String {
+        if viewModel.hasSeenWelcome { return "Welcome back" }
+        return viewModel.signInMethod == .entra
+            ? "Sign in with your work account"
+            : "Sign in with your email"
+    }
+
     private var logoHeader: some View {
         HStack(spacing: 12) {
             Text(Branding.title)
@@ -213,8 +232,77 @@ struct LoginView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
+    // MARK: - Entra Sign-In Section
+
+    private var entraSignInSection: some View {
+        VStack(spacing: 20) {
+            if viewModel.isLoading {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+
+                    Text("Waiting for Microsoft sign-in…")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+
+                    Spacer()
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+            } else {
+                SSOButton(icon: "person.badge.key.fill", title: "Sign in with Microsoft") {
+                    viewModel.loginWithEntra()
+                }
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.blue)
+
+                Text("You'll sign in through your organization's Microsoft account")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .opacity(showContent ? 1 : 0)
+        .offset(y: showContent ? 0 : 20)
+    }
+
+    // MARK: - Configuration Error Section
+
+    /// Entra mode with missing tenant/client id: fail-closed dead end —
+    /// there is deliberately no email fallback here.
+    private var configurationErrorSection: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.shield.fill")
+                .font(.system(size: 44, weight: .light))
+                .foregroundColor(.orange)
+
+            Text("Sign-in is not configured on this Mac")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text("Contact your administrator.")
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .opacity(showContent ? 1 : 0)
+    }
+
     // MARK: - Continue Button
-    
+
     private var continueButton: some View {
         Button(action: login) {
             HStack {

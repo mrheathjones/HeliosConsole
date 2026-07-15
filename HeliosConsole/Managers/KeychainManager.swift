@@ -24,6 +24,7 @@ class KeychainManager {
         static let userEmail = "com.herojoneslabs.helios.console.userEmail"
         static let userName = "com.herojoneslabs.helios.console.userName"
         static let refreshToken = "com.herojoneslabs.helios.console.refreshToken"
+        static let entraRefreshToken = "com.herojoneslabs.helios.console.entraRefreshToken"
         static let jamfCredentials = "com.herojoneslabs.helios.console.jamfCredentials"
     }
     
@@ -106,6 +107,18 @@ class KeychainManager {
         return delete(key: Keys.refreshToken)
     }
     
+    func saveEntraRefreshToken(_ token: String) -> Bool {
+        return saveString(token, forKey: Keys.entraRefreshToken)
+    }
+
+    func loadEntraRefreshToken() -> String? {
+        return loadString(forKey: Keys.entraRefreshToken)
+    }
+
+    func deleteEntraRefreshToken() -> Bool {
+        return delete(key: Keys.entraRefreshToken)
+    }
+
     func saveUserEmail(_ email: String) -> Bool {
         return saveString(email, forKey: Keys.userEmail)
     }
@@ -133,6 +146,7 @@ class KeychainManager {
     func clearAllAuthData() {
         _ = deleteAuthToken()
         _ = deleteRefreshToken()
+        _ = deleteEntraRefreshToken()
         _ = deleteUserEmail()
         _ = deleteUserName()
     }

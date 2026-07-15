@@ -115,6 +115,47 @@
 				<string>com.herojoneslabs.helios.console.entra</string>
 			</dict>
 			-->
+
+			<!-- Optional interactive sign-in. Omit the block (as here) to
+			     keep the built-in email flow. method=entra replaces the
+			     email form with Microsoft Entra ID sign-in via a SEPARATE
+			     PUBLIC-client app registration (no secret exists for it,
+			     ever). Distinct from the entra cleanup pointer above.
+			     FAIL-CLOSED: entra with missing tenantId/clientId shows a
+			     configuration error, never the email form. Also enable
+			     "Assignment required" on the enterprise application so the
+			     restriction is enforced Entra-side too. cleanupRoles (empty
+			     below = admins only) may list extra app-role values, e.g.
+			     Helios.CleanupTech, that grant the Cleanup module in
+			     addition to adminRoles. The ids below are
+			     clearly-fake placeholders: set your real GUIDs in Jamf,
+			     never in this repo. -->
+			<!--
+			<key>signIn</key>
+			<dict>
+				<key>method</key>
+				<string>entra</string>
+				<key>entra</key>
+				<dict>
+					<key>tenantId</key>
+					<string>00000000-0000-0000-0000-000000000000</string>
+					<key>clientId</key>
+					<string>11111111-1111-1111-1111-111111111111</string>
+					<key>adminRoles</key>
+					<array>
+						<string>Helios.Admin</string>
+					</array>
+					<key>operatorRoles</key>
+					<array>
+						<string>Helios.Operator</string>
+					</array>
+					<key>cleanupRoles</key>
+					<array/>
+					<key>provisionJamfCredentials</key>
+					<true/>
+				</dict>
+			</dict>
+			-->
 		</dict>
 
 		<!-- ============================================================
@@ -196,7 +237,16 @@
 			     the device Actions menu is HIDDEN ENTIRELY. Only actions
 			     listed with enabled=true appear; unlisted or disabled ids
 			     are hidden AND blocked at execution. displayName overrides
-			     the menu label only. See schemas/Helios_Access_SCHEMA.json. -->
+			     the menu label only. See schemas/Helios_Access_SCHEMA.json.
+
+			     requiredTier (2.3+, optional): minimum signed-in USER tier
+			     ("Admin"/"Operator") per action — a second gate on top of
+			     this machine-scoped allow-list, consulted ONLY when the
+			     core payload sets signIn.method=entra (email mode ignores
+			     it). Omitted = the action's built-in default; any unknown
+			     value fails closed to Admin. Two illustrative entries
+			     below (sendBlankPush, returnToService) set it explicitly
+			     to their built-in defaults. -->
 			<key>deviceActions</key>
 			<dict>
 				<key>computer</key>
@@ -206,6 +256,7 @@
 						<dict>
 							<key>id</key><string>sendBlankPush</string>
 							<key>enabled</key><true/>
+							<key>requiredTier</key><string>Operator</string>
 						</dict>
 						<dict>
 							<key>id</key><string>restart</string>
@@ -261,6 +312,7 @@
 						<dict>
 							<key>id</key><string>returnToService</string>
 							<key>enabled</key><false/>
+							<key>requiredTier</key><string>Admin</string>
 							<key>options</key>
 							<dict>
 								<key>deleteJamfRecord</key><true/>

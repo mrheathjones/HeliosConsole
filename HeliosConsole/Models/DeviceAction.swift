@@ -103,6 +103,49 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         self != .screenShare
     }
 
+    // MARK: - User-tier classification
+
+    /// Built-in minimum user tier for this action, enforced by
+    /// DeviceActionPolicy ONLY when Entra sign-in is active (core
+    /// signIn.method=entra) — email mode ignores tiers entirely. The access
+    /// profile can override per action via `requiredTier` on the allow-list
+    /// entry (overrides resolve fail-closed UPWARD; see AccessConfiguration).
+    ///
+    /// Classification: anything that destroys data, changes security state,
+    /// discloses a credential, or takes over the device is `.admin`; only
+    /// informational pings and benign peripheral toggles are `.operator`.
+    /// Every case is listed deliberately — no default clause — so adding an
+    /// action forces an explicit tier decision.
+    var defaultMinimumTier: UserAccessTier {
+        switch self {
+        // Benign: an APNs check-in nudge and peripheral-connectivity
+        // toggles — disruptive at most, never destructive or
+        // privilege-expanding.
+        case .sendBlankPush, .enableBluetooth, .disableBluetooth:
+            return .operator
+        // Remote-access security state (both directions — disable also
+        // kills active sessions; in-doubt cases resolve upward).
+        case .enableRemoteDesktop, .disableRemoteDesktop:
+            return .admin
+        // Interactive control of the device's screen.
+        case .screenShare:
+            return .admin
+        // Forced interruption / availability loss (shutdown needs physical
+        // access to recover; the silent restart doesn't even warn the user).
+        case .restart, .restartSilent, .shutdown:
+            return .admin
+        // Data destruction (Return to Service also deletes management records).
+        case .wipe, .returnToService:
+            return .admin
+        // Credential disclosure (LAPS password / FileVault recovery key).
+        case .viewLocalAdminPassword, .viewFileVaultKey:
+            return .admin
+        // Account security state change.
+        case .unlockUserAccount:
+            return .admin
+        }
+    }
+
     // MARK: - Confirmation dialog copy
     // Deliberately NOT profile-overridable: a menu-label rename must never
     // be able to soften the safety copy on a destructive action.

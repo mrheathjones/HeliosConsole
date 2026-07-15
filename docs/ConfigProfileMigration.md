@@ -80,11 +80,13 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 | `deviceActions.computer.wipe` (bool) | **access** | `deviceActions.computer.actions[id=wipe]` | **ENFORCED — now IMPLEMENTED**: bare `ERASE_DEVICE` (recovery PIN, typed ERASE confirmation), MANDATORY acknowledgment wait, Jamf record and Entra object kept; schema default **disabled** |
 | — (NEW in 2.1) | **access** | `deviceActions.computer.actions[id=returnToService].options.deleteJamfRecord` / `.deleteEntraObject` | **ENFORCED** — per-step cleanup toggles for Return to Service; defaults **true/true** preserve the original full-decommission behavior for already-deployed profiles; `deleteEntraObject` auto-skips when Entra isn't configured; NO cleanup step runs unless the erase is acknowledged |
 | — (NEW in 2.1) | core | `jamfPro.eraseAckTimeoutSeconds` / `jamfPro.eraseAckPollIntervalSeconds` | **ENFORCED** — EVERY erase (Erase Device / Return to Service) waits for the `ERASE_DEVICE` acknowledgment (defaults 180 s timeout / 15 s poll interval; clamped 30–1800 / 5–120) |
+| — (NEW in core 2.3) | core | `signIn.*` — interactive sign-in (method + public-client Entra settings) | **ENFORCED** — login flow + access-tier resolution; see the *Interactive sign-in* section below for the per-key table and fail-closed rules |
+| — (NEW in access 2.3) | **access** | `deviceActions.*.actions[].requiredTier` — per-action minimum user tier (`Admin` / `Operator`) | **ENFORCED** — DeviceView actionsMenu + executeAction, active ONLY when `signIn.method=entra`; omitted = the action's built-in tier; unknown values fail closed to **Admin**; see the *User-tier gating* section below |
 | `userInterface.supportURL` | ui | `userInterface.supportURL` | **ENFORCED** — LoginView |
 | `userInterface.appTitle` / `appSubtitle` | ui | same keys (`appSubtitle` default now `"Console"`) | **ENFORCED** — all brand surfaces via the Branding helper (empty appSubtitle hides the badge) |
 | `userInterface.companyName` / `logoURL` / `accentColor` / `defaultColorScheme` / `showEnrollments` / `showAnnouncements` / `showSettings` | ui | same keys + NEW `tagline` / `footerText` / `documentationURL` / `feedbackURL` | **ENFORCED** — Branding helper feeds every brand surface: appTitle/appSubtitle (login, welcome, sidebar, biometric prompt, menu bar, About, PDF footer, export filenames, logout/biometric copy), accentColor (brand gradients derive from it when delivered; built-in blue→cyan otherwise), logoURL (BrandMark replaces the built-in sun tile), companyName (fallback = product name), defaultColorScheme (seeds first-launch appearance; user's own choice wins thereafter), show* switches (sidebar). supportURL placeholder fallback removed — absent key hides the login help link and About row. documentationURL/feedbackURL wire the previously dead About links + welcome Learn More |
 | `SidebarItems` (top-level, PascalCase) | ui | **`sidebarItems`** (RENAMED — camelCase) | **ENFORCED** — SidebarView renders from the configured list (presence/order/label/icon; ids must be route ids: dashboard, devices, announcements, logs, reports, enrollments, settings; unknown ids skipped; Cleanup stays role-gated; Settings pinned + gated by `showSettings`). Built-in default list fixed — it referenced routes (enterprise/groundcontrol/depsearch) that never existed |
-| `authentication.*` | ui | `authentication.*` (unchanged) | Parsed, **NOT yet enforced** in views |
+| `authentication.*` | ui | `authentication.*` (unchanged) | **ENFORCED** (as of the Entra sign-in PR — previously parsed only) — `requireBiometric`, `allowBiometricSetup`, `sessionTimeout`, and `allowRememberMe` are enforced by the sign-in/session layer. Keys, types, and defaults unchanged |
 | `role` (top-level) | **access** | `role` — **default `"Admin"` DROPPED**; no default, fail-closed | **ENFORCED** — Cleanup gate (SidebarView / SettingsView) |
 | `cleanup.staleDays` | access | `cleanup.staleDays` (default now **90**; Int or String accepted) | **ENFORCED as a default** — CleanupSettings / CleanupDashboardView; an in-app edit stores a local override that wins (§4 step 6) |
 | `cleanup.defaultStaticGroupID` / `defaultSiteID` | access | same keys (strings; parsed to Int downstream) | **ENFORCED** — CleanupSettings / CleanupDashboardView |
@@ -118,6 +120,118 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 
 If your old profile relied on an *absent* `screenShareEnabled`, `appleBusinessManager.enabled`,
 or `jamfProtect.enabled` resolving to `true`, you must now deliver the key explicitly.
+
+### Interactive sign-in (`signIn` block — NEW in core 2.3)
+
+The core domain now configures **how users sign into Helios itself**. This is separate from
+the `entra` cleanup pointer (app-only Graph credentials for Return to Service): `signIn.entra`
+targets a **separate PUBLIC-client Entra app registration** — a public client has no client
+secret, so no secret exists for it anywhere, by design. An absent `signIn` block (or
+`method=email`) keeps the built-in email flow **unchanged** — existing deployments need no
+profile change.
+
+| Key | Type | Default | Enforced where |
+|---|---|---|---|
+| `signIn.method` | string enum `email` / `entra` (case-insensitive) | `email` | Login flow — `entra` replaces the email form with Entra ID sign-in |
+| `signIn.entra.tenantId` | string (GUID) | — (required for Entra sign-in) | EntraAuthService — interactive token requests |
+| `signIn.entra.clientId` | string (GUID; public client, never paired with a secret) | — (required for Entra sign-in) | EntraAuthService — interactive token requests |
+| `signIn.entra.cloudInstance` | string enum `global` / `usgov` / `china` | `global` | EntraAuthService — token authority host (same mapping as `entra.cloudInstance`) |
+| `signIn.entra.adminRoles` | array of strings (app-role values, roles claim) | `["Helios.Admin"]` | Access-tier resolution after sign-in — grants the **admin** tier |
+| `signIn.entra.operatorRoles` | array of strings | `["Helios.Operator"]` | Access-tier resolution after sign-in — grants the **operator** tier |
+| `signIn.entra.cleanupRoles` | array of strings (app-role values) | `[]` = admins only | Cleanup gate — listed roles grant the Cleanup module **in addition to** admin-tier users; grants **no** device-action tier (a cleanup-only user signs in at tier `None`); the Mac still needs access `role=Admin` |
+| `signIn.entra.allowedGroupIds` | array of strings (group object ids) | `[]` = no group check | Optional extra client-side membership check via the token's groups claim |
+| `signIn.entra.provisionJamfCredentials` | boolean | `true` | Per-user Jamf API client provisioning from the verified email after Entra sign-in |
+
+**Fail-closed rules (deliberate — mirror the access domain's `role` gate):**
+
+- `method=entra` with a missing/blank `tenantId` or `clientId` → sign-in is **blocked with a
+  configuration-error state**. The app **never falls back to the email flow** — a
+  misconfigured profile must not silently downgrade to the weaker sign-in path. (In code:
+  `signInMethod` stays `.entra` while `isEntraSignInConfigured` is `false`.)
+- A token carrying **none** of the admin, operator, or cleanup role values → **no access**.
+  Roles absent means denied, never defaulted up. (A cleanup-only match is a valid sign-in
+  at tier `None` — Cleanup plus read surfaces, nothing tier-gated.)
+- A **delivered empty** `adminRoles` / `operatorRoles` array is honored verbatim: it grants
+  that tier to no one. Only an *absent* key receives the documented default; entries are
+  trimmed and empty strings dropped. `cleanupRoles` defaults to `[]` either way — absent or
+  delivered-empty, it grants nothing beyond admins.
+- Enforce the restriction **Entra-side too**: enable *Assignment required* on the enterprise
+  application and assign only the intended users/groups — the client-side checks here are a
+  UX gate, not a security boundary on their own.
+- Prefer app roles over `allowedGroupIds`: the groups claim is subject to Entra's overage
+  limit and can arrive **empty** for users in many groups, which the group check then fails.
+  The roles claim is never subject to overage.
+
+### User-tier gating (Entra sign-in — access 2.3)
+
+When Entra sign-in is active (`signIn.method=entra` in the core domain), feature and
+device-action gating becomes **two independent layers**. Both must allow — a fail-closed
+intersection; neither layer can expand what the other denies:
+
+| Layer | Scope | Source | Gates |
+|---|---|---|---|
+| 1 (existing) | **Machine** — which Mac the operator sits at | access domain `role` + `deviceActions` allow-list (+ features `enableAPIActions` kill switch) | Cleanup visibility; which action ids exist in the Actions menu at all |
+| 2 (new) | **User** — who is signed in | User access tier resolved from the Entra token's roles claim (`signIn.entra.adminRoles` / `operatorRoles`) | Per-action minimum tier; Cleanup requires the **admin** tier or a `signIn.entra.cleanupRoles` role |
+
+In **email sign-in mode layer 2 is inert** — every tier check passes and behavior is
+byte-for-byte identical to pre-tier builds. Existing deployments that never deliver
+`signIn` need no profile change and see no difference. In entra mode a user whose token
+grants **no** tier (`None`) passes no tier check — nothing tier-gated shows. That state
+is reachable only by a **cleanup-only** user (a token matching `cleanupRoles` but no tier
+list): they see the Cleanup module and read surfaces, zero tier-gated device actions —
+fail-closed by construction. Tokens matching no configured role at all are refused at
+sign-in.
+
+**Built-in per-action tiers** (the defaults when an entry omits `requiredTier`):
+
+| Action id | Default tier | Why |
+|---|---|---|
+| `sendBlankPush` | Operator | Purely informational APNs check-in nudge |
+| `enableBluetooth` | Operator | Peripheral-connectivity toggle; no data/security impact |
+| `disableBluetooth` | Operator | Same — disruptive at most (disconnects peripherals) |
+| `enableRemoteDesktop` | Admin | Opens remote access — security-state change |
+| `disableRemoteDesktop` | Admin | Alters the same remote-access posture, kills active sessions; in-doubt cases resolve upward |
+| `screenShare` | Admin | Opens an interactive screen-control session of the device |
+| `restart` | Admin | Forced interruption; unsaved-work loss |
+| `restartSilent` | Admin | Same, without even warning the user |
+| `shutdown` | Admin | Takes the device offline until someone has physical access |
+| `wipe` | Admin | Permanently destroys all data |
+| `returnToService` | Admin | Destroys all data and deletes management records |
+| `viewLocalAdminPassword` | Admin | Discloses the LAPS admin credential |
+| `viewFileVaultKey` | Admin | Discloses the disk-encryption recovery key |
+| `unlockUserAccount` | Admin | Changes account security state |
+
+(Reserved ids — `lock`, `updateInventory`, `viewRecoveryLockPassword`, `renewMDMProfile`,
+`sendCustomCommand`, `installPackage`, `runPolicy` — render nothing regardless of tier.)
+
+**`requiredTier` override semantics + fail-closed rules (deliberate):**
+
+- Each `deviceActions.*.actions[]` entry accepts an optional `requiredTier`
+  (`"Admin"` / `"Operator"`) that **overrides** the built-in tier for that action —
+  in either direction (you may open `restart` to operators, or lock `sendBlankPush`
+  to admins).
+- **Unknown value → Admin.** Anything other than exactly `"Admin"` or `"Operator"` —
+  a typo, wrong case, or `"None"` — resolves to **Admin** (fail-closed **upward**:
+  a malformed value must restrict, never expand; `"None"` is rejected precisely
+  because it would pass every tier check).
+- **Email mode → tier layer inert.** `requiredTier` keys are ignored entirely when
+  `signIn.method` is not `entra`.
+- **Cleanup is gated by a role set, not `requiredTier`** — it is not a device action
+  and no `requiredTier` key touches it. Under entra sign-in Cleanup shows only for
+  machine `role=Admin` **and** a user who either holds the admin tier (admin roles
+  always qualify) or carries an app role listed in the core domain's
+  `signIn.entra.cleanupRoles` (default empty = admins only). Email mode is unchanged —
+  machine `role=Admin` alone decides.
+- The machine allow-list stays authoritative for **existence**: an action that is not
+  granted (or is `enabled=false`) in layer 1 stays hidden and blocked no matter what
+  tier the user holds.
+
+**Revocation:** the tier is resolved from the token at sign-in. Removing a user's Entra
+app-role assignment (or the whole assignment) takes effect at the user's **next launch /
+sign-in and at the next idle-lock unlock** (both redeem the refresh token and re-derive
+the tier from the fresh token) — an actively-used session is not re-evaluated mid-flight.
+For immediate lockout, disable the user or revoke sessions in Entra and enforce
+*Assignment required* on the enterprise application.
 
 ---
 

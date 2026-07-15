@@ -120,6 +120,13 @@ struct MDMConfiguration: Codable {
     /// appTitle/appSubtitle/supportURL.
     let userInterfaceExtras: UserInterfaceSettings?
 
+    /// Interactive sign-in configuration (core domain `signIn` block) —
+    /// how users sign into the app itself: built-in email flow (default)
+    /// or Microsoft Entra ID via a separate PUBLIC-client app registration.
+    /// Distinct from the app-only `entra*` cleanup credentials above.
+    /// Consumed via the `signInMethod` / `entraSignIn*` accessors below.
+    let signIn: CoreConfiguration.SignInSettings?
+
     /// Whether Entra device cleanup can run: tenant + client id must be present
     /// along with at least one credential (certificate PEM or client secret).
     var isEntraConfigured: Bool {
@@ -166,8 +173,120 @@ struct MDMConfiguration: Codable {
         return parsed
     }
 
-    /// Whether the Cleanup feature should be available to this operator.
-    var isCleanupAdmin: Bool { appRole == .admin }
+    /// Machine-scoped Cleanup predicate — private by design: callers must
+    /// go through the composed `isCleanupPermitted(tier:roles:)` gate so
+    /// the user layer can never be bypassed.
+    private var isCleanupAdmin: Bool { appRole == .admin }
+
+    /// Composed Cleanup gate — both layers must allow: the machine-scoped
+    /// access-domain role (`isCleanupAdmin`) AND, when Entra sign-in is
+    /// active, the signed-in user. Admin-tier users always qualify;
+    /// `signIn.entra.cleanupRoles` EXTENDS the grant to holders of any
+    /// listed app role. The role check is a non-disjoint intersection, so
+    /// the default-empty cleanup list can never match anything — absent or
+    /// delivered-empty keeps exactly the admins-only behavior (fail-closed).
+    /// In email mode the user layer is inert (identical to
+    /// `isCleanupAdmin` alone).
+    func isCleanupPermitted(tier: UserAccessTier, roles: [String]) -> Bool {
+        isCleanupAdmin && (
+            signInMethod != .entra
+                || tier >= .admin
+                || !Set(roles).isDisjoint(with: effectiveEntraCleanupRoles)
+        )
+    }
+
+    // MARK: - Interactive sign-in (core signIn block; strict fail-closed)
+
+    /// How users sign into the app.
+    enum SignInMethod: String {
+        case email
+        case entra
+    }
+
+    /// Resolved sign-in method. Case-insensitive: only "entra" selects the
+    /// Entra flow; anything else — or an absent `signIn` block — is the
+    /// built-in email flow (backward compatible: a fleet that never
+    /// delivers `signIn` keeps the email flow unchanged).
+    var signInMethod: SignInMethod {
+        let raw = signIn?.method?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return raw == SignInMethod.entra.rawValue ? .entra : .email
+    }
+
+    /// Whether the Entra sign-in flow is selected AND usable: method is
+    /// "entra" with non-empty tenantId and clientId. FAIL-CLOSED: when
+    /// `signInMethod == .entra` but this is false, the login UI must show
+    /// a configuration-error state — NEVER the email form (see
+    /// `entraSignInRequired`); a misconfigured profile must not silently
+    /// downgrade to the weaker email flow.
+    var isEntraSignInConfigured: Bool {
+        signInMethod == .entra
+            && !entraSignInTenantId.isEmpty
+            && !entraSignInClientId.isEmpty
+    }
+
+    /// Entra tenant id for interactive sign-in ("" when absent).
+    var entraSignInTenantId: String {
+        signIn?.entra?.tenantId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    /// Application (client) id of the PUBLIC-client app registration for
+    /// interactive sign-in ("" when absent). Not secret — and no secret
+    /// is ever paired with it.
+    var entraSignInClientId: String {
+        signIn?.entra?.clientId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    /// OAuth token authority host for interactive sign-in, resolved from
+    /// signIn.entra.cloudInstance via the shared CloudInstance mapping
+    /// (default global → login.microsoftonline.com).
+    var entraSignInAuthorityHost: String {
+        (signIn?.entra?.effectiveCloudInstance ?? .global).authorityHost
+    }
+
+    /// App-role values granting the ADMIN tier (absent key →
+    /// the documented default; entries trimmed, empties dropped). A
+    /// DELIVERED empty list grants the tier to no one — fail-closed.
+    var effectiveEntraAdminRoles: [String] {
+        signIn?.entra?.effectiveAdminRoles
+            ?? CoreConfiguration.EntraSignInSettings.defaultAdminRoles
+    }
+
+    /// App-role values granting the OPERATOR tier (absent key → the
+    /// documented default; same semantics as `effectiveEntraAdminRoles`).
+    var effectiveEntraOperatorRoles: [String] {
+        signIn?.entra?.effectiveOperatorRoles
+            ?? CoreConfiguration.EntraSignInSettings.defaultOperatorRoles
+    }
+
+    /// App-role values granting the CLEANUP module in addition to
+    /// admin-tier users (default [] = admins only). No named default role
+    /// exists — extending Cleanup beyond admins is strictly opt-in; entries
+    /// are trimmed and empties dropped like the tier lists.
+    var effectiveEntraCleanupRoles: [String] {
+        signIn?.entra?.effectiveCleanupRoles ?? []
+    }
+
+    /// Entra group OBJECT ids the signed-in user must be a member of
+    /// (verified via the token's groups claim). Default [] = no group
+    /// check. Prefer app roles — the groups claim is overage-limited.
+    var effectiveEntraAllowedGroupIds: [String] {
+        signIn?.entra?.effectiveAllowedGroupIds ?? []
+    }
+
+    /// Whether to still provision the per-user Jamf API client from the
+    /// verified email after Entra sign-in (default true).
+    var effectiveProvisionJamfCredentials: Bool {
+        signIn?.entra?.effectiveProvisionJamfCredentials ?? true
+    }
+
+    /// Whether the Entra sign-in flow is REQUIRED: true whenever the
+    /// method is "entra", even when misconfigured
+    /// (`isEntraSignInConfigured == false`). The email path must be
+    /// hidden in that case — the login UI shows a configuration error
+    /// instead of falling back to the weaker email flow.
+    var entraSignInRequired: Bool { signInMethod == .entra }
 
     // MARK: - Device action policies (strict fail-closed)
 
@@ -178,7 +297,7 @@ struct MDMConfiguration: Codable {
     /// authoritative for Screen Share too — the legacy core-domain
     /// `jamfPro.screenShareEnabled` key is deprecated and ignored.
     var computerActionPolicy: DeviceActionPolicy {
-        DeviceActionPolicy(
+        deviceActionPolicy(
             grants: deviceActions?.computer?.grantsByID,
             apiActionsEnabled: features?.effectiveComputers.effectiveEnableAPIActions ?? true
         )
@@ -188,9 +307,24 @@ struct MDMConfiguration: Codable {
     /// (MobileDeviceView's "More" button is a stub); any future menu must be
     /// built from this policy from day one.
     var mobileDeviceActionPolicy: DeviceActionPolicy {
-        DeviceActionPolicy(
+        deviceActionPolicy(
             grants: deviceActions?.mobileDevice?.grantsByID,
             apiActionsEnabled: features?.effectiveMobileDevices.effectiveEnableAPIActions ?? true
+        )
+    }
+
+    /// Shared per-platform policy builder: access-domain grants +
+    /// features-domain kill switch. The user-tier layer (grants carry the
+    /// per-action requiredTier overrides) is active only under Entra
+    /// sign-in.
+    private func deviceActionPolicy(
+        grants: [String: AccessConfiguration.DeviceActionSetting]?,
+        apiActionsEnabled: Bool
+    ) -> DeviceActionPolicy {
+        DeviceActionPolicy(
+            grants: grants,
+            apiActionsEnabled: apiActionsEnabled,
+            tierGatingEnabled: signInMethod == .entra
         )
     }
 
@@ -234,7 +368,8 @@ struct MDMConfiguration: Codable {
         deviceActions: AccessConfiguration.DeviceActionsSettings? = nil,
         features: FeaturesConfiguration? = nil,
         authentication: AuthenticationSettings? = nil,
-        userInterfaceExtras: UserInterfaceSettings? = nil
+        userInterfaceExtras: UserInterfaceSettings? = nil,
+        signIn: CoreConfiguration.SignInSettings? = nil
     ) {
         self.jamfURL = jamfURL
         self.masterClientID = masterClientID
@@ -276,6 +411,7 @@ struct MDMConfiguration: Codable {
         self.features = features
         self.authentication = authentication
         self.userInterfaceExtras = userInterfaceExtras
+        self.signIn = signIn
     }
 
     // MARK: - Composition from the five managed domains
@@ -376,7 +512,11 @@ struct MDMConfiguration: Codable {
             deviceActions: access?.deviceActions,
             features: features,
             authentication: ui?.authentication,
-            userInterfaceExtras: uiSettings
+            userInterfaceExtras: uiSettings,
+            // Interactive sign-in passthrough. Absent core domain (or an
+            // absent signIn block) → nil → signInMethod resolves to .email,
+            // so undelivered profiles keep the email flow unchanged.
+            signIn: core?.signIn
         )
     }
     

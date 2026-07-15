@@ -66,9 +66,6 @@ struct AccessConfiguration: Codable {
         return parsed
     }
 
-    /// Whether the Cleanup feature should be available to this operator.
-    var isCleanupAdmin: Bool { appRole == .admin }
-
     // MARK: - Effective accessors
 
     var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
@@ -138,25 +135,46 @@ struct AccessConfiguration: Codable {
         var enabled: Bool?
         var displayName: String?
         var options: DeviceActionOptions?
+        /// Minimum user tier override ("Admin" / "Operator") — consulted by
+        /// DeviceActionPolicy only when Entra sign-in is active. Resolve via
+        /// `effectiveRequiredTier`, never by comparing this raw string.
+        var requiredTier: String?
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveDisplayName: String { displayName ?? "" }
         var effectiveOptions: DeviceActionOptions { options ?? .empty }
 
+        /// Profile-delivered tier override, resolved fail-closed UPWARD:
+        /// exactly "Admin" → .admin, exactly "Operator" → .operator,
+        /// absent → nil (the action's built-in `defaultMinimumTier`
+        /// applies), and ANY other delivered value — typo, wrong case,
+        /// even "None" — → .admin. A malformed value must restrict,
+        /// never expand ("None" would pass every tier check).
+        var effectiveRequiredTier: UserAccessTier? {
+            guard let requiredTier else { return nil }
+            switch requiredTier {
+            case UserAccessTier.admin.rawValue: return .admin
+            case UserAccessTier.operator.rawValue: return .operator
+            default: return .admin
+            }
+        }
+
         enum CodingKeys: String, CodingKey {
-            case id, enabled, displayName, options
+            case id, enabled, displayName, options, requiredTier
         }
 
         init(
             id: String? = nil,
             enabled: Bool? = nil,
             displayName: String? = nil,
-            options: DeviceActionOptions? = nil
+            options: DeviceActionOptions? = nil,
+            requiredTier: String? = nil
         ) {
             self.id = id
             self.enabled = enabled
             self.displayName = displayName
             self.options = options
+            self.requiredTier = requiredTier
         }
 
         /// Per-field resilient decode: a malformed value (e.g. `options`
@@ -194,6 +212,22 @@ struct AccessConfiguration: Codable {
                 }
             } else {
                 options = nil
+            }
+
+            if container.contains(.requiredTier) {
+                if let value = try? container.decode(String.self, forKey: .requiredTier) {
+                    requiredTier = value
+                    if value != UserAccessTier.admin.rawValue && value != UserAccessTier.operator.rawValue {
+                        NSLog("⚠️ deviceActions: unknown 'requiredTier' '%@' for id '%@' — treated as Admin (fail-closed upward)", value, (try? container.decode(String.self, forKey: .id)) ?? "?")
+                    }
+                } else {
+                    // Present but not a string: same fail-closed-upward
+                    // direction as an unknown value.
+                    requiredTier = UserAccessTier.admin.rawValue
+                    NSLog("⚠️ deviceActions: malformed 'requiredTier' for id '%@' — treated as Admin (fail-closed upward)", (try? container.decode(String.self, forKey: .id)) ?? "?")
+                }
+            } else {
+                requiredTier = nil
             }
         }
     }

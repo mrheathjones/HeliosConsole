@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema version for compatibility checking (informational — the loader logs it, nothing else reads it)",
-      "default": "2.2"
+      "default": "2.3"
     },
     "jamfPro": {
       "type": "object",
@@ -181,6 +181,101 @@
       "required": [
         "credentialDomain"
       ]
+    },
+    "signIn": {
+      "type": "object",
+      "title": "Interactive Sign-In (optional)",
+      "description": "How users sign INTO Helios itself. Omit this block entirely to keep the built-in email sign-in flow (default, unchanged behavior). DISTINCT from the entra block above: that one points at APP-ONLY Graph credentials used by Return to Service cleanup; this one configures the INTERACTIVE user OAuth flow against a separate PUBLIC-client Entra app registration — a public client has NO client secret, so no secret exists for it anywhere, by design. FAIL-CLOSED: when method is entra but tenantId/clientId are missing or blank, the app blocks sign-in with a configuration-error state — it NEVER silently falls back to the weaker email flow.",
+      "properties": {
+        "method": {
+          "type": "string",
+          "title": "Sign-In Method",
+          "description": "email = the built-in email sign-in flow (default). entra = Microsoft Entra ID interactive sign-in — the email form is replaced entirely. Matched case-insensitively. Note the fail-closed rule: delivering entra with missing tenant/client ids blocks sign-in with a configuration error rather than reverting to email.",
+          "enum": [
+            "email",
+            "entra"
+          ],
+          "default": "email"
+        },
+        "entra": {
+          "type": "object",
+          "title": "Entra ID Sign-In",
+          "description": "Microsoft Entra ID interactive sign-in settings. Create a SEPARATE PUBLIC-client app registration for this (desktop/mobile platform redirect; do NOT create a client secret — none is needed and Helios never uses one). Access tiers are granted via the registration's app roles (adminRoles/operatorRoles below, read from the token's roles claim). IMPORTANT: also enforce the sign-in restriction Entra-side — enable 'Assignment required' on the enterprise application and assign only the intended users/groups. The client-side checks configured here are a UX gate, not a security boundary on their own.",
+          "properties": {
+            "tenantId": {
+              "type": "string",
+              "title": "Tenant ID",
+              "description": "Entra tenant id — MUST be the directory (tenant) ID GUID. Required when method is entra. The multi-tenant authority aliases 'common' and 'organizations' are NOT supported: id_token issuer validation is an exact match against the tenant-specific issuer, so sign-in fails with an issuer-mismatch validation error. Set the real value in Jamf — never commit a real tenant id to a repo."
+            },
+            "clientId": {
+              "type": "string",
+              "title": "Client ID (public client)",
+              "description": "Application (client) id of the PUBLIC-client app registration. Not secret — and no secret is ever paired with it. Required when method is entra."
+            },
+            "cloudInstance": {
+              "type": "string",
+              "title": "Azure Cloud Instance",
+              "description": "Azure cloud for interactive sign-in: global (login.microsoftonline.com), usgov (Azure Government / GCC High), or china (Azure operated by 21Vianet). Same mapping as entra.cloudInstance above — both Entra features agree on hosts per cloud.",
+              "enum": [
+                "global",
+                "usgov",
+                "china"
+              ],
+              "default": "global"
+            },
+            "adminRoles": {
+              "type": "array",
+              "title": "Admin App Roles",
+              "description": "App-role VALUES (the appRoles 'value' field on the app registration, surfaced in the token's roles claim) that grant the ADMIN access tier. Absent key = [\"Helios.Admin\"]. Entries are trimmed and empties dropped; a DELIVERED empty list grants the admin tier to no one (fail-closed) — only an absent key gets the default.",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "Helios.Admin"
+              ]
+            },
+            "operatorRoles": {
+              "type": "array",
+              "title": "Operator App Roles",
+              "description": "App-role values that grant the OPERATOR access tier. Absent key = [\"Helios.Operator\"]. Same trimming/fail-closed semantics as adminRoles. A user whose token carries none of the admin, operator, or cleanup role values gets NO access.",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "Helios.Operator"
+              ]
+            },
+            "cleanupRoles": {
+              "type": "array",
+              "title": "Cleanup App Roles (optional)",
+              "description": "App-role values that grant the CLEANUP module IN ADDITION to adminRoles (admin-tier users always qualify). Default is none — Cleanup stays admins-only unless roles are listed here (e.g. Helios.CleanupTech). A user holding ONLY a cleanup role is a valid sign-in but receives NO device-action tier — Cleanup plus read surfaces, nothing tier-gated. The Mac must still carry access role Admin for Cleanup to appear at all (both layers must allow). Same trimming semantics as adminRoles.",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "allowedGroupIds": {
+              "type": "array",
+              "title": "Allowed Group IDs (optional)",
+              "description": "OPTIONAL extra client-side check: Entra group OBJECT ids (GUIDs) — the signed-in user must be a member of at least one, verified via the token's groups claim. Empty/absent = no group check. CAVEAT: the groups claim is subject to Entra's overage limit — users who belong to many groups receive an overage token with NO groups listed, and this check will then fail them. Prefer app roles (adminRoles/operatorRoles) over group ids; the roles claim is never subject to overage.",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "provisionJamfCredentials": {
+              "type": "boolean",
+              "title": "Provision Jamf Credentials After Sign-In",
+              "description": "After a successful Entra sign-in, still provision the per-user Jamf API client from the verified email address (the same provisioning the email flow performs). Disable only if per-user Jamf API clients are not wanted.",
+              "default": true
+            }
+          },
+          "required": [
+            "tenantId",
+            "clientId"
+          ]
+        }
+      }
     },
     "localAdministration": {
       "type": "object",

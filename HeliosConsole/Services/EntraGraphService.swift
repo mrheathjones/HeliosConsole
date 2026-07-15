@@ -404,7 +404,9 @@ final class EntraGraphService {
 
     // MARK: - Encoding helpers
 
-    private static func base64URLEncode(_ data: Data) -> String {
+    // Internal (not private): shared with EntraAuthService's interactive
+    // sign-in flow so the OAuth plumbing isn't duplicated.
+    static func base64URLEncode(_ data: Data) -> String {
         var s = data.base64EncodedString()
         s = s.replacingOccurrences(of: "+", with: "-")
         s = s.replacingOccurrences(of: "/", with: "_")
@@ -412,13 +414,13 @@ final class EntraGraphService {
         return s
     }
 
-    private static func base64URLEncodeJSON(_ object: [String: Any]) throws -> String {
+    static func base64URLEncodeJSON(_ object: [String: Any]) throws -> String {
         // Deterministic, compact JSON — key order is irrelevant for JWT.
         let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         return base64URLEncode(data)
     }
 
-    private static func formURLEncode(_ params: [String: String]) -> String {
+    static func formURLEncode(_ params: [String: String]) -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
         return params.map { key, value in
@@ -428,7 +430,7 @@ final class EntraGraphService {
         }.joined(separator: "&")
     }
 
-    private static func extractGraphError(_ data: Data) -> String? {
+    static func extractGraphError(_ data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         if let err = json["error"] as? [String: Any] {
             let code = err["code"] as? String

@@ -46,7 +46,7 @@ enum ManagedDomainLoader {
     /// matching schema in schemas/.
     static let coreKeys = [
         "configurationVersion", "jamfPro", "appleBusinessManager",
-        "jamfProtect", "entra", "localAdministration"
+        "jamfProtect", "entra", "signIn", "localAdministration"
     ]
     static let credentialsKeys = [
         "configurationVersion", "jamfProClientSecret", "abmPrivateKey",

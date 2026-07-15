@@ -55,8 +55,11 @@ struct SidebarView: View {
     @Binding var selectedDestination: NavigationDestination
     @Binding var isInNestedView: Bool
     let onNavigate: (NavigationDestination) -> Void
-    
+
     @Environment(\.colorScheme) private var colorScheme
+    /// Observed so the Cleanup gate re-evaluates when the tier lands after
+    /// Entra sign-in (tier is established post-login, not at view init).
+    @ObservedObject private var session = UserSession.shared
     @State private var showLogoutModal = false
     
     private let sidebarWidth: CGFloat = 260
@@ -241,8 +244,11 @@ struct SidebarView: View {
             ))
         }
 
-        // Cleanup (stale-device bulk actions) is gated to the Admin role.
-        if config.isCleanupAdmin {
+        // Cleanup (stale-device bulk actions) is gated to the Admin role
+        // AND, under Entra sign-in, the signed-in user: admin tier or a
+        // configured cleanupRoles app role (both layers must allow — see
+        // MDMConfiguration.isCleanupPermitted).
+        if config.isCleanupPermitted(tier: session.tier, roles: session.roles) {
             entries.append(ResolvedSidebarEntry(
                 destination: .cleanup,
                 title: NavigationDestination.cleanup.title,

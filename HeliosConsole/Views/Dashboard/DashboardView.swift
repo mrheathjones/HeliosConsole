@@ -10,6 +10,9 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
+    /// Observed so the Cleanup route gate re-evaluates when the tier lands
+    /// after Entra sign-in (matches SidebarView).
+    @ObservedObject private var session = UserSession.shared
     @State private var viewModel = DashboardViewModel()
     @State private var selectedDestination: NavigationDestination = .dashboard
     @State private var isInNestedView: Bool = false
@@ -85,10 +88,48 @@ struct DashboardView: View {
         case .enrollments:
             EnrollmentsView()
         case .cleanup:
-            CleanupView(isInNestedView: $isInNestedView)
+            // Defense in depth: the sidebar/settings gates hide the entry
+            // points, but the route itself must re-check the composed
+            // Cleanup gate — never rely on navigation visibility alone.
+            if MDMConfigurationManager.shared.configuration.isCleanupPermitted(tier: session.tier, roles: session.roles) {
+                CleanupView(isInNestedView: $isInNestedView)
+            } else {
+                cleanupNotAuthorizedView
+            }
         case .settings:
             SettingsView()
         }
+    }
+
+    private var cleanupNotAuthorizedView: some View {
+        ZStack {
+            AnimatedBackgroundView(animate: .constant(true))
+
+            VStack(spacing: 24) {
+
+                ZStack {
+                    Circle()
+                        .fill(Color.orange.opacity(0.1))
+                        .frame(width: 120, height: 120)
+
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 48, weight: .medium))
+                        .foregroundColor(.orange.opacity(0.6))
+                }
+
+                VStack(spacing: 12) {
+                    Text("Not Authorized")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Cleanup is not available for your account.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private func handleNavigation(to destination: NavigationDestination) {

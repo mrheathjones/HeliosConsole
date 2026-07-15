@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the app logs it, nothing else reads it).",
-      "default": "2.2"
+      "default": "2.3"
     },
     "role": {
       "type": "string",
@@ -98,6 +98,15 @@
                     "title": "Menu Label Override",
                     "description": "Overrides the Actions-menu label ONLY. Confirmation-dialog safety copy is app-built-in and never profile-controlled. Empty = built-in label.",
                     "default": ""
+                  },
+                  "requiredTier": {
+                    "type": "string",
+                    "title": "Required User Tier (Entra sign-in only)",
+                    "description": "Minimum signed-in user tier for this action — the USER-scoped layer 2 of a two-layer gate (the machine-scoped allow-list above must ALSO grant the action; both must allow). ACTIVE ONLY when the core domain sets signIn.method=entra; in email sign-in mode this key is ignored entirely, so existing deployments are unaffected. OMIT the key to use the action's built-in classification — Operator: sendBlankPush, enableBluetooth, disableBluetooth; Admin: restart, restartSilent, shutdown, wipe, returnToService, enableRemoteDesktop, disableRemoteDesktop, screenShare, viewLocalAdminPassword, viewFileVaultKey, unlockUserAccount (reserved ids — lock, updateInventory, viewRecoveryLockPassword, renewMDMProfile, sendCustomCommand, installPackage, runPolicy — render nothing regardless of tier). FAIL-CLOSED UPWARD: any delivered value other than exactly \"Admin\" or \"Operator\" (typo, wrong case, \"None\") is treated as Admin — a malformed value restricts, never expands. The Cleanup feature is NOT configurable here: it is gated by the core domain's signIn.entra.cleanupRoles role set (admin-tier users always qualify; listed roles extend the grant).",
+                    "enum": [
+                      "Admin",
+                      "Operator"
+                    ]
                   },
                   "options": {
                     "type": "object",
@@ -245,6 +254,15 @@
                     "title": "Menu Label Override",
                     "description": "Overrides the Actions-menu label ONLY. Confirmation-dialog safety copy is app-built-in and never profile-controlled. Empty = built-in label.",
                     "default": ""
+                  },
+                  "requiredTier": {
+                    "type": "string",
+                    "title": "Required User Tier (Entra sign-in only)",
+                    "description": "Forward-looking — no mobile actions menu exists yet. Same semantics as the computer key when one ships: consulted only when signIn.method=entra; unknown values fail closed to Admin.",
+                    "enum": [
+                      "Admin",
+                      "Operator"
+                    ]
                   }
                 }
               },

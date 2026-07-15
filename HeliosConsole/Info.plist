@@ -36,6 +36,14 @@
 				<string>heliosconsole</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.herojoneslabs.helios.console.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>heliosauth</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>
