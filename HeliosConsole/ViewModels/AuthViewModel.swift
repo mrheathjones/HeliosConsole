@@ -115,21 +115,20 @@ class AuthViewModel: ObservableObject {
             return
         }
 
+        self.currentUser = User(
+            email: email,
+            name: name,
+            authToken: authToken,
+            refreshToken: refreshToken
+        )
+
         if biometricGateActive {
+            // Capabilities are established only after the unlock succeeds
+            // (see authenticateWithBiometrics) — a pending prompt is not a
+            // session.
             showBiometricPrompt = true
-            self.currentUser = User(
-                email: email,
-                name: name,
-                authToken: authToken,
-                refreshToken: refreshToken
-            )
         } else {
-            self.currentUser = User(
-                email: email,
-                name: name,
-                authToken: authToken,
-                refreshToken: refreshToken
-            )
+            establishMDMSession(email: email, displayName: name)
             self.isLoggedIn = true
         }
     }
@@ -165,13 +164,13 @@ class AuthViewModel: ObservableObject {
                 return
             }
             do {
-                // Fail-closed revalidation: the tier comes from the FRESH
+                // Fail-closed revalidation: the roles come from the FRESH
                 // token — a role revoked since last sign-in ends the session.
                 let identity = try await service.refreshSession(refreshToken: refreshToken)
                 self.establishEntraSession(with: identity)
-                NSLog("✅ Entra session restored (%@ tier)", identity.tier.rawValue)
+                NSLog("✅ Entra session restored (roles: %@)", identity.roles.joined(separator: ", "))
             } catch {
-                // Any refresh failure → signed out. No cached-tier fallback.
+                // Any refresh failure → signed out. No cached-capability fallback.
                 NSLog("⚠️ Entra session refresh failed (fail-closed): %@", error.localizedDescription)
                 self.failEntraRestore()
             }
@@ -195,13 +194,41 @@ class AuthViewModel: ObservableObject {
             DispatchQueue.main.async {
                 if success {
                     self.showBiometricPrompt = false
-                    if let pendingToken = self.pendingEntraRefreshToken {
+                    // Branch on the CONFIGURED method, never on whether a
+                    // token happens to be parked: establishMDMSession
+                    // resolves from the access `role` key, which is ignored
+                    // outright under signIn.method=entra, so inferring the
+                    // mode from a nil pendingEntraRefreshToken would resolve
+                    // Entra capabilities from a key that has no authority.
+                    if self.signInMethod == .entra {
+                        guard let pendingToken = self.pendingEntraRefreshToken else {
+                            // Entra mode with nothing parked: no token to
+                            // revalidate, and no other admissible source of
+                            // role names — only a full Microsoft sign-in may
+                            // unlock (fail-closed).
+                            NSLog("⚠️ Biometric unlock in Entra mode with no parked refresh token — requiring full sign-in (fail-closed)")
+                            self.currentUser = nil
+                            self.clearSession()
+                            self.isLoggedIn = false
+                            self.errorMessage = "Please sign in with Microsoft to continue."
+                            completion?(false)
+                            return
+                        }
                         // Cold restore in Entra mode: unlocking is not a
                         // session — the refresh token still has to be
-                        // redeemed for a fresh tier (fail-closed).
+                        // redeemed for freshly resolved capabilities
+                        // (fail-closed).
                         self.pendingEntraRefreshToken = nil
                         self.redeemEntraRefreshToken(pendingToken)
                     } else {
+                        // Email mode: re-resolve capabilities from the
+                        // CURRENT profile on every unlock, so a role edit
+                        // applies at idle-unlock as well as at launch.
+                        let user = self.currentUser
+                        self.establishMDMSession(
+                            email: user?.email ?? "",
+                            displayName: user?.name ?? ""
+                        )
                         self.isLoggedIn = true
                     }
                     completion?(true)
@@ -262,6 +289,9 @@ class AuthViewModel: ObservableObject {
                 if userSaved && credentialsSaved {
                     self.currentUser = user
                     self.hasSeenWelcome = true
+                    // Capabilities BEFORE isLoggedIn — the UI reads them the
+                    // moment it renders.
+                    self.establishMDMSession(email: email, displayName: name)
                     self.isLoggedIn = true
                     self.isLoading = false
                     NSLog("✅ Login successful")
@@ -304,7 +334,7 @@ class AuthViewModel: ObservableObject {
             do {
                 let identity = try await service.signInInteractively()
                 self.establishEntraSession(with: identity)
-                NSLog("✅ Entra sign-in successful (%@ tier)", identity.tier.rawValue)
+                NSLog("✅ Entra sign-in successful (roles: %@)", identity.roles.joined(separator: ", "))
                 // Jamf provisioning is non-fatal and can stall for the full
                 // request timeout when Jamf is unreachable — run it off the
                 // sign-in critical path so the user lands in the app now.
@@ -346,6 +376,62 @@ class AuthViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Capability resolution
+    //
+    // Capabilities come from the CONFIG, always — never from the app. Both
+    // sign-in modes resolve the identity's role NAMES against the access
+    // domain's role definitions:
+    //   • Entra: the id_token roles claim (re-resolved from the FRESH token
+    //     on every restore/unlock, so a revocation applies at launch and at
+    //     idle-unlock).
+    //   • Email/MDM: the access domain's single `role` key.
+    // A name matching no definition contributes nothing, and no match at all
+    // means .none — the user is signed in but sees the empty state.
+
+    /// Establishes the MDM-role session for the email flow. Deliberately
+    /// NEVER refuses sign-in: an org whose profile is missing or whose
+    /// `role` names nothing would otherwise be hard-locked out of the app
+    /// with no way to see the error. They sign in to an empty state instead.
+    ///
+    /// Non-isolated, and synchronous on the main thread when possible, for
+    /// the same reason as `clearSession()`: callers set `isLoggedIn = true`
+    /// on the next line, and a deferred establish would leave the UI reading
+    /// `.none` for a tick — flashing the empty state at a fully entitled
+    /// user. (Also callable from `init` → `restoreEmailSession`, which is
+    /// not MainActor-isolated.)
+    private func establishMDMSession(email: String, displayName: String) {
+        let roleName = mdmConfiguration.mdmRoleName
+        let capabilities = mdmConfiguration.capabilities(forRoleNames: [roleName])
+
+        // Diagnose the two failures separately — they need different fixes.
+        // "No matching definition" is a NAME test, not a capability test: a
+        // role that IS defined but lists nothing also resolves to .none, and
+        // reporting that as a name mismatch sends the admin hunting a typo
+        // that isn't there.
+        if roleName.isEmpty {
+            NSLog("⚠️ No access-domain 'role' delivered — signing in with NO capabilities (fail-closed)")
+        } else if mdmConfiguration.roleDefinitions[roleName] == nil {
+            NSLog("⚠️ Access-domain role '%@' matches no definition in the profile's roles block — signing in with NO capabilities (fail-closed; role names are case-sensitive)", roleName)
+        } else if capabilities == .none {
+            NSLog("⚠️ Access-domain role '%@' IS defined in the profile's roles block but grants nothing — signing in with NO capabilities (add modules/actions to the definition)", roleName)
+        }
+
+        let roles = roleName.isEmpty ? [] : [roleName]
+        let establish: @MainActor () -> Void = {
+            UserSession.shared.establish(
+                email: email,
+                displayName: displayName,
+                roles: roles,
+                capabilities: capabilities
+            )
+        }
+        if Thread.isMainThread {
+            MainActor.assumeIsolated(establish)
+        } else {
+            Task { @MainActor in establish() }
+        }
+    }
+
     /// Shared tail of interactive Entra sign-in and refresh restore. The
     /// legacy authToken slot stays empty in Entra mode — the refresh token
     /// is the only session key.
@@ -363,11 +449,20 @@ class AuthViewModel: ObservableObject {
         _ = keychain.saveUserEmail(identity.email)
         _ = keychain.saveUserName(identity.displayName)
 
+        // Resolved from the token's roles against the CURRENT config, so a
+        // role revoked in Entra OR withdrawn from the profile takes effect
+        // on the next restore/unlock. EntraAuthService's gate tested only
+        // that a role NAME exists in the profile — it says nothing about
+        // what that name grants — so .none here is not necessarily a
+        // mid-session profile change: a defined role whose lists are all
+        // empty resolves the same way. Either way the user lands on the
+        // empty state, fail-closed.
+        let capabilities = mdmConfiguration.capabilities(forRoleNames: identity.roles)
         UserSession.shared.establish(
-            tier: identity.tier,
-            roles: identity.roles,
             email: identity.email,
-            displayName: identity.displayName
+            displayName: identity.displayName,
+            roles: identity.roles,
+            capabilities: capabilities
         )
         currentUser = User(email: identity.email, name: identity.displayName, authToken: "", refreshToken: nil)
         hasSeenWelcome = true
@@ -408,10 +503,18 @@ class AuthViewModel: ObservableObject {
     func clearSession() {
         pendingEntraRefreshToken = nil
         keychain.clearAllAuthData()
-        // Clear synchronously when possible: deferring the wipe past the
-        // caller's isLoggedIn=false would leave stale tier/roles readable
-        // for a tick, and a fast re-login's establish could be clobbered by
-        // the late clear.
+        clearUserSession()
+    }
+
+    /// Wipes the app-wide identity/capability holder WITHOUT touching the
+    /// keychain — the idle-lock path needs exactly this, since the stored
+    /// credentials must survive so biometric/re-login can restore them.
+    ///
+    /// Clears synchronously when possible: deferring the wipe past the
+    /// caller's isLoggedIn=false would leave stale capabilities/roles
+    /// readable for a tick, and a fast re-login's establish could be
+    /// clobbered by the late clear.
+    private func clearUserSession() {
         if Thread.isMainThread {
             MainActor.assumeIsolated { UserSession.shared.clear() }
         } else {
@@ -485,9 +588,9 @@ class AuthViewModel: ObservableObject {
             if signInMethod == .entra {
                 // Entra mode: an unlock is never a session — park the
                 // refresh token so a successful unlock routes through
-                // redeemEntraRefreshToken (fresh id_token → fresh tier,
-                // fail-closed), exactly like cold restore. A role revoked
-                // since sign-in must not survive the unlock.
+                // redeemEntraRefreshToken (fresh id_token → freshly resolved
+                // capabilities, fail-closed), exactly like cold restore. A
+                // role revoked since sign-in must not survive the unlock.
                 guard let refreshToken = keychain.loadEntraRefreshToken(),
                       !refreshToken.isEmpty else {
                     // No redeemable token (e.g. allowRememberMe off) means
@@ -510,8 +613,13 @@ class AuthViewModel: ObservableObject {
             clearSession()
             errorMessage = "Session locked due to inactivity. Please sign in again."
         } else {
-            // Email mode: keychain/UserSession stay intact; the login
-            // screen re-authenticates.
+            // Email mode: the keychain stays intact so the login screen (or
+            // a later biometric unlock) can re-authenticate — but UserSession
+            // must NOT keep serving the locked-out operator's identity and
+            // capabilities to services and command handlers for the whole
+            // locked window. Both restore paths re-establish it before
+            // setting isLoggedIn.
+            clearUserSession()
             errorMessage = "Session locked due to inactivity. Please sign in again."
         }
     }

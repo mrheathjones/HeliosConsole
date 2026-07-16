@@ -19,8 +19,8 @@ import LocalAuthentication
 
 struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
-    /// Observed so the Cleanup section re-evaluates when the tier lands
-    /// after Entra sign-in.
+    /// Observed so the Cleanup section re-evaluates when capabilities land
+    /// after sign-in.
     @ObservedObject private var session = UserSession.shared
     @Environment(\.colorScheme) private var colorScheme
     
@@ -72,7 +72,7 @@ struct SettingsView: View {
                         appearanceSection
                         securitySection
                         displaySection
-                        if MDMConfigurationManager.shared.configuration.isCleanupPermitted(tier: session.tier, roles: session.roles) {
+                        if session.capabilities.canAccess(module: NavigationDestination.cleanup.rawValue) {
                             cleanupSection
                         }
                         aboutSection

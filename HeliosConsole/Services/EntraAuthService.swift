@@ -5,9 +5,14 @@
 //  Interactive Entra ID operator sign-in: OpenID Connect authorization-code
 //  flow with PKCE via ASWebAuthenticationSession. Complements
 //  EntraGraphService (app-only client-credentials for device cleanup) —
-//  this service authenticates the human operator and derives their Helios
-//  access tier from the id_token roles claim, strictly fail-closed: no
-//  recognized role → sign-in is rejected, never a default tier.
+//  this service authenticates the human operator and returns the id_token's
+//  raw roles claim, strictly fail-closed: a token carrying no role DEFINED
+//  IN THE PROFILE is rejected outright, never admitted with a default.
+//
+//  This service does NOT resolve capabilities — it only proves identity and
+//  eligibility. AuthViewModel maps the returned role names onto the access
+//  domain's role definitions (MDMConfiguration.capabilities(forRoleNames:)),
+//  so the config stays the single source of what a role may do.
 //
 //  Tokens arrive directly from the token endpoint over TLS, so per OIDC
 //  Core 3.1.3.7 the id_token signature check may be omitted; claim
@@ -23,8 +28,7 @@ import Security
 struct EntraIdentity {
     let email: String          // preferred_username, fallback email claim
     let displayName: String    // name claim, fallback email
-    let tier: UserAccessTier
-    let roles: [String]        // raw roles claim
+    let roles: [String]        // raw roles claim; resolved against the profile
     let refreshToken: String?  // from offline_access
     let idTokenExpiresAt: Date
 }
@@ -69,9 +73,18 @@ final class EntraAuthService: NSObject {
     private let tenantId: String
     private let clientId: String
     private let authorityHost: String
-    private let adminRoles: [String]
-    private let operatorRoles: [String]
-    private let cleanupRoles: [String]
+
+    /// The sign-in eligibility gate: `MDMConfiguration.hasAnyDefinedRole` —
+    /// the single implementation of the rule — closed over the profile's
+    /// role index, snapshotted at init. A closure rather than the
+    /// configuration itself so the auth service doesn't retain a copy of it
+    /// (it carries Jamf/Entra secrets this service has no business holding).
+    ///
+    /// Refuses everything when the profile defines no roles. That is
+    /// deliberate: with no roles defined, a successful sign-in could only
+    /// ever land on an empty app.
+    private let hasAnyDefinedRole: ([String]) -> Bool
+
     private let allowedGroupIds: [String]
 
     private let session: URLSession
@@ -85,9 +98,10 @@ final class EntraAuthService: NSObject {
         self.tenantId = configuration.entraSignInTenantId
         self.clientId = configuration.entraSignInClientId
         self.authorityHost = configuration.entraSignInAuthorityHost
-        self.adminRoles = configuration.effectiveEntraAdminRoles
-        self.operatorRoles = configuration.effectiveEntraOperatorRoles
-        self.cleanupRoles = configuration.effectiveEntraCleanupRoles
+        let roleDefinitions = configuration.roleDefinitions
+        self.hasAnyDefinedRole = {
+            MDMConfiguration.hasAnyDefinedRole(in: $0, definitions: roleDefinitions)
+        }
         self.allowedGroupIds = configuration.effectiveEntraAllowedGroupIds
 
         let cfg = URLSessionConfiguration.ephemeral
@@ -150,9 +164,10 @@ final class EntraAuthService: NSObject {
         return try identity(from: tokens, expectedNonce: nonce)
     }
 
-    /// Redeem a refresh token for a fresh id_token and re-derive the tier
-    /// from the NEW token (fail-closed revalidation — a role or group
-    /// revoked since the last sign-in ends the session).
+    /// Redeem a refresh token for a fresh id_token and re-read the roles
+    /// claim from the NEW token (fail-closed revalidation — a role or group
+    /// revoked since the last sign-in ends the session; the caller
+    /// re-resolves capabilities from these fresh names).
     func refreshSession(refreshToken: String) async throws -> EntraIdentity {
         var tokens = try await requestTokens(form: [
             "grant_type": "refresh_token",
@@ -239,7 +254,7 @@ final class EntraAuthService: NSObject {
         )
     }
 
-    // MARK: - id_token validation & tier derivation
+    // MARK: - id_token validation & authorization
 
     private func identity(from tokens: TokenResponse, expectedNonce: String?) throws -> EntraIdentity {
         let claims = try validatedClaims(idToken: tokens.idToken, expectedNonce: expectedNonce)
@@ -262,29 +277,22 @@ final class EntraAuthService: NSObject {
             }
         }
 
-        // Sign-in eligibility: the token must carry at least one recognized
-        // role — admin, operator, OR cleanup. Unknown-only role sets are
-        // refused. Shared by interactive sign-in and refresh (both funnel
-        // through this method), so revalidation applies the same rule.
+        // Sign-in eligibility (MDMConfiguration.hasAnyDefinedRole): the token
+        // must carry at least one role that the PROFILE defines. Role names
+        // the profile never names — however many the tenant assigns — are
+        // not a Helios role and are refused.
+        // Shared by interactive sign-in and refresh (both funnel through
+        // this method), so revalidation applies the same rule: a role
+        // un-assigned in Entra, or removed from the profile, ends the
+        // session at the next refresh.
+        //
+        // Capabilities are NOT derived here — AuthViewModel resolves them
+        // from these names against the current configuration.
         let roles = claims["roles"] as? [String] ?? []
-        let recognizedRoles = Set(adminRoles).union(operatorRoles).union(cleanupRoles)
-        guard roles.contains(where: { recognizedRoles.contains($0) }) else {
+        guard hasAnyDefinedRole(roles) else {
             throw AuthError.notAuthorized(
                 "You signed in successfully, but your account has no Helios Console role. Contact your admin about Helios role assignment."
             )
-        }
-
-        // Tier derivation is UNCHANGED by the cleanup list: a cleanup-only
-        // user is a valid sign-in at tier .none — they see the Cleanup
-        // module (role-set gate) and read surfaces, but pass no tier-gated
-        // check. Fail-closed by construction.
-        let tier: UserAccessTier
-        if roles.contains(where: { adminRoles.contains($0) }) {
-            tier = .admin
-        } else if roles.contains(where: { operatorRoles.contains($0) }) {
-            tier = .operator
-        } else {
-            tier = .none
         }
 
         let preferredUsername = (claims["preferred_username"] as? String).flatMap { $0.isEmpty ? nil : $0 }
@@ -295,7 +303,6 @@ final class EntraAuthService: NSObject {
         return EntraIdentity(
             email: email,
             displayName: name,
-            tier: tier,
             roles: roles,
             refreshToken: tokens.refreshToken,
             idTokenExpiresAt: Date(timeIntervalSince1970: exp)

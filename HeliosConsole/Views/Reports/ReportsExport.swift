@@ -196,22 +196,30 @@ struct ReportsExportMenu: View {
     @State private var isExporting = false
     @State private var isRendering = false
     @State private var showFormats = false
+    /// Observed so the export gate re-evaluates when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
 
     var body: some View {
-        Group {
-            if prominent {
-                prominentButton
-            } else {
-                subtleMenu
+        // Both Reports export entry points (the toolbar menu and the
+        // prominent Run-Report button) render through this view, so the
+        // allowExport gate lives here once: no grant, no control at all.
+        if session.capabilities.allowExport {
+            Group {
+                if prominent {
+                    prominentButton
+                } else {
+                    subtleMenu
+                }
             }
-        }
-        .fileExporter(
-            isPresented: $isExporting,
-            document: document,
-            contentType: contentType,
-            defaultFilename: filename
-        ) { _ in
-            document = nil
+            .fileExporter(
+                isPresented: $isExporting,
+                document: document,
+                contentType: contentType,
+                defaultFilename: filename
+            ) { _ in
+                document = nil
+            }
         }
     }
 
@@ -288,6 +296,9 @@ struct ReportsExportMenu: View {
     }
 
     private func prepare(_ format: ReportsExportFormat) {
+        // Defense in depth: the control is not rendered without the grant,
+        // but never let enforcement live only in the UI.
+        guard session.capabilities.allowExport else { return }
         // Snapshot the on-screen results now (on the main actor) so the export
         // reflects exactly what's visible, even if the report is re-run later.
         let table = makeTable()

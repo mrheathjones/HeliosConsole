@@ -68,9 +68,19 @@ struct MDMConfiguration: Codable {
     let abmPrivateKey: String?
 
     // MARK: - Role-based access + Cleanup feature (Jamf stale-device cleanup)
-    /// Operator role delivered by MDM (Admin / Support / User). The Cleanup
-    /// feature is Admin-only. Absent → treated as Admin.
+    /// This Mac's role name, delivered by MDM in the access domain's `role`
+    /// key. A FREE-FORM string naming a key in `roleDefinitions` — the app
+    /// defines no roles of its own. Read it through `mdmRoleName` (trimmed);
+    /// a value matching no definition grants nothing (fail-closed).
     let role: String?
+
+    /// NAME INDEX over the access domain's `roles` array, built once at
+    /// composition by `roleIndex(from:)` so lookup stays O(1). The value is a
+    /// LIST because duplicate names are legal and UNION together — see
+    /// `roleIndex(from:)` for why. `[:]` when the domain or the block is
+    /// absent — in which case EVERY user resolves to `UserCapabilities.none`.
+    /// Resolve through `capabilities(forRoleNames:)`, never by hand.
+    let roleDefinitions: [String: [AccessConfiguration.RoleDefinition]]
     /// Stale threshold (days without check-in) used by Cleanup.
     let cleanupStaleDays: Int
     let cleanupDefaultStaticGroupID: String?
@@ -158,41 +168,88 @@ struct MDMConfiguration: Codable {
         return true
     }
 
-    enum AppRole: String {
-        case admin = "Admin"
-        case support = "Support"
-        case user = "User"
+    // MARK: - Roles & capabilities (profile-defined; strict fail-closed)
+
+    /// This Mac's role name from the access domain's `role` key, trimmed.
+    /// `""` when absent. Used as the identity's role name ONLY when Entra
+    /// sign-in is not configured — the Entra roles claim wins when it is.
+    var mdmRoleName: String {
+        role?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    /// Resolves the operator role fail-closed: a missing, blank, or
-    /// unrecognized value (including wrong case like "admin") is treated as
-    /// the least-privileged `.user`, so the destructive Cleanup feature is
-    /// never exposed by accident. Only the exact string "Admin" grants it.
-    var appRole: AppRole {
-        guard let role, let parsed = AppRole(rawValue: role) else { return .user }
-        return parsed
+    /// Resolves capabilities for a set of role names — the Entra roles claim
+    /// under Entra sign-in, or `[mdmRoleName]` otherwise.
+    ///
+    /// Matching is EXACT and CASE-SENSITIVE: "Helios.Admin" and
+    /// "helios.admin" are different roles. Names matching no definition
+    /// contribute nothing (they are not an error — an Entra tenant may
+    /// assign roles this app has never heard of). When no name matches, the
+    /// result is `.none` — fail-closed, by construction of `union([])`.
+    ///
+    /// A user holding several defined roles gets the UNION of their
+    /// capabilities — as does a user holding ONE name that the profile
+    /// defines more than once (see `roleIndex(from:)`).
+    func capabilities(forRoleNames names: [String]) -> UserCapabilities {
+        let definitions = roleDefinitions
+        return UserCapabilities.union(names.flatMap { definitions[$0] ?? [] })
     }
 
-    /// Machine-scoped Cleanup predicate — private by design: callers must
-    /// go through the composed `isCleanupPermitted(tier:roles:)` gate so
-    /// the user layer can never be bypassed.
-    private var isCleanupAdmin: Bool { appRole == .admin }
+    /// True when at least one name matches a defined role — i.e. the
+    /// identity has some Helios role at all. THE Entra sign-in eligibility
+    /// gate (EntraAuthService calls it through a closure — see the overload
+    /// below); this rule exists nowhere else. Same exact, case-sensitive
+    /// matching as `capabilities(forRoleNames:)`.
+    ///
+    /// Note what it does NOT test: only that a name is DEFINED, never what
+    /// that definition grants. A role defined as `{name = "Auditor";}` is
+    /// eligible and resolves to `.none` — signed in, empty app.
+    func hasAnyDefinedRole(in names: [String]) -> Bool {
+        Self.hasAnyDefinedRole(in: names, definitions: roleDefinitions)
+    }
 
-    /// Composed Cleanup gate — both layers must allow: the machine-scoped
-    /// access-domain role (`isCleanupAdmin`) AND, when Entra sign-in is
-    /// active, the signed-in user. Admin-tier users always qualify;
-    /// `signIn.entra.cleanupRoles` EXTENDS the grant to holders of any
-    /// listed app role. The role check is a non-disjoint intersection, so
-    /// the default-empty cleanup list can never match anything — absent or
-    /// delivered-empty keeps exactly the admins-only behavior (fail-closed).
-    /// In email mode the user layer is inert (identical to
-    /// `isCleanupAdmin` alone).
-    func isCleanupPermitted(tier: UserAccessTier, roles: [String]) -> Bool {
-        isCleanupAdmin && (
-            signInMethod != .entra
-                || tier >= .admin
-                || !Set(roles).isDisjoint(with: effectiveEntraCleanupRoles)
-        )
+    /// The rule itself, over the role index alone, so a caller that must not
+    /// retain the whole configuration can still share this exact
+    /// implementation rather than re-deriving it — EntraAuthService holds a
+    /// closure over this, because the configuration carries Jamf/Entra
+    /// secrets an auth service has no business retaining.
+    static func hasAnyDefinedRole(
+        in names: [String],
+        definitions: [String: [AccessConfiguration.RoleDefinition]]
+    ) -> Bool {
+        names.contains { definitions[$0] != nil }
+    }
+
+    /// Indexes the access domain's `roles` ARRAY by role name, once, so
+    /// `capabilities(forRoleNames:)` and `hasAnyDefinedRole(in:)` stay O(1)
+    /// per name.
+    ///
+    /// Two edge cases the array shape introduces, both resolved fail-closed:
+    ///
+    /// • NAMELESS ENTRY (`name` missing, blank, or malformed) → SKIPPED and
+    ///   logged. No role name can ever match it, so indexing it under `""`
+    ///   would only risk an empty/whitespace `role` key accidentally
+    ///   resolving to real capabilities.
+    ///
+    /// • DUPLICATE NAMES → UNIONED, not replaced. Later entries append rather
+    ///   than overwrite, so `roleDefinitions[name]` holds every definition
+    ///   carrying that name and `UserCapabilities.union` sums them. Union is
+    ///   the direction that matches multi-role semantics (holding a name
+    ///   grants everything that name is defined to grant) and it is the
+    ///   predictable one: last-wins would make an admin's grant silently
+    ///   vanish based on array order.
+    static func roleIndex(
+        from definitions: [AccessConfiguration.RoleDefinition]
+    ) -> [String: [AccessConfiguration.RoleDefinition]] {
+        var index: [String: [AccessConfiguration.RoleDefinition]] = [:]
+        for definition in definitions {
+            let name = definition.effectiveName
+            guard !name.isEmpty else {
+                NSLog("⚠️ access.roles: role entry with a missing or blank 'name' — SKIPPED (an unnamed role is unreachable; no role name can match it)")
+                continue
+            }
+            index[name, default: []].append(definition)
+        }
+        return index
     }
 
     // MARK: - Interactive sign-in (core signIn block; strict fail-closed)
@@ -245,29 +302,6 @@ struct MDMConfiguration: Codable {
         (signIn?.entra?.effectiveCloudInstance ?? .global).authorityHost
     }
 
-    /// App-role values granting the ADMIN tier (absent key →
-    /// the documented default; entries trimmed, empties dropped). A
-    /// DELIVERED empty list grants the tier to no one — fail-closed.
-    var effectiveEntraAdminRoles: [String] {
-        signIn?.entra?.effectiveAdminRoles
-            ?? CoreConfiguration.EntraSignInSettings.defaultAdminRoles
-    }
-
-    /// App-role values granting the OPERATOR tier (absent key → the
-    /// documented default; same semantics as `effectiveEntraAdminRoles`).
-    var effectiveEntraOperatorRoles: [String] {
-        signIn?.entra?.effectiveOperatorRoles
-            ?? CoreConfiguration.EntraSignInSettings.defaultOperatorRoles
-    }
-
-    /// App-role values granting the CLEANUP module in addition to
-    /// admin-tier users (default [] = admins only). No named default role
-    /// exists — extending Cleanup beyond admins is strictly opt-in; entries
-    /// are trimmed and empties dropped like the tier lists.
-    var effectiveEntraCleanupRoles: [String] {
-        signIn?.entra?.effectiveCleanupRoles ?? []
-    }
-
     /// Entra group OBJECT ids the signed-in user must be a member of
     /// (verified via the token's groups claim). Default [] = no group
     /// check. Prefer app roles — the groups claim is overage-limited.
@@ -291,40 +325,51 @@ struct MDMConfiguration: Codable {
     // MARK: - Device action policies (strict fail-closed)
 
     /// Policy for the computer (macOS) Actions menu: access-domain
-    /// allow-list + features-domain enableAPIActions kill switch. No
+    /// allow-list + features-domain enableAPIActions kill switch,
+    /// intersected with the signed-in user's role capabilities. No
     /// allow-list delivered → DeviceActionPolicy denies everything and the
-    /// Actions menu is hidden. NOTE: once an allow-list is delivered it is
-    /// authoritative for Screen Share too — the legacy core-domain
-    /// `jamfPro.screenShareEnabled` key is deprecated and ignored.
-    var computerActionPolicy: DeviceActionPolicy {
+    /// Actions menu is hidden; so does `.none` capabilities. NOTE: once an
+    /// allow-list is delivered it is authoritative for Screen Share too —
+    /// the legacy core-domain `jamfPro.screenShareEnabled` key is deprecated
+    /// and ignored.
+    ///
+    /// Pass the CURRENT capabilities (UserSession.shared.capabilities) —
+    /// the policy is a value, so it must be rebuilt when they change.
+    func computerActionPolicy(capabilities: UserCapabilities) -> DeviceActionPolicy {
         deviceActionPolicy(
             grants: deviceActions?.computer?.grantsByID,
-            apiActionsEnabled: features?.effectiveComputers.effectiveEnableAPIActions ?? true
+            apiActionsEnabled: features?.effectiveComputers.effectiveEnableAPIActions ?? true,
+            capabilities: capabilities,
+            platform: .computer
         )
     }
 
     /// Policy for mobile-device actions. No mobile actions menu exists yet
     /// (MobileDeviceView's "More" button is a stub); any future menu must be
     /// built from this policy from day one.
-    var mobileDeviceActionPolicy: DeviceActionPolicy {
+    func mobileDeviceActionPolicy(capabilities: UserCapabilities) -> DeviceActionPolicy {
         deviceActionPolicy(
             grants: deviceActions?.mobileDevice?.grantsByID,
-            apiActionsEnabled: features?.effectiveMobileDevices.effectiveEnableAPIActions ?? true
+            apiActionsEnabled: features?.effectiveMobileDevices.effectiveEnableAPIActions ?? true,
+            capabilities: capabilities,
+            platform: .mobileDevice
         )
     }
 
-    /// Shared per-platform policy builder: access-domain grants +
-    /// features-domain kill switch. The user-tier layer (grants carry the
-    /// per-action requiredTier overrides) is active only under Entra
-    /// sign-in.
+    /// Shared per-platform policy builder: machine layer (access-domain
+    /// grants + features-domain kill switch) intersected with the user layer
+    /// (role capabilities for that platform).
     private func deviceActionPolicy(
         grants: [String: AccessConfiguration.DeviceActionSetting]?,
-        apiActionsEnabled: Bool
+        apiActionsEnabled: Bool,
+        capabilities: UserCapabilities,
+        platform: DeviceActionPolicy.Platform
     ) -> DeviceActionPolicy {
         DeviceActionPolicy(
             grants: grants,
             apiActionsEnabled: apiActionsEnabled,
-            tierGatingEnabled: signInMethod == .entra
+            capabilities: capabilities,
+            platform: platform
         )
     }
 
@@ -353,6 +398,7 @@ struct MDMConfiguration: Codable {
         abmKeyId: String?,
         abmPrivateKey: String?,
         role: String? = nil,
+        roleDefinitions: [String: [AccessConfiguration.RoleDefinition]] = [:],
         cleanupStaleDays: Int = 90,
         cleanupDefaultStaticGroupID: String? = nil,
         cleanupDefaultSiteID: String? = nil,
@@ -395,6 +441,7 @@ struct MDMConfiguration: Codable {
         self.abmKeyId = abmKeyId
         self.abmPrivateKey = abmPrivateKey
         self.role = role
+        self.roleDefinitions = roleDefinitions
         self.cleanupStaleDays = cleanupStaleDays
         self.cleanupDefaultStaticGroupID = cleanupDefaultStaticGroupID
         self.cleanupDefaultSiteID = cleanupDefaultSiteID
@@ -495,8 +542,10 @@ struct MDMConfiguration: Codable {
             abmClientId: abmClientId,
             abmKeyId: abmKeyId,
             abmPrivateKey: abmPrivateKey,
-            // Fail-closed: absent access domain → nil role → .user.
+            // Fail-closed: absent access domain → nil role name and no role
+            // definitions → every user resolves to UserCapabilities.none.
             role: access?.role,
+            roleDefinitions: MDMConfiguration.roleIndex(from: access?.effectiveRoles ?? []),
             cleanupStaleDays: access?.effectiveCleanup.effectiveStaleDays ?? 90,
             cleanupDefaultStaticGroupID: access?.cleanup?.defaultStaticGroupID,
             cleanupDefaultSiteID: access?.cleanup?.defaultSiteID,
@@ -541,6 +590,18 @@ struct MDMConfiguration: Codable {
     /// values — unknown ids are skipped by SidebarView. (The previous list
     /// referenced routes — enterprise/groundcontrol/depsearch — that never
     /// existed in this app.)
+    ///
+    /// INVARIANT: this list MUST enumerate EVERY module id a role can grant.
+    /// SidebarView renders (this list, or the ui domain's sidebarItems
+    /// override) ∩ (the user's role `modules`), so an id missing here can
+    /// NEVER appear on a Mac that gets no sidebarItems override — the
+    /// presentation layer would silently swallow a grant the admin made.
+    /// This list is presentation only; it grants nothing on its own.
+    /// (`cleanup` was missing and was unreachable exactly this way: it used
+    /// to be appended outside the sidebarItems loop, so the default list
+    /// never had to carry it.) `myDevice` is deliberately ABSENT — it is
+    /// reserved for a follow-up PR and has no NavigationDestination case, so
+    /// it would be skipped anyway.
     static let defaultSidebarItems: [SidebarItemConfig] = [
         SidebarItemConfig(id: "dashboard", icon: "square.grid.2x2", title: "Dashboard", order: 1),
         SidebarItemConfig(id: "devices", icon: "desktopcomputer", title: "Devices", order: 2),
@@ -548,7 +609,8 @@ struct MDMConfiguration: Codable {
         SidebarItemConfig(id: "logs", icon: "doc.text.magnifyingglass", title: "Logs", order: 4),
         SidebarItemConfig(id: "reports", icon: "chart.bar.doc.horizontal", title: "Reports", order: 5),
         SidebarItemConfig(id: "enrollments", icon: "person.badge.plus", title: "Enrollments", order: 6),
-        SidebarItemConfig(id: "settings", icon: "gearshape", title: "Settings", order: 7)
+        SidebarItemConfig(id: "cleanup", icon: "wand.and.sparkles", title: "Cleanup", order: 7),
+        SidebarItemConfig(id: "settings", icon: "gearshape", title: "Settings", order: 8)
     ]
 
     // Default configuration (fallback when no managed domain is delivered).
@@ -568,16 +630,20 @@ struct MDMConfiguration: Codable {
         screenShareEnabled: false,
         abmClientId: nil,
         abmKeyId: nil,
-        abmPrivateKey: nil,
-        // DEBUG keeps Cleanup visible for local dev without profiles; a
-        // RELEASE build with no access profile fails closed (role nil →
-        // .user, Cleanup hidden).
-        role: { () -> String? in
-            #if DEBUG
-            return "Admin"
-            #else
-            return nil
-            #endif
-        }()
+        abmPrivateKey: nil
+        // No role name and no role definitions: with nothing delivered,
+        // every user resolves to UserCapabilities.none. The old DEBUG
+        // `role: "Admin"` shim is gone — it named a role the app invented,
+        // and roles are now defined ONLY by the profile, so it could not
+        // grant anything anyway. For local dev, deliver a roles ARRAY (each
+        // entry names itself) plus the `role` key that selects one of them:
+        //   defaults write com.herojoneslabs.helios.console.access roles '(
+        //     {
+        //       name = "Dev";
+        //       modules = (dashboard, devices);
+        //       allowExport = 1;
+        //     }
+        //   )'
+        //   defaults write com.herojoneslabs.helios.console.access role "Dev"
     )
 }

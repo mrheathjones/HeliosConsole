@@ -14,8 +14,8 @@ struct DeviceView: View {
     @Environment(\.openURL) private var openURL
     @ObservedObject private var actionLogService = ActionLogService.shared
     @ObservedObject private var configManager = MDMConfigurationManager.shared
-    /// Observed so every policy gate re-evaluates when the user's tier
-    /// lands after Entra sign-in (tier is established post-login).
+    /// Observed so every policy gate re-evaluates when the user's
+    /// capabilities land after sign-in (they are resolved post-login).
     @ObservedObject private var session = UserSession.shared
     @State private var selectedSection: DeviceSection = .overview
     @State private var searchText: String = ""
@@ -94,9 +94,10 @@ struct DeviceView: View {
     
     /// Policy for this device's Actions menu (strict fail-closed — see
     /// DeviceActionPolicy). Recomputed on configuration reload via
-    /// `configManager`.
+    /// `configManager` and on capability change via `session`; the policy is
+    /// a value type, so it must be rebuilt from the CURRENT capabilities.
     private var actionPolicy: DeviceActionPolicy {
-        configManager.configuration.computerActionPolicy
+        configManager.configuration.computerActionPolicy(capabilities: session.capabilities)
     }
 
     struct CommandResult {
@@ -701,10 +702,10 @@ struct DeviceView: View {
 
     private func executeAction(_ action: DeviceAction) async {
         // Defense in depth: the menu already filters by policy, but never
-        // rely on UI alone — re-check BOTH layers (machine allow-list AND,
-        // under Entra sign-in, the user's tier) before any command fires,
+        // rely on UI alone — re-check BOTH layers (machine allow-list AND
+        // the signed-in user's role capabilities) before any command fires,
         // and audit-log which layer denied.
-        if let denial = actionPolicy.denialReason(for: action, tier: session.tier) {
+        if let denial = actionPolicy.denialReason(for: action) {
             await reportActionDenial(denial, for: action)
             return
         }
@@ -762,14 +763,14 @@ struct DeviceView: View {
     /// (executeAction and the Unlock Account sheet): surfaces the
     /// "Action Not Permitted" alert and audit-logs which layer denied.
     private func reportActionDenial(_ denial: DeviceActionPolicy.DenialReason, for action: DeviceAction) async {
-        let deniedByTier = denial == .userTier
+        let deniedByRole = denial == .roleCapability
         await MainActor.run {
             commandResult = CommandResult(
                 success: false,
                 title: "Action Not Permitted",
-                message: deniedByTier
-                    ? "\"\(action.logName)\" is not available at your access level."
-                    : "\"\(action.logName)\" is not enabled by your administrator."
+                message: deniedByRole
+                    ? "\"\(action.logName)\" is not available for your role."
+                    : "\"\(action.logName)\" is not enabled by your administrator for this Mac."
             )
             showingCommandAlert = true
         }
@@ -780,10 +781,16 @@ struct DeviceView: View {
             deviceSerialNumber: displayComputer.serialNumber ?? "Unknown",
             deviceId: displayComputer.id,
             success: false,
-            errorMessage: deniedByTier
-                ? "Blocked by user access tier (\(session.tier.rawValue) < required \(actionPolicy.requiredTier(for: action).rawValue))"
+            errorMessage: deniedByRole
+                ? "Blocked by role capability (no role held by this user grants '\(action.rawValue)' on computers; roles: \(signedInRolesDescription))"
                 : "Blocked by deviceActions policy (access profile)"
         )
+    }
+
+    /// The user's role names for audit copy — roles are arbitrary names
+    /// defined by the profile, so the log records what they actually held.
+    private var signedInRolesDescription: String {
+        session.roles.isEmpty ? "none" : session.roles.joined(separator: ", ")
     }
     
     // MARK: - Screen Share
@@ -1108,13 +1115,13 @@ struct DeviceView: View {
                 .disabled(isLoadingDetails)
                 
                 // Actions menu with MDM commands. Strict fail-closed: when
-                // the access profile grants no device actions — or, under
-                // Entra sign-in, the user's tier grants none — the button
-                // itself is not rendered. Bound once per render: the
-                // computed policy rebuilds its grants dictionary on every
-                // access, and one menu render consults it dozens of times.
+                // the access profile grants no device actions — or the
+                // user's roles grant none — the button itself is not
+                // rendered. Bound once per render: the computed policy
+                // rebuilds its grants dictionary on every access, and one
+                // menu render consults it dozens of times.
                 let policy = actionPolicy
-                if policy.hasAnyVisibleAction(tier: session.tier) {
+                if policy.hasAnyVisibleAction() {
                     actionsMenu(policy: policy)
                 }
             }
@@ -1126,17 +1133,18 @@ struct DeviceView: View {
     
     // MARK: - Actions Menu
     
-    /// Menu contents are driven entirely by the access profile's
-    /// deviceActions allow-list: only granted actions render, sections with
-    /// no granted action disappear, and the profile's displayName override
-    /// (menu label only) is honored. Grouping/order stay app-defined.
-    /// Takes the policy bound by the caller so one render evaluates the
-    /// computed `actionPolicy` once (execution paths still read it fresh).
+    /// Menu contents are driven entirely by the policy — the access
+    /// profile's deviceActions allow-list intersected with the user's role
+    /// capabilities: only granted actions render, sections with no granted
+    /// action disappear, and the profile's displayName override (menu label
+    /// only) is honored. Grouping/order stay app-defined. Takes the policy
+    /// bound by the caller so one render evaluates the computed
+    /// `actionPolicy` once (execution paths still read it fresh).
     private func actionsMenu(policy: DeviceActionPolicy) -> some View {
         Menu {
             ForEach(DeviceAction.MenuSection.allCases, id: \.self) { section in
                 let visibleActions = DeviceAction.allCases.filter {
-                    $0.menuSection == section && policy.isAllowed($0, tier: session.tier)
+                    $0.menuSection == section && policy.isAllowed($0)
                 }
                 if !visibleActions.isEmpty {
                     Section(section.title) {
@@ -1951,7 +1959,7 @@ struct DeviceView: View {
         // only reachable via the policy-filtered menu, but enforcement must
         // never live only in the UI — re-check both layers and audit-log
         // which one denied.
-        if let denial = actionPolicy.denialReason(for: .unlockUserAccount, tier: session.tier) {
+        if let denial = actionPolicy.denialReason(for: .unlockUserAccount) {
             await reportActionDenial(denial, for: .unlockUserAccount)
             return
         }

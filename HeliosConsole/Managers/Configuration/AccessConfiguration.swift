@@ -19,15 +19,16 @@
 //  property is optional — a missing key must never fail the whole domain
 //  decode. Defaults live in the computed `effective*` accessors, NOT inline.
 //
-//  Fail-closed: a Mac that never receives this profile resolves to
-//  role=User (Cleanup hidden) and the default device-action allow-list.
+//  Fail-closed: a Mac that never receives this profile resolves to no role
+//  (every capability empty — see UserCapabilities.none) and no device-action
+//  allow-list.
 //
 
 import Foundation
 
 /// Codable model for the `com.herojoneslabs.helios.console.access` managed-preference
-/// domain: operator role (RBAC), Cleanup defaults, and the device-action
-/// allow-list.
+/// domain: the admin-authored role definitions (RBAC), this Mac's role name,
+/// Cleanup defaults, and the device-action allow-list.
 struct AccessConfiguration: Codable {
 
     /// Managed-preference domain this model is decoded from.
@@ -37,40 +38,234 @@ struct AccessConfiguration: Codable {
     /// nothing else reads it).
     var configurationVersion: String?
 
-    /// Operator role string as delivered by MDM ("Admin" / "Support" /
-    /// "User"). Never compare this raw value directly — resolve it through
-    /// `appRole`, which fails closed.
+    /// Role name for this Mac, used ONLY when Entra sign-in is not
+    /// configured (the Entra roles claim is authoritative when it is). A
+    /// FREE-FORM string naming a `roles` entry's `name` — the app defines no
+    /// roles of its own, so a value matching no entry grants nothing
+    /// (fail-closed). Matched exactly, case-sensitively.
     var role: String?
 
-    /// Defaults for the Admin-only Cleanup (stale device) feature.
+    /// Admin-authored role definitions — an ARRAY of objects, each carrying
+    /// its role name in the `name` field. The names are arbitrary and chosen
+    /// entirely by the admin — they must match the Entra app-role values
+    /// (roles claim) under Entra sign-in, or the `role` key above otherwise.
+    /// A user holding several roles gets the UNION of their capabilities
+    /// (see UserCapabilities.union).
+    ///
+    /// ARRAY, NOT A DICTIONARY, deliberately: an admin-keyed dictionary can
+    /// only be expressed in JSON Schema as `additionalProperties`, which
+    /// Jamf Pro's Application & Custom Settings form generator cannot render
+    /// — admins would have to hand-edit XML. An array of objects with the
+    /// name as a field renders as a repeatable form, matching the
+    /// `deviceActions.computer.actions` precedent.
+    ///
+    /// Entries are indexed by name at composition time
+    /// (MDMConfiguration.roleIndex(from:)), which SKIPS nameless entries and
+    /// UNIONS duplicate names. Absent → no role is defined → EVERY user
+    /// resolves to `UserCapabilities.none`. There is no built-in fallback role.
+    var roles: [RoleDefinition]?
+
+    /// Defaults for the Cleanup (stale device) feature.
     var cleanup: CleanupSettings?
 
     /// Per-action allow-list for device commands.
     var deviceActions: DeviceActionsSettings?
 
-    // MARK: - Role (fail-closed)
-
-    enum AppRole: String {
-        case admin = "Admin"
-        case support = "Support"
-        case user = "User"
-    }
-
-    /// Resolves the operator role fail-closed: a missing, blank, or
-    /// unrecognized value (including wrong case like "admin") is treated as
-    /// the least-privileged `.user`, so the destructive Cleanup feature is
-    /// never exposed by accident. Only the exact string "Admin" grants it.
-    /// Mirrors `MDMConfiguration.appRole`.
-    var appRole: AppRole {
-        guard let role, let parsed = AppRole(rawValue: role) else { return .user }
-        return parsed
-    }
-
     // MARK: - Effective accessors
 
     var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
+    var effectiveRoles: [RoleDefinition] { roles ?? [] }
     var effectiveCleanup: CleanupSettings { cleanup ?? CleanupSettings() }
     var effectiveDeviceActions: DeviceActionsSettings { deviceActions ?? DeviceActionsSettings() }
+
+    // MARK: - Domain decode (resilient by key)
+
+    enum CodingKeys: String, CodingKey {
+        case configurationVersion, role, roles, cleanup, deviceActions
+    }
+
+    init(
+        configurationVersion: String? = nil,
+        role: String? = nil,
+        roles: [RoleDefinition]? = nil,
+        cleanup: CleanupSettings? = nil,
+        deviceActions: DeviceActionsSettings? = nil
+    ) {
+        self.configurationVersion = configurationVersion
+        self.role = role
+        self.roles = roles
+        self.cleanup = cleanup
+        self.deviceActions = deviceActions
+    }
+
+    /// Per-key resilient decode. ManagedDomainLoader catches a thrown decode
+    /// and discards the ENTIRE domain — which would silently strip the
+    /// device-action allow-list and every role definition over one typo'd
+    /// value. So each key degrades on its own instead: a malformed key
+    /// becomes nil, which every `effective*` accessor resolves fail-closed
+    /// (nothing granted).
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        configurationVersion = try? container.decode(String.self, forKey: .configurationVersion)
+        role = try? container.decode(String.self, forKey: .role)
+        roles = Self.decodeRoles(from: container)
+        cleanup = try? container.decode(CleanupSettings.self, forKey: .cleanup)
+        deviceActions = try? container.decode(DeviceActionsSettings.self, forKey: .deviceActions)
+    }
+
+    /// Lenient `roles` decode over the array shape. Each element is decoded
+    /// through `FailableRole`, whose init NEVER throws — so one undecodable
+    /// entry (e.g. a role delivered as a string instead of an object) becomes
+    /// nil and is SKIPPED rather than failing the array decode, which would
+    /// discard every other role and, via the loader's catch, the whole access
+    /// domain.
+    ///
+    /// `roles` present but not an array at all → `[]` (no roles defined;
+    /// every user gets nothing, fail-closed).
+    ///
+    /// Nameless entries are NOT filtered here — names are resolved at
+    /// composition time by `MDMConfiguration.roleIndex(from:)`, which skips
+    /// them and unions duplicates, so every construction path gets the same
+    /// treatment.
+    private static func decodeRoles(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) -> [RoleDefinition]? {
+        guard container.contains(.roles) else { return nil }
+
+        guard let entries = try? container.decode([FailableRole].self, forKey: .roles) else {
+            NSLog("⚠️ access.roles: 'roles' is not an array of role definitions — NO roles defined (every user gets no access, fail-closed)")
+            return []
+        }
+
+        var decoded: [RoleDefinition] = []
+        for (index, entry) in entries.enumerated() {
+            guard let definition = entry.value else {
+                NSLog("⚠️ access.roles: role entry at index %d is malformed — SKIPPED (other roles are unaffected)", index)
+                continue
+            }
+            decoded.append(definition)
+        }
+        return decoded
+    }
+
+    /// Lossy element wrapper: absorbs an undecodable role entry instead of
+    /// throwing, so the surrounding array decode always succeeds. Because the
+    /// init never throws, the unkeyed container advances past every element
+    /// normally.
+    private struct FailableRole: Decodable {
+        let value: RoleDefinition?
+
+        init(from decoder: Decoder) throws {
+            value = try? RoleDefinition(from: decoder)
+        }
+    }
+
+    // MARK: - Role definition
+
+    /// One admin-authored role: its NAME and the capabilities its holders
+    /// receive. Every list is optional and resolves fail-closed when absent —
+    /// a role that defines nothing grants nothing. Ids are matched EXACTLY:
+    /// `modules` are sidebar/route ids, `computerActions` /
+    /// `mobileDeviceActions` are DeviceAction raw values, and
+    /// `cleanupActions` are CleanupAction configIDs.
+    struct RoleDefinition: Codable {
+        /// The admin-chosen role name. Optional at the type level because a
+        /// missing key must never fail the decode — but a definition without
+        /// a usable name is UNREACHABLE and gets skipped when the name index
+        /// is built (see MDMConfiguration.roleIndex(from:)).
+        var name: String?
+
+        var modules: [String]?
+        var computerActions: [String]?
+        var mobileDeviceActions: [String]?
+        var cleanupActions: [String]?
+        var allowExport: Bool?
+
+        /// The role name, trimmed. `""` when absent, blank, or malformed —
+        /// which makes the definition unreachable (no role name can ever
+        /// match it) and is what `roleIndex(from:)` skips on.
+        var effectiveName: String {
+            name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
+
+        /// Absent/malformed → [] (grants nothing); entries are trimmed and
+        /// empties dropped so a stray space never becomes an unmatchable id.
+        var effectiveModules: [String] { Self.normalizedList(modules) }
+        var effectiveComputerActions: [String] { Self.normalizedList(computerActions) }
+        var effectiveMobileDeviceActions: [String] { Self.normalizedList(mobileDeviceActions) }
+        var effectiveCleanupActions: [String] { Self.normalizedList(cleanupActions) }
+
+        /// Absent/malformed → false (fail-closed).
+        var effectiveAllowExport: Bool { allowExport ?? false }
+
+        enum CodingKeys: String, CodingKey {
+            case name, modules, computerActions, mobileDeviceActions, cleanupActions, allowExport
+        }
+
+        init(
+            name: String? = nil,
+            modules: [String]? = nil,
+            computerActions: [String]? = nil,
+            mobileDeviceActions: [String]? = nil,
+            cleanupActions: [String]? = nil,
+            allowExport: Bool? = nil
+        ) {
+            self.name = name
+            self.modules = modules
+            self.computerActions = computerActions
+            self.mobileDeviceActions = mobileDeviceActions
+            self.cleanupActions = cleanupActions
+            self.allowExport = allowExport
+        }
+
+        /// Per-field resilient decode: a malformed list degrades to nil (that
+        /// capability grants nothing) instead of failing the role — and a
+        /// malformed `allowExport` degrades to false. One typo'd key never
+        /// discards its correctly-typed siblings. Never throws for an object
+        /// input, so a `[RoleDefinition]` decode only fails when an ENTRY
+        /// isn't an object at all (absorbed by `FailableRole`/`decodeRoles`).
+        ///
+        /// A malformed `name` degrades to nil — i.e. an unreachable role that
+        /// grants nobody anything, the fail-closed direction.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try? container.decode(String.self, forKey: .name)
+            modules = Self.decodeList(container, .modules)
+            computerActions = Self.decodeList(container, .computerActions)
+            mobileDeviceActions = Self.decodeList(container, .mobileDeviceActions)
+            cleanupActions = Self.decodeList(container, .cleanupActions)
+
+            if container.contains(.allowExport) {
+                if let value = try? container.decode(Bool.self, forKey: .allowExport) {
+                    allowExport = value
+                } else {
+                    allowExport = false
+                    NSLog("⚠️ access.roles: malformed 'allowExport' — treated as FALSE (fail-closed)")
+                }
+            } else {
+                allowExport = nil
+            }
+        }
+
+        private static func decodeList(
+            _ container: KeyedDecodingContainer<CodingKeys>,
+            _ key: CodingKeys
+        ) -> [String]? {
+            guard container.contains(key) else { return nil }
+            if let values = try? container.decode([String].self, forKey: key) { return values }
+            NSLog("⚠️ access.roles: malformed '%@' — treated as EMPTY (grants nothing, fail-closed)", key.rawValue)
+            return []
+        }
+
+        /// Trims each entry and drops empties. Absent → [] (fail-closed):
+        /// unlike the old tier lists there is no documented default to fall
+        /// back to, because the app defines no roles of its own.
+        private static func normalizedList(_ values: [String]?) -> [String] {
+            (values ?? [])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+    }
 
     // MARK: - Cleanup settings (managed payload)
 
@@ -135,46 +330,25 @@ struct AccessConfiguration: Codable {
         var enabled: Bool?
         var displayName: String?
         var options: DeviceActionOptions?
-        /// Minimum user tier override ("Admin" / "Operator") — consulted by
-        /// DeviceActionPolicy only when Entra sign-in is active. Resolve via
-        /// `effectiveRequiredTier`, never by comparing this raw string.
-        var requiredTier: String?
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveDisplayName: String { displayName ?? "" }
         var effectiveOptions: DeviceActionOptions { options ?? .empty }
 
-        /// Profile-delivered tier override, resolved fail-closed UPWARD:
-        /// exactly "Admin" → .admin, exactly "Operator" → .operator,
-        /// absent → nil (the action's built-in `defaultMinimumTier`
-        /// applies), and ANY other delivered value — typo, wrong case,
-        /// even "None" — → .admin. A malformed value must restrict,
-        /// never expand ("None" would pass every tier check).
-        var effectiveRequiredTier: UserAccessTier? {
-            guard let requiredTier else { return nil }
-            switch requiredTier {
-            case UserAccessTier.admin.rawValue: return .admin
-            case UserAccessTier.operator.rawValue: return .operator
-            default: return .admin
-            }
-        }
-
         enum CodingKeys: String, CodingKey {
-            case id, enabled, displayName, options, requiredTier
+            case id, enabled, displayName, options
         }
 
         init(
             id: String? = nil,
             enabled: Bool? = nil,
             displayName: String? = nil,
-            options: DeviceActionOptions? = nil,
-            requiredTier: String? = nil
+            options: DeviceActionOptions? = nil
         ) {
             self.id = id
             self.enabled = enabled
             self.displayName = displayName
             self.options = options
-            self.requiredTier = requiredTier
         }
 
         /// Per-field resilient decode: a malformed value (e.g. `options`
@@ -212,22 +386,6 @@ struct AccessConfiguration: Codable {
                 }
             } else {
                 options = nil
-            }
-
-            if container.contains(.requiredTier) {
-                if let value = try? container.decode(String.self, forKey: .requiredTier) {
-                    requiredTier = value
-                    if value != UserAccessTier.admin.rawValue && value != UserAccessTier.operator.rawValue {
-                        NSLog("⚠️ deviceActions: unknown 'requiredTier' '%@' for id '%@' — treated as Admin (fail-closed upward)", value, (try? container.decode(String.self, forKey: .id)) ?? "?")
-                    }
-                } else {
-                    // Present but not a string: same fail-closed-upward
-                    // direction as an unknown value.
-                    requiredTier = UserAccessTier.admin.rawValue
-                    NSLog("⚠️ deviceActions: malformed 'requiredTier' for id '%@' — treated as Admin (fail-closed upward)", (try? container.decode(String.self, forKey: .id)) ?? "?")
-                }
-            } else {
-                requiredTier = nil
             }
         }
     }

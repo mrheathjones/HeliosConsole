@@ -19,6 +19,14 @@ struct ProtectDeviceListView: View {
     @State private var confirmingDelete = false
     @State private var isDeleting = false
     @State private var results: [ActionResult]?
+    /// Observed so the delete gate re-evaluates when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
+
+    /// The only action in this view is deleting the Jamf Protect record.
+    private var canDeleteFromProtect: Bool {
+        session.capabilities.canRunCleanupAction(.deleteFromProtect)
+    }
 
     private var filterMatches: [ProtectDevice] {
         model.protectDevices(for: filter)
@@ -75,7 +83,9 @@ struct ProtectDeviceListView: View {
         .searchable(text: $searchText, prompt: "Host name or serial")
         .safeAreaInset(edge: .top, spacing: 0) { countBar }
         .safeAreaInset(edge: .bottom) {
-            if !selection.isEmpty {
+            // No Protect delete grant → no delete bar; the list stays
+            // browsable and exportable, but read-only.
+            if !selection.isEmpty, canDeleteFromProtect {
                 deleteBar
             }
         }
@@ -104,6 +114,9 @@ struct ProtectDeviceListView: View {
     // MARK: - Delete flow
 
     private func runDelete() {
+        // Defense in depth: the delete bar is not rendered without the
+        // grant, but enforcement must never live only in the UI.
+        guard canDeleteFromProtect else { return }
         let targets = selectedDevices
         isDeleting = true
         Task {

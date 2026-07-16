@@ -57,8 +57,8 @@ struct SidebarView: View {
     let onNavigate: (NavigationDestination) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    /// Observed so the Cleanup gate re-evaluates when the tier lands after
-    /// Entra sign-in (tier is established post-login, not at view init).
+    /// Observed so the module gates re-evaluate when capabilities land after
+    /// sign-in (they are resolved post-login, not at view init).
     @ObservedObject private var session = UserSession.shared
     @State private var showLogoutModal = false
     
@@ -208,34 +208,69 @@ struct SidebarView: View {
         var id: String { destination.id }
     }
 
-    /// Sidebar contents are config-driven: the ui domain's sidebarItems
-    /// controls presence, order, label, and icon (ids must be
-    /// NavigationDestination raw values — unknown ids are skipped); the
-    /// showAnnouncements/showEnrollments switches prune their views; and
-    /// Cleanup stays strictly role-gated no matter what the profile lists.
-    /// Settings is pinned below the divider (gated by showSettings there).
+    /// Sidebar contents are the INTERSECTION of two independent layers, both
+    /// of which must allow a row (fail-closed — neither widens the other):
+    ///
+    ///   Machine layer — the ui domain's sidebarItems controls presence,
+    ///     order, label, and icon (ids must be NavigationDestination raw
+    ///     values; unknown ids are skipped), and the
+    ///     showAnnouncements/showEnrollments/reports switches prune further.
+    ///   User layer — the signed-in user's role modules must contain the
+    ///     destination id. Cleanup is NOT special-cased any more: it is the
+    ///     `cleanup` module id like every other row.
+    ///
+    /// Settings is pinned below the divider (gated the same way there).
     private var mainNavigationEntries: [ResolvedSidebarEntry] {
-        let config = MDMConfigurationManager.shared.configuration
-        let ui = config.userInterfaceExtras
+        Self.resolvedEntries(
+            config: MDMConfigurationManager.shared.configuration,
+            capabilities: session.capabilities
+        )
+    }
 
+    /// The MACHINE-scoped half of a route's gate, in ONE place: the ui
+    /// domain's sidebarItems presence/isEnabled plus the per-module kill
+    /// switches (showAnnouncements / showEnrollments / features.reports, and
+    /// showSettings for the pinned Settings row). Says nothing about the
+    /// USER layer — intersect it with `capabilities.canAccess(module:)`.
+    ///
+    /// Shared by the sidebar rows, `availableDestination(matching:config:capabilities:)`
+    /// and DashboardView's route gate, so a module killed on this Mac can
+    /// never stay reachable through a route that skipped one of the
+    /// conditions (deep links set the destination directly).
+    static func machineAllows(_ destination: NavigationDestination, config: MDMConfiguration) -> Bool {
+        let ui = config.userInterfaceExtras
+        switch destination {
+        case .settings:
+            // Pinned below the divider — deliberately not a sidebarItems
+            // entry, so presence there is not part of its rule.
+            return ui?.effectiveShowSettings ?? true
+        case .announcements where ui?.effectiveShowAnnouncements == false:
+            return false
+        case .enrollments where ui?.effectiveShowEnrollments == false:
+            return false
+        case .reports where config.features?.effectiveReports.effectiveEnabled == false:
+            return false // features domain: reports module disabled
+        default:
+            break
+        }
+        return config.sidebarItems.contains { $0.id == destination.rawValue && $0.isEnabled }
+    }
+
+    /// Shared with `availableDestination(matching:config:capabilities:)` so the
+    /// rows a user can click and the route the app lands on can never disagree.
+    private static func resolvedEntries(
+        config: MDMConfiguration,
+        capabilities: UserCapabilities
+    ) -> [ResolvedSidebarEntry] {
         var entries: [ResolvedSidebarEntry] = []
         for item in config.sidebarItems.sorted(by: { $0.order < $1.order }) where item.isEnabled {
             guard let destination = NavigationDestination(rawValue: item.id) else {
                 print("⚠️ ui: sidebarItems id '\(item.id)' does not match any view — skipped")
                 continue
             }
-            switch destination {
-            case .settings, .cleanup:
-                continue // settings is pinned below; cleanup is role-gated
-            case .announcements where ui?.effectiveShowAnnouncements == false:
-                continue
-            case .enrollments where ui?.effectiveShowEnrollments == false:
-                continue
-            case .reports where config.features?.effectiveReports.effectiveEnabled == false:
-                continue // features domain: reports module disabled
-            default:
-                break
-            }
+            guard destination != .settings else { continue } // pinned below the divider
+            guard machineAllows(destination, config: config) else { continue }
+            guard capabilities.canAccess(module: destination.rawValue) else { continue }
             guard !entries.contains(where: { $0.destination == destination }) else { continue }
             entries.append(ResolvedSidebarEntry(
                 destination: destination,
@@ -243,25 +278,43 @@ struct SidebarView: View {
                 icon: item.icon.isEmpty ? destination.icon : item.icon
             ))
         }
-
-        // Cleanup (stale-device bulk actions) is gated to the Admin role
-        // AND, under Entra sign-in, the signed-in user: admin tier or a
-        // configured cleanupRoles app role (both layers must allow — see
-        // MDMConfiguration.isCleanupPermitted).
-        if config.isCleanupPermitted(tier: session.tier, roles: session.roles) {
-            entries.append(ResolvedSidebarEntry(
-                destination: .cleanup,
-                title: NavigationDestination.cleanup.title,
-                icon: NavigationDestination.cleanup.icon
-            ))
-        }
         return entries
     }
 
-    /// ui domain showSettings switch (default true).
+    /// ui domain showSettings switch (default true) INTERSECTED with the
+    /// user's `settings` module grant. Log Out lives outside this gate — it
+    /// must stay reachable for a user with no modules at all.
     private var showSettingsItem: Bool {
-        MDMConfigurationManager.shared.configuration
-            .userInterfaceExtras?.effectiveShowSettings ?? true
+        Self.showsSettings(
+            config: MDMConfigurationManager.shared.configuration,
+            capabilities: session.capabilities
+        )
+    }
+
+    private static func showsSettings(
+        config: MDMConfiguration,
+        capabilities: UserCapabilities
+    ) -> Bool {
+        machineAllows(.settings, config: config)
+            && capabilities.canAccess(module: NavigationDestination.settings.rawValue)
+    }
+
+    /// `current` when the user can still reach it, otherwise the first row they
+    /// can reach (nil when they can reach none). Callers use this to land a user
+    /// somewhere real instead of stranding them on a route their roles don't
+    /// grant — the default selection cannot know what a given user is allowed.
+    static func availableDestination(
+        matching current: NavigationDestination,
+        config: MDMConfiguration,
+        capabilities: UserCapabilities
+    ) -> NavigationDestination? {
+        if current == .settings, showsSettings(config: config, capabilities: capabilities) {
+            return .settings
+        }
+        let entries = resolvedEntries(config: config, capabilities: capabilities)
+        if entries.contains(where: { $0.destination == current }) { return current }
+        if let first = entries.first { return first.destination }
+        return showsSettings(config: config, capabilities: capabilities) ? .settings : nil
     }
 }
 

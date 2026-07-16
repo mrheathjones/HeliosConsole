@@ -380,9 +380,10 @@ struct CoreConfiguration: Codable {
 
     /// `signIn.entra` block: PUBLIC-client Entra app registration for the
     /// interactive user sign-in flow. Carries NO secrets, ever — a public
-    /// client has none. Access tiers are granted via the registration's
-    /// app-role values (roles claim); sign-in restriction should ALSO be
-    /// enforced Entra-side ("Assignment required" on the enterprise
+    /// client has none. Capabilities are granted by matching the token's
+    /// roles claim against the role names defined in the ACCESS domain's
+    /// `roles` block (no role names live here); sign-in restriction should
+    /// ALSO be enforced Entra-side ("Assignment required" on the enterprise
     /// application) — the client-side checks are a UX gate, not a security
     /// boundary on their own.
     struct EntraSignInSettings: Codable {
@@ -398,18 +399,6 @@ struct CoreConfiguration: Codable {
         /// Reuses the cleanup pointer's `CloudInstance` host mapping.
         var cloudInstance: String?
 
-        /// App-role VALUES (the registration's appRoles `value` field,
-        /// surfaced in the token's roles claim) granting the ADMIN tier.
-        var adminRoles: [String]?
-
-        /// App-role values granting the OPERATOR tier.
-        var operatorRoles: [String]?
-
-        /// App-role values granting the CLEANUP module IN ADDITION to
-        /// admin-tier users (who always qualify). Absent/empty = admins
-        /// only — today's behavior; extending Cleanup is strictly opt-in.
-        var cleanupRoles: [String]?
-
         /// Optional extra client-side check: Entra group OBJECT ids the
         /// user must be a member of (token groups claim). Empty/absent =
         /// no group check. Prefer app roles — the groups claim is subject
@@ -421,40 +410,11 @@ struct CoreConfiguration: Codable {
         /// flow performs).
         var provisionJamfCredentials: Bool?
 
-        /// Single source for the documented default role values —
-        /// referenced here (block present, key absent) AND by
-        /// MDMConfiguration's accessors (whole block absent).
-        static let defaultAdminRoles = ["Helios.Admin"]
-        static let defaultOperatorRoles = ["Helios.Operator"]
-
         /// Fail-safe cloud resolution: missing/unrecognized → global.
         /// Reuses the cleanup pointer's `CloudInstance` mapping so both
         /// Entra features agree on hosts per cloud.
         var effectiveCloudInstance: EntraPointerSettings.CloudInstance {
             EntraPointerSettings.CloudInstance.resolve(cloudInstance)
-        }
-
-        /// Admin-tier app roles with the documented default applied
-        /// (absent key → `defaultAdminRoles`). A DELIVERED list is honored
-        /// verbatim after trimming — an explicit empty list grants the
-        /// tier to no one (fail-closed), only an absent key defaults.
-        var effectiveAdminRoles: [String] {
-            Self.normalizedList(adminRoles, default: Self.defaultAdminRoles)
-        }
-
-        /// Operator-tier app roles with the documented default applied
-        /// (absent key → `defaultOperatorRoles`; same fail-closed semantics
-        /// as `effectiveAdminRoles`).
-        var effectiveOperatorRoles: [String] {
-            Self.normalizedList(operatorRoles, default: Self.defaultOperatorRoles)
-        }
-
-        /// Cleanup-granting app roles with the documented default applied
-        /// (absent key → [] = admins only, today's behavior). Unlike the
-        /// tier lists there is NO named default role — a delivered list is
-        /// trimmed with empties dropped, same as `effectiveAdminRoles`.
-        var effectiveCleanupRoles: [String] {
-            Self.normalizedList(cleanupRoles, default: [])
         }
 
         /// Group-id allow-list; empty = no group check (default).
