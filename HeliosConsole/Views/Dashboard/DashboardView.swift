@@ -127,7 +127,7 @@ struct DashboardView: View {
                 }
             case .devices:
                 gated(.devices) {
-                    DevicesView(isInNestedView: $isInNestedView)
+                    DevicesHomeView(isInNestedView: $isInNestedView)
                         .environmentObject(deepLinkRouter)
                         .id(devicesResetTrigger)
                 }
@@ -137,8 +137,6 @@ struct DashboardView: View {
                 gated(.logs) { LogsView() }
             case .reports:
                 gated(.reports) { ReportsView() }
-            case .enrollments:
-                gated(.enrollments) { EnrollmentsView() }
             case .cleanup:
                 gated(.cleanup) { CleanupView(isInNestedView: $isInNestedView) }
             case .settings:

@@ -80,7 +80,6 @@ struct UserInterfaceSettings: Codable {
     var logoURL: String?
     var accentColor: String?
     var defaultColorScheme: String?
-    var showEnrollments: Bool?
     var showAnnouncements: Bool?
     var showSettings: Bool?
     /// Marketing tagline under the wordmark on the welcome screen.
@@ -137,7 +136,6 @@ struct UserInterfaceSettings: Codable {
         return parsed
     }
 
-    var effectiveShowEnrollments: Bool { showEnrollments ?? true }
     var effectiveShowAnnouncements: Bool { showAnnouncements ?? true }
     var effectiveShowSettings: Bool { showSettings ?? true }
 

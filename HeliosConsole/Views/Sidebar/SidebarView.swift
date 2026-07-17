@@ -15,7 +15,6 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
     case announcements = "announcements"
     case logs = "logs"
     case reports = "reports"
-    case enrollments = "enrollments"
     case cleanup = "cleanup"
     case settings = "settings"
 
@@ -28,7 +27,6 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
         case .announcements: return "Announcements"
         case .logs: return "Logs"
         case .reports: return "Reports"
-        case .enrollments: return "Enrollments"
         case .cleanup: return "Cleanup"
         case .settings: return "Settings"
         }
@@ -41,7 +39,6 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
         case .announcements: return "megaphone"
         case .logs: return "doc.text.magnifyingglass"
         case .reports: return "chart.bar.doc.horizontal"
-        case .enrollments: return "person.badge.plus"
         case .cleanup: return "wand.and.sparkles"
         case .settings: return "gearshape"
         }
@@ -217,7 +214,7 @@ struct SidebarView: View {
     ///   Machine layer — the ui domain's sidebarItems controls presence,
     ///     label, and icon (ids must be NavigationDestination raw values;
     ///     unknown ids are skipped), and the
-    ///     showAnnouncements/showEnrollments/reports switches prune further.
+    ///     showAnnouncements/reports switches prune further.
     ///
     /// Settings is pinned below the divider (gated the same way there).
     private var mainNavigationEntries: [ResolvedSidebarEntry] {
@@ -229,7 +226,7 @@ struct SidebarView: View {
 
     /// The MACHINE-scoped half of a route's gate, in ONE place: the ui
     /// domain's sidebarItems presence/isEnabled plus the per-module kill
-    /// switches (showAnnouncements / showEnrollments / features.reports, and
+    /// switches (showAnnouncements / features.reports, and
     /// showSettings for the pinned Settings row). Says nothing about the
     /// USER layer — intersect it with `capabilities.canAccess(module:)`.
     ///
@@ -245,8 +242,6 @@ struct SidebarView: View {
             // entry, so presence there is not part of its rule.
             return ui?.effectiveShowSettings ?? true
         case .announcements where ui?.effectiveShowAnnouncements == false:
-            return false
-        case .enrollments where ui?.effectiveShowEnrollments == false:
             return false
         case .reports where config.features?.effectiveReports.effectiveEnabled == false:
             return false // features domain: reports module disabled
