@@ -433,4 +433,219 @@ final class JamfPreStageService: ObservableObject {
         NSLog("✅ JamfPreStageService: preload record %@ for serial %@ (assetTag %@)",
               updating ? "updated" : "created", normalized, assetTag)
     }
+
+    // MARK: - Bulk Preload (CSV import)
+
+    /// Every existing Inventory Preload serial, uppercased, for the bulk
+    /// import's skip-existing check.
+    func fetchAllPreloadSerials() async throws -> Set<String> {
+        struct Page: Codable {
+            struct Result: Codable { let serialNumber: String? }
+            let totalCount: Int
+            let results: [Result]
+        }
+
+        var serials: Set<String> = []
+        var page = 0
+        var fetched = 0
+        let pageSize = 200
+
+        while true {
+            let (data, response) = try await request(
+                "GET",
+                path: "/api/v2/inventory-preload/records?page=\(page)&page-size=\(pageSize)",
+                timeout: NetworkTuning.requestTimeout
+            )
+            guard response.statusCode == 200 else {
+                throw PreStageError.httpError(response.statusCode,
+                                              String(data: data, encoding: .utf8) ?? "Unknown error")
+            }
+            let decoded = try JSONDecoder().decode(Page.self, from: data)
+            for result in decoded.results {
+                if let serial = result.serialNumber, !serial.isEmpty {
+                    serials.insert(serial.uppercased())
+                }
+            }
+            // Terminate on the count actually RETURNED, not the requested
+            // page size — a server-side page cap would otherwise end the
+            // sweep early and misclassify existing records as new.
+            fetched += decoded.results.count
+            page += 1
+            if decoded.results.isEmpty || fetched >= decoded.totalCount { break }
+        }
+        NSLog("ℹ️ JamfPreStageService: loaded %d existing preload serial(s)", serials.count)
+        return serials
+    }
+
+    /// Create-only record write for the bulk path (existence was already
+    /// checked against fetchAllPreloadSerials — never blind-upsert in a
+    /// loop, that would be one search request per row).
+    func createPreloadRecord(serial: String, assetTag: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "serialNumber": serial,
+            "deviceType": "Computer",
+            "assetTag": assetTag,
+        ])
+        let (data, response) = try await request(
+            "POST", path: "/api/v2/inventory-preload/records", body: body
+        )
+        guard (200...299).contains(response.statusCode) else {
+            throw PreStageError.httpError(response.statusCode,
+                                          String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+    }
+}
+
+// MARK: - CSV Preload Parsing
+
+/// Parses a preload CSV the way Device_Enrollment_Prep.sh did: columns
+/// located by NORMALIZED header name (case/space/punctuation-insensitive,
+/// so "Serial Number" / "SerialNumber" / "serial_number" all match),
+/// RFC 4180 quoting (embedded commas, "" escapes; embedded newlines are
+/// not supported), serials uppercased, a blank Asset Tag falling back to
+/// the Computer Name when it matches SH/CH + 6 digits, and first-wins
+/// in-file dedup by serial.
+enum CSVPreloadParser {
+
+    struct Row: Equatable {
+        let serialNumber: String
+        let assetTag: String
+    }
+
+    struct ParseResult {
+        let rows: [Row]
+        let totalDataRows: Int
+        let skippedNoSerial: Int
+        let skippedNoAssetTag: Int
+        let duplicatesInFile: Int
+    }
+
+    enum ParseError: LocalizedError {
+        case emptyFile
+        case missingSerialColumn
+
+        var errorDescription: String? {
+            switch self {
+            case .emptyFile:
+                return "The CSV file is empty."
+            case .missingSerialColumn:
+                return "The CSV has no Serial Number column. A header row with a Serial Number column is required."
+            }
+        }
+    }
+
+    /// Header key normalization: lowercase, alphanumerics only.
+    private static func normalize(_ header: String) -> String {
+        header.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// SH###### / CH###### (the org's computer-name-as-asset-tag scheme).
+    private static func looksLikeAssetTag(_ value: String) -> Bool {
+        guard value.count == 8 else { return false }
+        guard value.hasPrefix("SH") || value.hasPrefix("CH") else { return false }
+        return value.dropFirst(2).allSatisfy { $0.isASCII && $0.isNumber }
+    }
+
+    /// Splits one CSV line per RFC 4180 (quotes, "" escapes).
+    static func fields(of line: String) -> [String] {
+        var fields: [String] = []
+        var current = ""
+        var inQuotes = false
+        var iterator = line.makeIterator()
+
+        while let ch = iterator.next() {
+            if inQuotes {
+                if ch == "\"" {
+                    // Peek: doubled quote is an escaped quote.
+                    if let next = iterator.next() {
+                        if next == "\"" {
+                            current.append("\"")
+                        } else {
+                            inQuotes = false
+                            if next == "," {
+                                fields.append(current)
+                                current = ""
+                            } else {
+                                current.append(next)
+                            }
+                        }
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    current.append(ch)
+                }
+            } else if ch == "\"" {
+                inQuotes = true
+            } else if ch == "," {
+                fields.append(current)
+                current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+        fields.append(current)
+        return fields
+    }
+
+    static func parse(_ content: String) throws -> ParseResult {
+        let lines = content
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+
+        guard let headerLine = lines.first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else {
+            throw ParseError.emptyFile
+        }
+        let headerIndex = lines.firstIndex(of: headerLine) ?? 0
+
+        let headers = fields(of: headerLine).map(normalize)
+        guard let serialIdx = headers.firstIndex(of: "serialnumber") else {
+            throw ParseError.missingSerialColumn
+        }
+        let assetIdx = headers.firstIndex(of: "assettag")
+        let nameIdx = headers.firstIndex(of: "computername")
+
+        var rows: [Row] = []
+        var seen: Set<String> = []
+        var total = 0
+        var noSerial = 0
+        var noAsset = 0
+        var dups = 0
+
+        for line in lines.dropFirst(headerIndex + 1) {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            total += 1
+
+            let cols = fields(of: line)
+            func col(_ index: Int?) -> String {
+                guard let index, index < cols.count else { return "" }
+                return cols[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            let serial = col(serialIdx).uppercased()
+            guard !serial.isEmpty else { noSerial += 1; continue }
+
+            var asset = col(assetIdx)
+            if asset.isEmpty {
+                let computerName = col(nameIdx).uppercased()
+                if looksLikeAssetTag(computerName) {
+                    asset = computerName
+                }
+            }
+            guard !asset.isEmpty else { noAsset += 1; continue }
+
+            guard seen.insert(serial).inserted else { dups += 1; continue }
+            rows.append(Row(serialNumber: serial, assetTag: asset))
+        }
+
+        return ParseResult(
+            rows: rows,
+            totalDataRows: total,
+            skippedNoSerial: noSerial,
+            skippedNoAssetTag: noAsset,
+            duplicatesInFile: dups
+        )
+    }
 }
