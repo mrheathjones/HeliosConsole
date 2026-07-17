@@ -126,6 +126,16 @@ struct CoreConfiguration: Codable {
         /// provisioned by the app (expiry forces re-provisioning).
         var userCredentialLifetimeDays: Int?
 
+        /// Seconds to wait for a device to acknowledge an ERASE_DEVICE
+        /// command. Governs EVERY erase (Erase Device and Return to
+        /// Service) — the acknowledgment wait is mandatory by design, and
+        /// no cleanup step runs without acknowledgment.
+        var eraseAckTimeoutSeconds: Int?
+
+        /// Seconds between acknowledgment polls while waiting for an erase
+        /// (see `eraseAckTimeoutSeconds`).
+        var eraseAckPollIntervalSeconds: Int?
+
         /// Required role name with the documented default applied. The
         /// default is a NEUTRAL name — deliver your org's real API Role
         /// name in the profile.
@@ -156,6 +166,22 @@ struct CoreConfiguration: Codable {
         /// (clamped to 1...365 days).
         var effectiveUserCredentialLifetimeDays: Int {
             min(max(userCredentialLifetimeDays ?? 90, 1), 365)
+        }
+
+        /// Erase-acknowledgment timeout with the documented default applied
+        /// (clamped to 30...1800 s). Governs EVERY erase — Erase Device and
+        /// Return to Service alike. The ack wait is mandatory by design:
+        /// no cleanup step (Jamf record or Entra object deletion) runs
+        /// without acknowledgment.
+        var effectiveEraseAckTimeoutSeconds: Int {
+            min(max(eraseAckTimeoutSeconds ?? 180, 30), 1800)
+        }
+
+        /// Erase-acknowledgment poll interval with the documented default
+        /// applied (clamped to 5...120 s). Applies to every erase alongside
+        /// `effectiveEraseAckTimeoutSeconds`.
+        var effectiveEraseAckPollIntervalSeconds: Int {
+            min(max(eraseAckPollIntervalSeconds ?? 15, 5), 120)
         }
     }
 

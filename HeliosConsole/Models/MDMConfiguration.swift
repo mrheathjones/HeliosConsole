@@ -28,7 +28,14 @@ struct MDMConfiguration: Codable {
     // URLRequest/URLSession construction site.
     let connectionTimeoutSeconds: Int
     let requestTimeoutSeconds: Int
-    
+
+    // Erase-acknowledgment tuning (core domain jamfPro.eraseAckTimeoutSeconds /
+    // jamfPro.eraseAckPollIntervalSeconds) — applied to EVERY erase (Erase
+    // Device and Return to Service). The ack wait is mandatory by design;
+    // no cleanup step runs without acknowledgment.
+    let eraseAckTimeoutSeconds: Int
+    let eraseAckPollIntervalSeconds: Int
+
     // DEPRECATED: the access domain's deviceActions allow-list is
     // authoritative for the screenShare action; no view reads this flag
     // anymore. Kept only until the core key is removed in a later major.
@@ -199,6 +206,8 @@ struct MDMConfiguration: Codable {
         localAdminUsername: String,
         connectionTimeoutSeconds: Int = 30,
         requestTimeoutSeconds: Int = 60,
+        eraseAckTimeoutSeconds: Int = 180,
+        eraseAckPollIntervalSeconds: Int = 15,
         screenShareEnabled: Bool,
         vpnIPExtensionAttribute: String? = nil,
         userCredentialLifetimeDays: Int = 90,
@@ -238,6 +247,8 @@ struct MDMConfiguration: Codable {
         self.localAdminUsername = localAdminUsername
         self.connectionTimeoutSeconds = connectionTimeoutSeconds
         self.requestTimeoutSeconds = requestTimeoutSeconds
+        self.eraseAckTimeoutSeconds = eraseAckTimeoutSeconds
+        self.eraseAckPollIntervalSeconds = eraseAckPollIntervalSeconds
         self.screenShareEnabled = screenShareEnabled
         self.vpnIPExtensionAttribute = vpnIPExtensionAttribute
         self.userCredentialLifetimeDays = userCredentialLifetimeDays
@@ -336,6 +347,8 @@ struct MDMConfiguration: Codable {
             localAdminUsername: core?.localAdministration?.effectiveUsername ?? "macadmin",
             connectionTimeoutSeconds: jamfPro?.effectiveConnectionTimeout ?? 30,
             requestTimeoutSeconds: jamfPro?.effectiveRequestTimeout ?? 60,
+            eraseAckTimeoutSeconds: jamfPro?.effectiveEraseAckTimeoutSeconds ?? 180,
+            eraseAckPollIntervalSeconds: jamfPro?.effectiveEraseAckPollIntervalSeconds ?? 15,
             screenShareEnabled: jamfPro?.effectiveScreenShareEnabled ?? false,
             vpnIPExtensionAttribute: jamfPro?.effectiveVPNIPExtensionAttributeName,
             userCredentialLifetimeDays: jamfPro?.effectiveUserCredentialLifetimeDays ?? 90,

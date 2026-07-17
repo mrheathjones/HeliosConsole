@@ -131,19 +131,120 @@ struct AccessConfiguration: Codable {
     /// per-item idiom ({id, enabled, displayName} — see HealthMetricSetting).
     /// Listing an id IS the grant: `enabled` omitted → true. `displayName`
     /// overrides the Actions-menu label only — confirmation-dialog safety
-    /// copy is never profile-controlled.
+    /// copy is never profile-controlled. `options` carries per-action tuning
+    /// consumed only by composite actions (see DeviceActionOptions).
     struct DeviceActionSetting: Codable {
         var id: String?
         var enabled: Bool?
         var displayName: String?
+        var options: DeviceActionOptions?
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveDisplayName: String { displayName ?? "" }
+        var effectiveOptions: DeviceActionOptions { options ?? .empty }
 
-        init(id: String? = nil, enabled: Bool? = nil, displayName: String? = nil) {
+        enum CodingKeys: String, CodingKey {
+            case id, enabled, displayName, options
+        }
+
+        init(
+            id: String? = nil,
+            enabled: Bool? = nil,
+            displayName: String? = nil,
+            options: DeviceActionOptions? = nil
+        ) {
             self.id = id
             self.enabled = enabled
             self.displayName = displayName
+            self.options = options
+        }
+
+        /// Per-field resilient decode: a malformed value (e.g. `options`
+        /// delivered as a string) degrades that field instead of failing the
+        /// whole actions array — which would cascade into the strict
+        /// fail-closed path and hide the entire Actions menu over one typo'd
+        /// profile value. Degradation direction matters on this surface:
+        /// a present-but-undecodable `enabled` is a DENY (never a grant),
+        /// and a present-but-undecodable `options` disables every cleanup
+        /// step (never "run everything"). Absent keys keep their normal
+        /// defaults (listing an id IS the grant).
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try? container.decode(String.self, forKey: .id)
+
+            if container.contains(.enabled) {
+                if let value = try? container.decode(Bool.self, forKey: .enabled) {
+                    enabled = value
+                } else {
+                    enabled = false
+                    NSLog("⚠️ deviceActions: malformed 'enabled' for id '%@' — treated as DISABLED (fail-closed)", (try? container.decode(String.self, forKey: .id)) ?? "?")
+                }
+            } else {
+                enabled = nil
+            }
+
+            displayName = try? container.decode(String.self, forKey: .displayName)
+
+            if container.contains(.options) {
+                if let value = try? container.decode(DeviceActionOptions.self, forKey: .options) {
+                    options = value
+                } else {
+                    options = DeviceActionOptions(deleteJamfRecord: false, deleteEntraObject: false)
+                    NSLog("⚠️ deviceActions: malformed 'options' for id '%@' — all cleanup steps DISABLED (fail-closed)", (try? container.decode(String.self, forKey: .id)) ?? "?")
+                }
+            } else {
+                options = nil
+            }
+        }
+    }
+
+    /// The optional `options` object on an allow-list entry. Only consulted
+    /// by the `returnToService` composite today — every other action ignores
+    /// it. Each toggle defaults to true so an absent options object
+    /// reproduces the original full-decommission behavior on
+    /// already-deployed profiles. The erase itself is not optional and
+    /// always waits for acknowledgment — only the post-ack cleanup steps are
+    /// configurable here.
+    struct DeviceActionOptions: Codable {
+        /// Remove the Jamf computer record after the erase is acknowledged.
+        var deleteJamfRecord: Bool?
+        /// Delete the Entra device object after the erase is acknowledged
+        /// (auto-skipped when Entra isn't configured).
+        var deleteEntraObject: Bool?
+
+        var effectiveDeleteJamfRecord: Bool { deleteJamfRecord ?? true }
+        var effectiveDeleteEntraObject: Bool { deleteEntraObject ?? true }
+
+        /// No keys delivered — every toggle resolves to its default (true).
+        static let empty = DeviceActionOptions()
+
+        enum CodingKeys: String, CodingKey {
+            case deleteJamfRecord, deleteEntraObject
+        }
+
+        init(deleteJamfRecord: Bool? = nil, deleteEntraObject: Bool? = nil) {
+            self.deleteJamfRecord = deleteJamfRecord
+            self.deleteEntraObject = deleteEntraObject
+        }
+
+        /// Per-field fail-closed decode: an absent toggle keeps its default
+        /// (true), but a present-but-undecodable toggle resolves to FALSE —
+        /// the non-destructive direction (skip the cleanup step) — and one
+        /// typo'd key never discards its correctly-typed sibling.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            deleteJamfRecord = Self.decodeToggle(container, .deleteJamfRecord)
+            deleteEntraObject = Self.decodeToggle(container, .deleteEntraObject)
+        }
+
+        private static func decodeToggle(
+            _ container: KeyedDecodingContainer<CodingKeys>,
+            _ key: CodingKeys
+        ) -> Bool? {
+            guard container.contains(key) else { return nil }
+            if let value = try? container.decode(Bool.self, forKey: key) { return value }
+            NSLog("⚠️ deviceActions.options: malformed '%@' — treated as FALSE (skip step, fail-closed)", key.rawValue)
+            return false
         }
     }
 
