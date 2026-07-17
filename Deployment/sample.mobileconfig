@@ -43,7 +43,13 @@
 				<key>masterClientID</key>
 				<string>REPLACE-WITH-MASTER-CLIENT-ID</string>
 				<key>requiredRoleName</key>
-				<string>SVC_WATCHER_USER</string>
+				<string>HeliosConsoleAPIRole</string>
+
+			<!-- Optional: name of the Jamf Extension Attribute holding a
+			     device's VPN IP. When set, Screen Share prefers it over
+			     the LAN IP. Empty/omitted = disabled.
+			<key>vpnIPExtensionAttributeName</key>
+			<string>EA_VPN_IP_ADDRESS</string> -->
 				<key>screenShareEnabled</key>
 				<false/>
 			</dict>

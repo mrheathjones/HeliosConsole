@@ -142,7 +142,9 @@ final class EntraGraphService {
     /// Obtain an app-only Graph token. Prefers certificate client-assertion
     /// (PS256), falls back to the client secret. Mirrors get_graph_token.
     func fetchAccessToken() async throws -> String {
-        let tokenURLString = "https://login.microsoftonline.com/\(tenantId)/oauth2/v2.0/token"
+        // Cloud endpoints from core entra.cloudInstance (global/usgov/china).
+        let authorityHost = MDMConfigurationManager.shared.configuration.entraAuthorityHost
+        let tokenURLString = "https://\(authorityHost)/\(tenantId)/oauth2/v2.0/token"
         guard let url = URL(string: tokenURLString) else {
             throw EntraGraphError.tokenRequestFailed("Invalid token endpoint URL")
         }
@@ -150,7 +152,7 @@ final class EntraGraphService {
         var form: [String: String] = [
             "client_id": clientId,
             "grant_type": "client_credentials",
-            "scope": "https://graph.microsoft.com/.default"
+            "scope": "https://\(MDMConfigurationManager.shared.configuration.entraGraphHost)/.default"
         ]
 
         if let certPEM {
@@ -193,7 +195,7 @@ final class EntraGraphService {
         // OData string literal escaping: a single quote is doubled.
         let escaped = displayName.replacingOccurrences(of: "'", with: "''")
 
-        var components = URLComponents(string: "https://graph.microsoft.com/v1.0/devices")!
+        var components = URLComponents(string: "https://\(MDMConfigurationManager.shared.configuration.entraGraphHost)/v1.0/devices")!
         components.queryItems = [
             URLQueryItem(name: "$filter", value: "displayName eq '\(escaped)'"),
             URLQueryItem(name: "$count", value: "true"),
@@ -229,7 +231,7 @@ final class EntraGraphService {
     /// otherwise; a 403 means the app is missing the Cloud Device Administrator
     /// role.
     private func deleteDevice(id: String, token: String) async -> Bool {
-        guard let url = URL(string: "https://graph.microsoft.com/v1.0/devices/\(id)") else {
+        guard let url = URL(string: "https://\(MDMConfigurationManager.shared.configuration.entraGraphHost)/v1.0/devices/\(id)") else {
             return false
         }
         var request = URLRequest(url: url)

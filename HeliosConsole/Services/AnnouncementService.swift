@@ -312,9 +312,13 @@ class AnnouncementService: ObservableObject {
     
     // MARK: - Public Methods
     
-    /// Manually refresh announcements from all sources
+    /// Manually refresh announcements from all sources. Also re-applies
+    /// the managed refresh-interval and local-file settings so a re-pushed
+    /// profile takes effect without relaunching.
     func refresh() {
         loadAnnouncements()
+        restartAutoRefresh()
+        startFileMonitoring()
     }
     
     /// Mark an announcement as read
@@ -657,10 +661,20 @@ class AnnouncementService: ObservableObject {
         }
     }
 
+    /// Re-applies the managed refreshInterval to the running timer (a
+    /// re-pushed profile can change or disable the cadence mid-session).
+    private func restartAutoRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        startAutoRefresh()
+    }
+
     private func startFileMonitoring() {
         // The local file is only a source when the profile allows it — no
-        // point watching a directory we will never read.
-        guard allowLocalFile else { return }
+        // point watching a directory we will never read. Idempotent: keeps
+        // an existing monitor so it can be safely re-invoked when managed
+        // settings change mid-session.
+        guard allowLocalFile, fileMonitor == nil else { return }
         let directoryPath = Self.localAnnouncementsDirectory
 
         // Monitor the directory for changes
@@ -687,7 +701,15 @@ class AnnouncementService: ObservableObject {
     }
     
     @objc private func managedConfigurationDidChange(_ notification: Notification) {
-        // Reload when managed configuration changes
+        // Reload when managed configuration changes, and re-apply the
+        // timer/monitor settings (interval or allowLocalFile may have
+        // changed). NOTE: this notification fires for in-process defaults
+        // writes; a pure MDM plist push lands on the next manual refresh
+        // or relaunch.
+        Task { @MainActor in
+            self.restartAutoRefresh()
+            self.startFileMonitoring()
+        }
         Task { @MainActor in
             loadAnnouncements()
         }

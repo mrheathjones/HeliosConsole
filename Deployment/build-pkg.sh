@@ -43,16 +43,16 @@ OUTPUT=""
 # Sign the APP with a Developer ID Application identity + hardened runtime.
 # Empty = use the project's own signing settings (fine for dev-team machines).
 # When set, build-pkg.sh signs Manual and OVERRIDES the project's team with the
-# team embedded in the identity (so this works even though the .xcodeproj's
-# DEVELOPMENT_TEAM is TEAMIDXXXXXX, for which this Mac has no cert).
-APP_IDENTITY="Developer ID Application: Your Name (TEAMIDXXXXXX)"
+# team embedded in the identity. Set via environment for your org, e.g.
+#   HELIOS_APP_IDENTITY="Developer ID Application: Your Org (TEAMID)" ./build-pkg.sh
+APP_IDENTITY="${HELIOS_APP_IDENTITY:-}"
 
 # --- App notarization (NOT the pkg) --------------------------------
 # true  = notarize + staple the .app itself (requires APP_IDENTITY).
 # Only needed if the app may arrive via a quarantine channel (download/AirDrop).
 # NOT required for plain Jamf policy installs.
 NOTARIZE=false
-NOTARY_PROFILE="Helios-Notary"     # notarytool keychain profile name
+NOTARY_PROFILE="${HELIOS_NOTARY_PROFILE:-Helios-Notary}"     # notarytool keychain profile name
 
 # --- Pkg signing ---------------------------------------------------
 # true  = sign the .pkg with a Developer ID Installer identity.
@@ -65,8 +65,20 @@ BUMP=true
 
 # --- Mirror the finished pkg ---------------------------------------
 # After a successful build, also copy the .pkg here (e.g. an iCloud folder for
-# archiving / sharing). Empty = don't mirror.
-MIRROR_DIST="/Users/heath/Library/Mobile Documents/com~apple~CloudDocs/_APPS_IM_BUILDING/Vibe/HELIOS/HeliosConsole/dist"
+# archiving / sharing). Empty = don't mirror. Set via environment, e.g.
+#   HELIOS_MIRROR_DIST="$HOME/path/to/mirror" ./build-pkg.sh
+MIRROR_DIST="${HELIOS_MIRROR_DIST:-}"
+
+# Machine-local defaults (git-ignored): Deployment/build-pkg.local.sh may
+# override APP_IDENTITY / MIRROR_DIST / NOTARY_PROFILE etc. for this Mac
+# without baking org- or machine-specific values into the repo. Sourced
+# LAST so it wins over every default above (env vars still win over it if
+# the local file honors them; plain assignments there override env).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${SCRIPT_DIR}/build-pkg.local.sh" ]]; then
+	# shellcheck source=/dev/null
+	source "${SCRIPT_DIR}/build-pkg.local.sh"
+fi
 
 # ===================================================================
 

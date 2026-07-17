@@ -50,7 +50,7 @@ script** (no command-line flags — runs straight from CodeRunner or by double-c
 |---|---|
 | `CHANNEL` | `dev` / `alpha` / `beta` / `uat` / `ga` |
 | `SCHEME` | Pre-set to `HeliosConsole` (the project has two schemes, so this must be explicit). |
-| `APP_IDENTITY` | Developer ID Application identity → signs the app + hardened runtime. Empty = the project's own signing (fine for dev machines). Example: `Developer ID Application: Your Name (TEAMIDXXXXXX)`. |
+| `APP_IDENTITY` | Developer ID Application identity → signs the app + hardened runtime. Empty = the project's own signing (fine for dev machines). Example: `Developer ID Application: Your Name (<TEAM_ID>)`. |
 | `NOTARIZE` | `true` = notarize + staple the **app** (not the pkg); requires `APP_IDENTITY`. |
 | `SIGN_PKG` | `true` = sign the pkg with your Developer ID Installer cert (auto-detected). |
 | `BUMP` | `true` = increment the project's build number after a successful build. |
@@ -65,9 +65,9 @@ an iCloud-synced folder makes `codesign` fail on xattr detritus.
 the app lands with no quarantine flag, so a valid Developer ID signature is enough. Set
 `NOTARIZE=true` only if the app may reach a Mac via download/AirDrop, or for MDM-command/manual
 installs. Create the notary profile once:
-`xcrun notarytool store-credentials "Helios-Notary" --apple-id … --team-id TEAMIDXXXXXX --password <app-specific>`.
+`xcrun notarytool store-credentials "Helios-Notary" --apple-id … --team-id <TEAM_ID> --password <app-specific>`.
 
-> Note: Helios's Xcode team is **TEAMIDXXXXXX** (use a Developer ID under that team, or update
+> Note: Helios's Xcode team is **<TEAM_ID>** (use a Developer ID under that team, or update
 > `APP_IDENTITY`/`DEVELOPMENT_TEAM` if you sign under a different account).
 
 ---

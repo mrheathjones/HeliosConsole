@@ -31,8 +31,8 @@
         "requiredRoleName": {
           "type": "string",
           "title": "Required Jamf API Role Name",
-          "description": "Name of the Jamf API Role used when provisioning per-user API clients. Load-bearing — per-user API client provisioning targets this role name; only change it if the role in Jamf Pro is renamed.",
-          "default": "SVC_WATCHER_USER"
+          "description": "Name of the Jamf API Role used when provisioning per-user API clients. Load-bearing — per-user API client provisioning targets this role name; only change it if the role in Jamf Pro is renamed. NEUTRAL default — deliver your org’s real Jamf API Role name; provisioning targets this role.",
+          "default": "HeliosConsoleAPIRole"
         },
         "screenShareEnabled": {
           "type": "boolean",
@@ -49,6 +49,18 @@
           "type": "integer",
           "title": "Request Timeout (seconds)",
           "default": 60
+        },
+        "vpnIPExtensionAttributeName": {
+          "type": "string",
+          "title": "VPN IP Extension Attribute Name",
+          "description": "Name of the Jamf Extension Attribute holding a device's VPN IP address. When set, Screen Share and the device IP card prefer this address over the reported LAN IP. Empty = disabled (LAN IP only).",
+          "default": ""
+        },
+        "userCredentialLifetimeDays": {
+          "type": "integer",
+          "title": "User Credential Lifetime (days)",
+          "description": "Lifetime of per-user Jamf API client credentials provisioned by the app; expiry forces re-provisioning. Clamped 1-365.",
+          "default": 90
         }
       },
       "required": [
@@ -76,6 +88,16 @@
           "type": "string",
           "title": "ABM Key ID",
           "description": "Key ID of the ABM API private key. Not secret — the PEM itself lives in com.herojoneslabs.helios.console.credentials (abmPrivateKey)."
+        },
+        "serviceType": {
+          "type": "string",
+          "title": "Apple Service Type",
+          "description": "Which Apple service hosts your organization: business (Apple Business Manager, api-business.apple.com) or school (Apple School Manager, api-school.apple.com). Same API and token flow.",
+          "enum": [
+            "business",
+            "school"
+          ],
+          "default": "business"
         }
       }
     },
@@ -131,6 +153,17 @@
           "type": "string",
           "title": "Certificate PEM Key (optional)",
           "description": "Exact key name for the certificate PEM string in the credential domain. Must be the PEM string itself, not a file path (Helios runs in user context and cannot read a root-owned PEM file). If omitted, Helios tries: entra_cert_pem, entra_certificate, cert_pem, certPEM, entra_cert, certificate_pem."
+        },
+        "cloudInstance": {
+          "type": "string",
+          "title": "Azure Cloud Instance",
+          "description": "Azure cloud for the Entra cleanup flow: global (login.microsoftonline.com / graph.microsoft.com), usgov (Azure Government / GCC High), or china (Azure operated by 21Vianet).",
+          "enum": [
+            "global",
+            "usgov",
+            "china"
+          ],
+          "default": "global"
         }
       },
       "required": [

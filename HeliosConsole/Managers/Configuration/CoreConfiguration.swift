@@ -116,20 +116,47 @@ struct CoreConfiguration: Codable {
         /// URLSession request timeout in seconds.
         var requestTimeout: Int?
 
-        /// Required role name with the documented default applied.
+        /// Name of the Jamf Extension Attribute holding a device's VPN IP,
+        /// used by Screen Share (and the device IP card) to prefer the VPN
+        /// address. Org-specific — absent/empty disables the VPN-IP lookup
+        /// and the app uses the reported LAN IP.
+        var vpnIPExtensionAttributeName: String?
+
+        /// Lifetime in days for per-user Jamf API client credentials
+        /// provisioned by the app (expiry forces re-provisioning).
+        var userCredentialLifetimeDays: Int?
+
+        /// Required role name with the documented default applied. The
+        /// default is a NEUTRAL name — deliver your org's real API Role
+        /// name in the profile.
         var effectiveRequiredRoleName: String {
             let name = requiredRoleName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return name.isEmpty ? "SVC_WATCHER_USER" : name
+            return name.isEmpty ? "HeliosConsoleAPIRole" : name
         }
 
         /// DEPRECATED Screen Share flag (see `screenShareEnabled`).
         var effectiveScreenShareEnabled: Bool { screenShareEnabled ?? false }
 
         /// Connection timeout with the documented default applied.
-        var effectiveConnectionTimeout: Int { connectionTimeout ?? 30 }
+        /// Clamped 5...600 s — a profile typo (0, negative, huge) must
+        /// never brick every network call app-wide.
+        var effectiveConnectionTimeout: Int { min(max(connectionTimeout ?? 30, 5), 600) }
 
         /// Request timeout with the documented default applied.
-        var effectiveRequestTimeout: Int { requestTimeout ?? 60 }
+        /// Clamped 5...3600 s (see effectiveConnectionTimeout).
+        var effectiveRequestTimeout: Int { min(max(requestTimeout ?? 60, 5), 3600) }
+
+        /// VPN-IP extension attribute — nil when not configured (feature off).
+        var effectiveVPNIPExtensionAttributeName: String? {
+            let name = vpnIPExtensionAttributeName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return name.isEmpty ? nil : name
+        }
+
+        /// Credential lifetime with the documented default applied
+        /// (clamped to 1...365 days).
+        var effectiveUserCredentialLifetimeDays: Int {
+            min(max(userCredentialLifetimeDays ?? 90, 1), 365)
+        }
     }
 
     // MARK: - Apple Business Manager
@@ -149,8 +176,41 @@ struct CoreConfiguration: Codable {
         /// Key ID of the ABM API private key. Not secret.
         var keyID: String?
 
+        /// Which Apple service hosts the org: "business" (Apple Business
+        /// Manager) or "school" (Apple School Manager). Same API, same
+        /// tokens — different host.
+        var serviceType: String?
+
         /// Enabled flag — absent key means disabled.
         var effectiveEnabled: Bool { enabled ?? false }
+
+        enum ServiceType: String {
+            case business
+            case school
+
+            /// AxM API base URL for this service.
+            var apiBaseURL: String {
+                switch self {
+                case .business: return "https://api-business.apple.com/v1"
+                case .school: return "https://api-school.apple.com/v1"
+                }
+            }
+
+            /// OAuth scope paired with the host — ASM tokens must be
+            /// requested with school.api or the API rejects them.
+            var oauthScope: String {
+                switch self {
+                case .business: return "business.api"
+                case .school: return "school.api"
+                }
+            }
+        }
+
+        /// Fail-safe service resolution: missing/unrecognized → business.
+        var effectiveServiceType: ServiceType {
+            let raw = serviceType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+            return ServiceType(rawValue: raw) ?? .business
+        }
     }
 
     // MARK: - Jamf Protect
@@ -215,10 +275,45 @@ struct CoreConfiguration: Codable {
         /// domain. Must be the PEM string itself, not a file path.
         var certPEMKey: String?
 
+        /// Azure cloud instance: "global" (default), "usgov" (Azure
+        /// Government / GCC High), or "china" (Azure operated by 21Vianet).
+        /// Selects the token authority and Graph API hosts.
+        var cloudInstance: String?
+
         /// Whether a usable (non-empty) credential domain pointer was
         /// delivered — the block is inert without one.
         var hasCredentialDomain: Bool {
             !(credentialDomain?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+
+        enum CloudInstance: String {
+            case global
+            case usgov
+            case china
+
+            /// OAuth token authority host.
+            var authorityHost: String {
+                switch self {
+                case .global: return "login.microsoftonline.com"
+                case .usgov: return "login.microsoftonline.us"
+                case .china: return "login.chinacloudapi.cn"
+                }
+            }
+
+            /// Microsoft Graph API host (also used for the token scope).
+            var graphHost: String {
+                switch self {
+                case .global: return "graph.microsoft.com"
+                case .usgov: return "graph.microsoft.us"
+                case .china: return "microsoftgraph.chinacloudapi.cn"
+                }
+            }
+        }
+
+        /// Fail-safe cloud resolution: missing/unrecognized → global.
+        var effectiveCloudInstance: CloudInstance {
+            let raw = cloudInstance?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+            return CloudInstance(rawValue: raw) ?? .global
         }
     }
 
