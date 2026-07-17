@@ -263,7 +263,15 @@ struct SidebarView: View {
         capabilities: UserCapabilities
     ) -> [ResolvedSidebarEntry] {
         var entries: [ResolvedSidebarEntry] = []
-        for item in config.sidebarItems.sorted(by: { $0.order < $1.order }) where item.isEnabled {
+        // Stable: `config.sidebarItems` already arrives ordered (managed items
+        // by order-then-delivered-position, defaults by their explicit order).
+        // A plain sorted(by:) here would re-scramble equal `order` values,
+        // undoing the arrangement the config layer just resolved.
+        let ordered = config.sidebarItems
+            .enumerated()
+            .sorted { ($0.element.order, $0.offset) < ($1.element.order, $1.offset) }
+            .map(\.element)
+        for item in ordered where item.isEnabled {
             guard let destination = NavigationDestination(rawValue: item.id) else {
                 print("⚠️ ui: sidebarItems id '\(item.id)' does not match any view — skipped")
                 continue

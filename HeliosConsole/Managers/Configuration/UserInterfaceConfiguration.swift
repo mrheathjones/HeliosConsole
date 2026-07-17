@@ -55,10 +55,20 @@ struct UserInterfaceConfiguration: Codable {
         nonEmptyTrimmed(configurationVersion) ?? "2.0"
     }
 
-    /// Sidebar override sorted by `order` (ascending). Empty when the profile
-    /// does not deliver one — callers fall back to the built-in sidebar.
+    /// Sidebar override sorted by `order` (ascending), ties broken by the order
+    /// the admin listed them in. Empty when the profile does not deliver one —
+    /// callers fall back to the built-in sidebar.
+    ///
+    /// `order` is optional, so an admin who arranges the rows in the profile
+    /// editor without typing numbers leaves every item at the same effective
+    /// order. Swift's sort is not stable, so tying on delivered index is what
+    /// makes that arrangement survive — without it the list comes out in an
+    /// arbitrary order and the admin's intent is silently lost.
     var effectiveSidebarItems: [SidebarItemSetting] {
-        (sidebarItems ?? []).sorted { $0.effectiveOrder < $1.effectiveOrder }
+        (sidebarItems ?? [])
+            .enumerated()
+            .sorted { ($0.element.effectiveOrder, $0.offset) < ($1.element.effectiveOrder, $1.offset) }
+            .map(\.element)
     }
 }
 

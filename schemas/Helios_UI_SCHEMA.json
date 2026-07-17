@@ -139,7 +139,7 @@
           "order": {
             "type": "integer",
             "title": "Order",
-            "description": "Sort order (ascending)."
+            "description": "Sort order, ascending (1 = topmost). OPTIONAL: items without an order keep the order they are listed in here, and items sharing an order stay in listed order — so you can simply arrange the rows in this editor and leave Order blank. Mixing both works: numbered items sort by number first, unnumbered ones follow in listed order."
           }
         }
       },
