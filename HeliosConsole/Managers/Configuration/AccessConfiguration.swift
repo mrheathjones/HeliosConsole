@@ -185,6 +185,14 @@ struct AccessConfiguration: Codable {
         var computerActions: [String]?
         var mobileDeviceActions: [String]?
         var cleanupActions: [String]?
+        /// Jamf Computer PreStage displayNames selectable in the Pre-Stage
+        /// tab. Same matching rules as DeviceActionOptions.allowedMdmServers:
+        /// exact names, plus the RESERVED literal `all` (any letter case)
+        /// meaning every PreStage. Absent/empty → the tab (if granted via
+        /// deviceTabs) offers nothing — fail-closed. Distinct from the
+        /// abmAssign option of the same name, which scopes the
+        /// prestage-on-assign step, not this tab.
+        var allowedPrestages: [String]?
         var allowExport: Bool?
 
         /// The role name, trimmed. `""` when absent, blank, or malformed —
@@ -201,12 +209,13 @@ struct AccessConfiguration: Codable {
         var effectiveComputerActions: [String] { Self.normalizedList(computerActions) }
         var effectiveMobileDeviceActions: [String] { Self.normalizedList(mobileDeviceActions) }
         var effectiveCleanupActions: [String] { Self.normalizedList(cleanupActions) }
+        var effectiveAllowedPrestages: [String] { Self.normalizedList(allowedPrestages) }
 
         /// Absent/malformed → false (fail-closed).
         var effectiveAllowExport: Bool { allowExport ?? false }
 
         enum CodingKeys: String, CodingKey {
-            case name, modules, deviceTabs, computerActions, mobileDeviceActions, cleanupActions, allowExport
+            case name, modules, deviceTabs, computerActions, mobileDeviceActions, cleanupActions, allowedPrestages, allowExport
         }
 
         init(
@@ -216,6 +225,7 @@ struct AccessConfiguration: Codable {
             computerActions: [String]? = nil,
             mobileDeviceActions: [String]? = nil,
             cleanupActions: [String]? = nil,
+            allowedPrestages: [String]? = nil,
             allowExport: Bool? = nil
         ) {
             self.name = name
@@ -224,6 +234,7 @@ struct AccessConfiguration: Codable {
             self.computerActions = computerActions
             self.mobileDeviceActions = mobileDeviceActions
             self.cleanupActions = cleanupActions
+            self.allowedPrestages = allowedPrestages
             self.allowExport = allowExport
         }
 
@@ -244,6 +255,7 @@ struct AccessConfiguration: Codable {
             computerActions = Self.decodeList(container, .computerActions)
             mobileDeviceActions = Self.decodeList(container, .mobileDeviceActions)
             cleanupActions = Self.decodeList(container, .cleanupActions)
+            allowedPrestages = Self.decodeList(container, .allowedPrestages)
 
             if container.contains(.allowExport) {
                 if let value = try? container.decode(Bool.self, forKey: .allowExport) {

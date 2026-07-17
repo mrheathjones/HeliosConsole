@@ -62,6 +62,8 @@
 		FABM1 /* DevicesHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM1 /* DevicesHomeView.swift */; };
 		FABM2 /* ABMLookupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM2 /* ABMLookupView.swift */; };
 		FABM3 /* ABMAssignmentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM3 /* ABMAssignmentSheet.swift */; };
+		FABM4 /* PreStageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM4 /* PreStageView.swift */; };
+		FABM5 /* JamfPreStageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM5 /* JamfPreStageService.swift */; };
 		F046 /* MobileDeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S046 /* MobileDeviceView.swift */; };
 		F047 /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S047 /* AnnouncementsView.swift */; };
 		F200 /* AnnouncementMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S200 /* AnnouncementMarkdownView.swift */; };
@@ -200,6 +202,8 @@
 		SABM1 /* DevicesHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesHomeView.swift; sourceTree = "<group>"; };
 		SABM2 /* ABMLookupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMLookupView.swift; sourceTree = "<group>"; };
 		SABM3 /* ABMAssignmentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMAssignmentSheet.swift; sourceTree = "<group>"; };
+		SABM4 /* PreStageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreStageView.swift; sourceTree = "<group>"; };
+		SABM5 /* JamfPreStageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfPreStageService.swift; sourceTree = "<group>"; };
 		S046 /* MobileDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceView.swift; sourceTree = "<group>"; };
 		S047 /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
 		S200 /* AnnouncementMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementMarkdownView.swift; sourceTree = "<group>"; };
@@ -357,6 +361,7 @@
 				S013 /* AnnouncementService.swift */,
 				S014 /* ComputerInventoryCache.swift */,
 				S015 /* ComputerInventoryService.swift */,
+				SABM5 /* JamfPreStageService.swift */,
 				S016 /* ComputerSearchModels.swift */,
 				S017 /* ComputerSearchService.swift */,
 				S018 /* HealthMetricsCalculator.swift */,
@@ -453,6 +458,7 @@
 				SABM1 /* DevicesHomeView.swift */,
 				SABM2 /* ABMLookupView.swift */,
 				SABM3 /* ABMAssignmentSheet.swift */,
+				SABM4 /* PreStageView.swift */,
 				S046 /* MobileDeviceView.swift */,
 			);
 			path = Device;
@@ -795,6 +801,8 @@
 				FABM1 /* DevicesHomeView.swift in Sources */,
 				FABM2 /* ABMLookupView.swift in Sources */,
 				FABM3 /* ABMAssignmentSheet.swift in Sources */,
+				FABM4 /* PreStageView.swift in Sources */,
+				FABM5 /* JamfPreStageService.swift in Sources */,
 				F046 /* MobileDeviceView.swift in Sources */,
 				F047 /* AnnouncementsView.swift in Sources */,
 				F200 /* AnnouncementMarkdownView.swift in Sources */,
