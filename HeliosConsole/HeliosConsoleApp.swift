@@ -36,6 +36,7 @@ struct HeliosConsoleApp: App {
                 .preferredColorScheme(AppSettings.shared.currentColorScheme)
                 .environmentObject(AppSettings.shared)
                 .environmentObject(deepLinkRouter)
+                .environmentObject(UserSession.shared)
                 .onOpenURL { url in
                     NSApplication.shared.activate(ignoringOtherApps: true)
                     deepLinkRouter.handleURL(url)

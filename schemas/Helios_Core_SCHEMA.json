@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema version for compatibility checking (informational — the loader logs it, nothing else reads it)",
-      "default": "2.2"
+      "default": "2.4"
     },
     "jamfPro": {
       "type": "object",
@@ -181,6 +181,70 @@
       "required": [
         "credentialDomain"
       ]
+    },
+    "signIn": {
+      "type": "object",
+      "title": "Interactive Sign-In (optional)",
+      "description": "How users sign INTO Helios itself — IDENTITY ONLY. This block decides WHO the user is and which role NAMES they carry; it grants no capabilities. What each role name can actually do is defined entirely in the ACCESS domain's `roles` block (com.herojoneslabs.helios.console.access) — see schemas/Helios_Access_SCHEMA.json. Omit this block entirely to keep the built-in email sign-in flow, in which case the access domain's `role` key names the user's single role instead. DISTINCT from the entra block above: that one points at APP-ONLY Graph credentials used by Return to Service cleanup; this one configures the INTERACTIVE user OAuth flow against a separate PUBLIC-client Entra app registration — a public client has NO client secret, so no secret exists for it anywhere, by design. FAIL-CLOSED: when method is entra but tenantId/clientId are missing or blank, the app blocks sign-in with a configuration-error state — it NEVER silently falls back to the weaker email flow.",
+      "properties": {
+        "method": {
+          "type": "string",
+          "title": "Sign-In Method",
+          "description": "email = the built-in email sign-in flow (default); the user's role name then comes from the ACCESS domain's `role` key. entra = Microsoft Entra ID interactive sign-in — the email form is replaced entirely, and the user's role names come from the token's roles claim instead (the access `role` key is ignored). Matched case-insensitively. Note the fail-closed rule: delivering entra with missing tenant/client ids blocks sign-in with a configuration error rather than reverting to email.",
+          "enum": [
+            "email",
+            "entra"
+          ],
+          "default": "email"
+        },
+        "entra": {
+          "type": "object",
+          "title": "Entra ID Sign-In",
+          "description": "Microsoft Entra ID interactive sign-in settings. Create a SEPARATE PUBLIC-client app registration for this (desktop/mobile platform redirect; do NOT create a client secret — none is needed and Helios never uses one). ROLE NAMES ARE NOT CONFIGURED HERE: the app reads the token's roles claim and looks each value up against the `name` of an entry in the ACCESS domain's `roles` array — an app-role VALUE must equal a role entry's `name` exactly (case-sensitive). A user matching several entries gets the UNION of those roles' capabilities; a user whose roles match NO entry is REFUSED sign-in (fail-closed). Define the capability sets in schemas/Helios_Access_SCHEMA.json, not here. IMPORTANT: also enforce the sign-in restriction Entra-side — enable 'Assignment required' on the enterprise application and assign only the intended users/groups. The client-side checks configured here are a UX gate, not a security boundary on their own.",
+          "properties": {
+            "tenantId": {
+              "type": "string",
+              "title": "Tenant ID",
+              "description": "Entra tenant id — MUST be the directory (tenant) ID GUID. Required when method is entra. The multi-tenant authority aliases 'common' and 'organizations' are NOT supported: id_token issuer validation is an exact match against the tenant-specific issuer, so sign-in fails with an issuer-mismatch validation error. Set the real value in Jamf — never commit a real tenant id to a repo. This key identifies the DIRECTORY only; it grants nothing — the role names carried by that directory's tokens resolve against the access domain's `roles` block."
+            },
+            "clientId": {
+              "type": "string",
+              "title": "Client ID (public client)",
+              "description": "Application (client) id of the PUBLIC-client app registration. Not secret — and no secret is ever paired with it. Required when method is entra."
+            },
+            "cloudInstance": {
+              "type": "string",
+              "title": "Azure Cloud Instance",
+              "description": "Azure cloud for interactive sign-in: global (login.microsoftonline.com), usgov (Azure Government / GCC High), or china (Azure operated by 21Vianet). Same mapping as entra.cloudInstance above — both Entra features agree on hosts per cloud.",
+              "enum": [
+                "global",
+                "usgov",
+                "china"
+              ],
+              "default": "global"
+            },
+            "allowedGroupIds": {
+              "type": "array",
+              "title": "Allowed Group IDs (optional)",
+              "description": "OPTIONAL extra client-side check: Entra group OBJECT ids (GUIDs) — the signed-in user must be a member of at least one, verified via the token's groups claim. Empty/absent = no group check. CAVEAT: the groups claim is subject to Entra's overage limit — users who belong to many groups receive an overage token with NO groups listed, and this check will then fail them. Prefer app roles (whose values match a `name` in the access domain's `roles` array) over group ids; the roles claim is never subject to overage.",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "provisionJamfCredentials": {
+              "type": "boolean",
+              "title": "Provision Jamf Credentials After Sign-In",
+              "description": "After a successful Entra sign-in, still provision the per-user Jamf API client from the verified email address (the same provisioning the email flow performs). Disable only if per-user Jamf API clients are not wanted.",
+              "default": true
+            }
+          },
+          "required": [
+            "tenantId",
+            "clientId"
+          ]
+        }
+      }
     },
     "localAdministration": {
       "type": "object",

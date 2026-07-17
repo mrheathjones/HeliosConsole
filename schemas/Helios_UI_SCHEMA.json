@@ -2,14 +2,14 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.ui",
   "title": "Helios Console — Branding & UX",
-  "description": "Managed configuration for Helios Console branding and user-experience settings. Preference domain MUST be com.herojoneslabs.helios.console.ui — deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings (External Applications / Custom Schema) scoped to ALL managed Macs running Helios. This domain carries NO secrets and no destructive capability; it is safe to scope broadly. Values are FORCED and take effect at the next app relaunch. NOTE: sidebarItems and authentication are parsed and exposed by the app but not yet enforced in views — see docs/ConfigProfileMigration.md for the enforcement-status table.",
+  "description": "Managed configuration for Helios Console branding and user-experience settings. Preference domain MUST be com.herojoneslabs.helios.console.ui — deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings (External Applications / Custom Schema) scoped to ALL managed Macs running Helios. This domain carries NO secrets and no destructive capability; it is safe to scope broadly. Values are FORCED and take effect at the next app relaunch. NOTE: sidebarItems and authentication are both ENFORCED in views — see docs/ConfigProfileMigration.md for the per-key enforcement-status table.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
-      "default": "2.1"
+      "default": "2.2"
     },
     "userInterface": {
       "type": "object",
@@ -111,7 +111,7 @@
     "sidebarItems": {
       "type": "array",
       "title": "Sidebar Items (optional override)",
-      "description": "Optional custom sidebar item list. Leave empty to use the app's built-in sidebar. Renamed from the legacy top-level key 'SidebarItems' — camelCase is required in this domain. Currently parsed but not yet enforced (SidebarView builds its own list); see docs/ConfigProfileMigration.md.",
+      "description": "Optional custom sidebar item list. Leave empty to use the app's built-in sidebar. Renamed from the legacy top-level key 'SidebarItems' — camelCase is required in this domain. ENFORCED, but for PRESENCE (isEnabled), LABEL (title), and ICON ONLY — ids must be route ids; unknown ids are skipped. THIS LIST DOES NOT CONTROL ORDER, and the position of an entry here means nothing: SIDEBAR ORDER COMES FROM THE ACCESS DOMAIN, specifically the array order of each role's roles[].modules list (first = topmost), so order is set per role alongside the grant itself. The `order` key was REMOVED in 2.2; a profile still delivering it decodes fine but the key is IGNORED (the app logs a notice once). See docs/ConfigProfileMigration.md.",
       "items": {
         "type": "object",
         "properties": {
@@ -135,11 +135,6 @@
             "title": "Enabled",
             "description": "Whether the item is shown.",
             "default": true
-          },
-          "order": {
-            "type": "integer",
-            "title": "Order",
-            "description": "Sort order (ascending)."
           }
         }
       },
@@ -148,7 +143,7 @@
     "authentication": {
       "type": "object",
       "title": "Authentication",
-      "description": "Sign-in behavior preferences. Currently parsed but not yet enforced in views; see docs/ConfigProfileMigration.md.",
+      "description": "Sign-in behavior preferences. ENFORCED in the sign-in and session views — requireBiometric, allowBiometricSetup, sessionTimeout, and allowRememberMe are all acted on by the app; see docs/ConfigProfileMigration.md.",
       "properties": {
         "requireBiometric": {
           "type": "boolean",

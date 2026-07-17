@@ -65,6 +65,13 @@ struct CoreConfiguration: Codable {
     /// the Graph credentials; no Entra secrets live in this domain.
     var entra: EntraPointerSettings?
 
+    /// Optional interactive sign-in configuration (`signIn` block): how
+    /// users sign into Helios itself — the built-in email flow (default)
+    /// or Microsoft Entra ID via a separate PUBLIC-client app registration.
+    /// Distinct from `entra` above, which carries app-only cleanup
+    /// credentials. An absent block keeps the email flow unchanged.
+    var signIn: SignInSettings?
+
     /// Local administrator account settings (LAPS lookup in DeviceView).
     var localAdministration: LocalAdminSettings?
 
@@ -334,12 +341,98 @@ struct CoreConfiguration: Codable {
                 case .china: return "microsoftgraph.chinacloudapi.cn"
                 }
             }
+
+            /// Shared fail-safe resolution from a raw profile value:
+            /// missing/unrecognized → global.
+            static func resolve(_ raw: String?) -> CloudInstance {
+                let normalized = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+                return CloudInstance(rawValue: normalized) ?? .global
+            }
         }
 
         /// Fail-safe cloud resolution: missing/unrecognized → global.
         var effectiveCloudInstance: CloudInstance {
-            let raw = cloudInstance?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-            return CloudInstance(rawValue: raw) ?? .global
+            CloudInstance.resolve(cloudInstance)
+        }
+    }
+
+    // MARK: - Interactive sign-in
+
+    /// `signIn` block: how users sign INTO Helios itself. Distinct from the
+    /// `entra` block above — that one POINTS at app-only Graph credentials
+    /// for Return to Service cleanup; this one configures the INTERACTIVE
+    /// user OAuth flow against a separate PUBLIC-client Entra app
+    /// registration (which has no client secret, ever, by design).
+    /// Absent block → the built-in email sign-in flow, unchanged.
+    struct SignInSettings: Codable {
+
+        /// Sign-in method: "email" (default) or "entra", matched
+        /// case-insensitively. FAIL-CLOSED direction: when "entra" is
+        /// selected but misconfigured (missing tenant/client id), the app
+        /// shows a configuration-error state — it NEVER silently falls
+        /// back to the weaker email flow.
+        var method: String?
+
+        /// Entra ID interactive sign-in settings; required in practice
+        /// when `method == "entra"`.
+        var entra: EntraSignInSettings?
+    }
+
+    /// `signIn.entra` block: PUBLIC-client Entra app registration for the
+    /// interactive user sign-in flow. Carries NO secrets, ever — a public
+    /// client has none. Capabilities are granted by matching the token's
+    /// roles claim against the role names defined in the ACCESS domain's
+    /// `roles` block (no role names live here); sign-in restriction should
+    /// ALSO be enforced Entra-side ("Assignment required" on the enterprise
+    /// application) — the client-side checks are a UX gate, not a security
+    /// boundary on their own.
+    struct EntraSignInSettings: Codable {
+
+        /// Entra tenant id (GUID). Required for Entra sign-in.
+        var tenantId: String?
+
+        /// Application (client) id of the PUBLIC-client app registration.
+        /// Not secret — and no secret is ever paired with it.
+        var clientId: String?
+
+        /// Azure cloud instance: "global" (default), "usgov", or "china".
+        /// Reuses the cleanup pointer's `CloudInstance` host mapping.
+        var cloudInstance: String?
+
+        /// Optional extra client-side check: Entra group OBJECT ids the
+        /// user must be a member of (token groups claim). Empty/absent =
+        /// no group check. Prefer app roles — the groups claim is subject
+        /// to Entra's overage limit on large memberships.
+        var allowedGroupIds: [String]?
+
+        /// After Entra sign-in, still provision the per-user Jamf API
+        /// client from the verified email (same provisioning the email
+        /// flow performs).
+        var provisionJamfCredentials: Bool?
+
+        /// Fail-safe cloud resolution: missing/unrecognized → global.
+        /// Reuses the cleanup pointer's `CloudInstance` mapping so both
+        /// Entra features agree on hosts per cloud.
+        var effectiveCloudInstance: EntraPointerSettings.CloudInstance {
+            EntraPointerSettings.CloudInstance.resolve(cloudInstance)
+        }
+
+        /// Group-id allow-list; empty = no group check (default).
+        var effectiveAllowedGroupIds: [String] {
+            Self.normalizedList(allowedGroupIds, default: [])
+        }
+
+        /// Per-user Jamf provisioning flag with the documented default
+        /// applied (default true).
+        var effectiveProvisionJamfCredentials: Bool { provisionJamfCredentials ?? true }
+
+        /// Trims each entry and drops empties. nil (key absent) → default;
+        /// a delivered array — even one that trims to empty — is honored.
+        private static func normalizedList(_ values: [String]?, default defaults: [String]) -> [String] {
+            guard let values else { return defaults }
+            return values
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
         }
     }
 

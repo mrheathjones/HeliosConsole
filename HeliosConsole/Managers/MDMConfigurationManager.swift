@@ -224,10 +224,11 @@ class MDMConfigurationManager: ObservableObject {
 
     // MARK: - Helper Methods
 
+    /// The sidebar items this Mac enables. UNORDERED with respect to display:
+    /// row order comes from the signed-in user's role `modules` (access
+    /// domain) and is resolved by SidebarView, not here.
     func getEnabledSidebarItems() -> [MDMConfiguration.SidebarItemConfig] {
-        return configuration.sidebarItems
-            .filter { $0.isEnabled }
-            .sorted { $0.order < $1.order }
+        return configuration.sidebarItems.filter { $0.isEnabled }
     }
 
     // MARK: - Debug

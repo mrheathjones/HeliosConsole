@@ -19,6 +19,9 @@ import LocalAuthentication
 
 struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// Observed so the Cleanup section re-evaluates when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
     @Environment(\.colorScheme) private var colorScheme
     
     @State private var showingResetAlert = false
@@ -69,7 +72,7 @@ struct SettingsView: View {
                         appearanceSection
                         securitySection
                         displaySection
-                        if MDMConfigurationManager.shared.configuration.isCleanupAdmin {
+                        if session.capabilities.canAccess(module: NavigationDestination.cleanup.rawValue) {
                             cleanupSection
                         }
                         aboutSection

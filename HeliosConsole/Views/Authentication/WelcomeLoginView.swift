@@ -48,6 +48,10 @@ struct WelcomeLoginView: View {
                             checkBiometricSetup()
                         }
                 }
+            } else if viewModel.isRestoringEntraSession {
+                // Redeeming the persisted Entra refresh token — avoid a
+                // login-form flash while the outcome is unknown.
+                entraRestoreProgressView
             } else if viewModel.showBiometricPrompt {
                 BiometricPromptView(viewModel: viewModel)
             } else {
@@ -73,9 +77,29 @@ struct WelcomeLoginView: View {
         }
     }
     
+    private var entraRestoreProgressView: some View {
+        ZStack {
+            AnimatedBackgroundView(animate: .constant(true))
+
+            VStack(spacing: 20) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.2)
+
+                Text("Signing you in…")
+                    .font(.system(size: 16))
+                    .foregroundColor(.gray)
+            }
+        }
+        .transition(.opacity)
+    }
+
     private func checkBiometricSetup() {
-        // Only show if biometric is available but not enabled
-        guard viewModel.biometricManager.biometricType != .none,
+        // Only show if setup is allowed by managed policy
+        // (ui.authentication allowBiometricSetup) and biometric hardware
+        // is available but not enabled
+        guard viewModel.isBiometricSetupAllowed,
+              viewModel.biometricManager.biometricType != .none,
               !viewModel.biometricManager.isBiometricEnabled,
               !showBiometricSetup else {
             return

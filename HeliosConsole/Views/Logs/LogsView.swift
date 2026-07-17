@@ -10,7 +10,10 @@ import SwiftUI
 struct LogsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var logService = ActionLogService.shared
-    
+    /// Observed so the export gate re-evaluates when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
+
     @State private var searchText = ""
     @State private var selectedSource: ActionLogEntry.LogSource? = nil
     @State private var selectedCategory: String? = nil
@@ -49,8 +52,23 @@ struct LogsView: View {
         }
     }
     
+    // MARK: - Export
+
+    private func exportCSVToPasteboard() {
+        // Defense in depth: the button is not rendered without the grant,
+        // but never let enforcement live only in the UI.
+        guard session.capabilities.allowExport else { return }
+        let csv = logService.exportAsCSV()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(csv, forType: .string)
+        showingExportConfirmation = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            showingExportConfirmation = false
+        }
+    }
+
     // MARK: - Header
-    
+
     private var headerSection: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
@@ -78,33 +96,31 @@ struct LogsView: View {
             Spacer()
             
             HStack(spacing: 8) {
-                // Export button
-                Button {
-                    let csv = logService.exportAsCSV()
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(csv, forType: .string)
-                    showingExportConfirmation = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        showingExportConfirmation = false
+                // Export button — the audit trail leaves the app here (via
+                // the pasteboard), so it answers to allowExport exactly like
+                // the Reports and Cleanup exporters: no grant, no control.
+                if session.capabilities.allowExport {
+                    Button {
+                        exportCSVToPasteboard()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showingExportConfirmation ? "checkmark" : "square.and.arrow.up")
+                                .font(.system(size: 12))
+                            Text(showingExportConfirmation ? "Copied!" : "Export CSV")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(showingExportConfirmation ? .green : (isDark ? .white : .primary))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                        )
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: showingExportConfirmation ? "checkmark" : "square.and.arrow.up")
-                            .font(.system(size: 12))
-                        Text(showingExportConfirmation ? "Copied!" : "Export CSV")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(showingExportConfirmation ? .green : (isDark ? .white : .primary))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                    )
+                    .buttonStyle(.plain)
+                    .disabled(logService.logs.isEmpty)
                 }
-                .buttonStyle(.plain)
-                .disabled(logService.logs.isEmpty)
-                
+
                 // Clear button
                 Button {
                     showingClearConfirmation = true

@@ -47,30 +47,40 @@ struct CleanupExportMenu: View {
     @State private var document: ExportDocument?
     @State private var contentType: UTType = .commaSeparatedText
     @State private var isExporting = false
+    /// Observed so the export gate re-evaluates when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
 
     var body: some View {
-        Menu {
-            ForEach(CleanupExportFormat.allCases) { format in
-                Button {
-                    prepare(format)
-                } label: {
-                    Label(format.displayName, systemImage: format.systemImage)
+        // Every Cleanup export funnels through this menu, so the
+        // allowExport gate lives here once: no grant, no control at all.
+        if session.capabilities.allowExport {
+            Menu {
+                ForEach(CleanupExportFormat.allCases) { format in
+                    Button {
+                        prepare(format)
+                    } label: {
+                        Label(format.displayName, systemImage: format.systemImage)
+                    }
                 }
+            } label: {
+                Label(titleKey, systemImage: "square.and.arrow.up")
             }
-        } label: {
-            Label(titleKey, systemImage: "square.and.arrow.up")
-        }
-        .fileExporter(
-            isPresented: $isExporting,
-            document: document,
-            contentType: contentType,
-            defaultFilename: filename
-        ) { _ in
-            document = nil
+            .fileExporter(
+                isPresented: $isExporting,
+                document: document,
+                contentType: contentType,
+                defaultFilename: filename
+            ) { _ in
+                document = nil
+            }
         }
     }
 
     private func prepare(_ format: CleanupExportFormat) {
+        // Defense in depth: the menu is not rendered without the grant, but
+        // never let enforcement live only in the UI.
+        guard session.capabilities.allowExport else { return }
         let table = makeTable()
         document = ExportDocument(data: exportData(table, as: format))
         contentType = format.utType

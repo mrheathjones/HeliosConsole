@@ -115,6 +115,43 @@
 				<string>com.herojoneslabs.helios.console.entra</string>
 			</dict>
 			-->
+
+			<!-- Optional interactive sign-in — IDENTITY ONLY. Omit the block
+			     (as here) to keep the built-in email flow, in which case the
+			     ACCESS payload's "role" key names the user's role instead.
+			     method=entra replaces the email form with Microsoft Entra ID
+			     sign-in via a SEPARATE PUBLIC-client app registration (no
+			     secret exists for it, ever). Distinct from the entra cleanup
+			     pointer above.
+
+			     NO ROLE NAMES ARE CONFIGURED HERE. The app reads the token's
+			     roles claim and looks each value up as a KEY in the ACCESS
+			     payload's "roles" block — an Entra app-role Value must equal
+			     a roles key EXACTLY (case-sensitive). Several matches = the
+			     UNION of those roles; no match = sign-in REFUSED.
+
+			     FAIL-CLOSED: entra with missing tenantId/clientId shows a
+			     configuration error, never the email form. Also enable
+			     "Assignment required" on the enterprise application so the
+			     restriction is enforced Entra-side too. The ids below are
+			     clearly-fake placeholders: set your real GUIDs in Jamf,
+			     never in this repo. See docs/EntraAuthSetup.md. -->
+			<!--
+			<key>signIn</key>
+			<dict>
+				<key>method</key>
+				<string>entra</string>
+				<key>entra</key>
+				<dict>
+					<key>tenantId</key>
+					<string>00000000-0000-0000-0000-000000000000</string>
+					<key>clientId</key>
+					<string>11111111-1111-1111-1111-111111111111</string>
+					<key>provisionJamfCredentials</key>
+					<true/>
+				</dict>
+			</dict>
+			-->
 		</dict>
 
 		<!-- ============================================================
@@ -158,9 +195,16 @@
 		</dict>
 
 		<!-- ============================================================
-		     3/5  ACCESS — RBAC & destructive capability. FAIL-CLOSED:
-		     a Mac without this payload runs as role=User (Cleanup hidden).
-		     Jamf scope: ADMIN MACS ONLY — never all managed Macs.
+		     3/5  ACCESS — role capabilities & destructive capability.
+		     Nothing is hardcoded in the app: the "roles" block below is
+		     the ONLY source of what any user can see or do.
+		     FAIL-CLOSED: a Mac without this payload (or a role name that
+		     matches no key) grants NOTHING — the user signs in to an
+		     EMPTY app.
+		     Jamf scope: ALL Macs running Helios (CHANGED in 2.4 — the
+		     roles block must reach every Mac whose users need one).
+		     Differentiate populations with per-variant "role" and
+		     "deviceActions", not by withholding the profile.
 		     ============================================================ -->
 		<dict>
 			<key>PayloadType</key>
@@ -176,12 +220,207 @@
 			<key>PayloadEnabled</key>
 			<true/>
 
-			<!-- Cleanup (destructive bulk actions) shows ONLY for the
-			     exact value "Admin". Anything else hides it. -->
+			<!-- MDM-mode role name. Names ONE key in the "roles" block
+			     below — free-form, exact, case-sensitive. IGNORED ENTIRELY
+			     when the core payload configures Entra sign-in
+			     (signIn.method=entra): role names then come from the Entra
+			     token's roles claim instead. Absent/blank/unmatched = an
+			     empty app (fail-closed). Ship one profile variant per Mac
+			     population — e.g. this value on support Macs, and a
+			     "Helios.Admin" variant on admin Macs. -->
 			<key>role</key>
-			<string>Admin</string>
+			<string>Helios.Support</string>
 
-			<!-- Cleanup defaults (Admin-only feature). -->
+			<!-- ROLE DEFINITIONS — the capability source of truth.
+			     An ARRAY of role objects, each naming itself in "name".
+			     Every name below is one YOU choose; the app ships none.
+			     In Entra mode a name must equal an app-role Value exactly
+			     (case-sensitive); in MDM mode it must equal "role" above.
+			     A user matching several roles gets the UNION of their
+			     lists, and allowExport is OR'd.
+
+			     An ARRAY (not a dictionary keyed by role name) so the
+			     Jamf Pro Application & Custom Settings schema editor can
+			     render this block as a form — same idiom as
+			     "deviceActions.computer.actions" below. An entry with no
+			     "name" is SKIPPED (nothing can match it); two entries
+			     sharing a "name" are UNIONED, never replaced.
+
+			     Device actions are TWO layers: "deviceActions" further
+			     below says which actions EXIST on this Mac; the
+			     computerActions/mobileDeviceActions lists here say which
+			     of those each role may use. Only the intersection renders.
+			     modules and cleanupActions are role-driven only.
+
+			     SIDEBAR ORDER LIVES HERE: each role's "modules" ARRAY
+			     ORDER is that role's sidebar order (first = topmost).
+			     There is no "order" key — not here and not in the ui
+			     domain, whose sidebarItems now carries presence, label,
+			     and icon only. Arrange a role's modules and you have
+			     arranged its sidebar; different roles may order the same
+			     modules differently. "settings" is pinned below the
+			     divider wherever it appears, and is listed LAST below to
+			     read the way it renders.
+
+			     Multi-role users get ONE merged list: this "roles" array
+			     is walked in the order authored here (NOT the order the
+			     Entra roles claim lists them), each matched role's
+			     modules appended in listed order, first appearance wins.
+
+			     Sign Out lives in the sidebar, so a role without the
+			     "settings" module is not stranded. -->
+			<key>roles</key>
+			<array>
+
+				<!-- Full access, including the destructive Cleanup module.
+				     modules order = sidebar order: Dashboard lands first,
+				     the destructive Cleanup module sits last of the real
+				     rows, and settings is pinned below the divider. -->
+				<dict>
+					<key>name</key>
+					<string>Helios.Admin</string>
+					<key>modules</key>
+					<array>
+						<string>dashboard</string>
+						<string>devices</string>
+						<string>announcements</string>
+						<string>logs</string>
+						<string>reports</string>
+						<string>enrollments</string>
+						<string>cleanup</string>
+						<string>settings</string>
+					</array>
+					<key>computerActions</key>
+					<array>
+						<string>sendBlankPush</string>
+						<string>restart</string>
+						<string>restartSilent</string>
+						<string>shutdown</string>
+						<string>enableRemoteDesktop</string>
+						<string>disableRemoteDesktop</string>
+						<string>enableBluetooth</string>
+						<string>disableBluetooth</string>
+						<string>screenShare</string>
+						<string>viewFileVaultKey</string>
+						<string>viewLocalAdminPassword</string>
+						<string>unlockUserAccount</string>
+						<string>wipe</string>
+						<string>returnToService</string>
+					</array>
+					<key>mobileDeviceActions</key>
+					<array>
+						<string>sendBlankPush</string>
+						<string>updateInventory</string>
+					</array>
+					<key>cleanupActions</key>
+					<array>
+						<string>unmanage</string>
+						<string>addToGroup</string>
+						<string>moveToSite</string>
+						<string>deleteFromProtect</string>
+						<string>deleteRecord</string>
+					</array>
+					<key>allowExport</key>
+					<true/>
+				</dict>
+
+				<!-- Day-to-day support. Full operational surface incl. the
+				     destructive erase paths, but NO Cleanup module and no
+				     credential/secret disclosure (viewLocalAdminPassword,
+				     viewFileVaultKey) or account-state change
+				     (unlockUserAccount). Same sidebar order as
+				     Helios.Admin, minus the cleanup row. -->
+				<dict>
+					<key>name</key>
+					<string>Helios.Support</string>
+					<key>modules</key>
+					<array>
+						<string>dashboard</string>
+						<string>devices</string>
+						<string>announcements</string>
+						<string>logs</string>
+						<string>reports</string>
+						<string>enrollments</string>
+						<string>settings</string>
+					</array>
+					<key>computerActions</key>
+					<array>
+						<string>sendBlankPush</string>
+						<string>restart</string>
+						<string>restartSilent</string>
+						<string>shutdown</string>
+						<string>enableRemoteDesktop</string>
+						<string>disableRemoteDesktop</string>
+						<string>enableBluetooth</string>
+						<string>disableBluetooth</string>
+						<string>screenShare</string>
+						<string>wipe</string>
+						<string>returnToService</string>
+					</array>
+					<key>mobileDeviceActions</key>
+					<array>
+						<string>sendBlankPush</string>
+						<string>updateInventory</string>
+					</array>
+					<key>cleanupActions</key>
+					<array/>
+					<key>allowExport</key>
+					<true/>
+				</dict>
+
+				<!-- Self-service end user. NOTE: "myDevice" is RESERVED for a
+				     per-user single-device view shipping in a follow-up PR —
+				     accepted today but INERT (unknown ids are ignored), so
+				     this role currently renders Settings only and its benign
+				     actions have no surface to appear on yet. Pre-staging it
+				     is safe. It is listed FIRST so that it lands at the top
+				     of the sidebar once it ships — no edit needed then. -->
+				<dict>
+					<key>name</key>
+					<string>Helios.User</string>
+					<key>modules</key>
+					<array>
+						<string>myDevice</string>
+						<string>settings</string>
+					</array>
+					<key>computerActions</key>
+					<array>
+						<string>sendBlankPush</string>
+						<string>restart</string>
+						<string>enableBluetooth</string>
+					</array>
+					<key>mobileDeviceActions</key>
+					<array/>
+					<key>cleanupActions</key>
+					<array/>
+					<key>allowExport</key>
+					<false/>
+				</dict>
+
+				<!-- Cleanup-only role — a supported pattern. Grants nothing
+				     but the Cleanup module and its sub-actions; assign it in
+				     Entra ALONGSIDE another role and the union applies (e.g.
+				     Helios.Support + Helios.CleanupTech = the support surface
+				     plus Cleanup). Uncomment to use.
+				<dict>
+					<key>name</key>
+					<string>Helios.CleanupTech</string>
+					<key>modules</key>
+					<array>
+						<string>cleanup</string>
+					</array>
+					<key>cleanupActions</key>
+					<array>
+						<string>addToGroup</string>
+						<string>moveToSite</string>
+					</array>
+				</dict>
+				-->
+			</array>
+
+			<!-- Cleanup TUNABLES only — this block grants nothing. The
+			     module is shown by "cleanup" in a role's modules list, and
+			     its sub-actions by that role's cleanupActions list. -->
 			<key>cleanup</key>
 			<dict>
 				<key>staleDays</key>
@@ -191,12 +430,18 @@
 				<!-- <key>defaultSiteID</key><string>1</string> -->
 			</dict>
 
-			<!-- Device Actions allow-list — STRICT FAIL-CLOSED. If this
-			     block (specifically computer.actions) is not delivered,
-			     the device Actions menu is HIDDEN ENTIRELY. Only actions
-			     listed with enabled=true appear; unlisted or disabled ids
-			     are hidden AND blocked at execution. displayName overrides
-			     the menu label only. See schemas/Helios_Access_SCHEMA.json. -->
+			<!-- Device Actions allow-list — LAYER 1 OF 2, STRICT FAIL-CLOSED.
+			     This block says which actions EXIST on THIS Mac; the
+			     roles.<Name>.computerActions lists above say which of those
+			     each USER may run. An action renders only when BOTH allow —
+			     neither layer can expand what the other denies.
+
+			     If this block (specifically computer.actions) is not
+			     delivered, the device Actions menu is HIDDEN ENTIRELY. Only
+			     actions listed with enabled=true appear; unlisted or disabled
+			     ids are hidden AND blocked at execution. displayName
+			     overrides the menu label only.
+			     See schemas/Helios_Access_SCHEMA.json. -->
 			<key>deviceActions</key>
 			<dict>
 				<key>computer</key>

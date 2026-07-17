@@ -32,6 +32,7 @@
 		F018 /* HealthMetricsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = S018 /* HealthMetricsCalculator.swift */; };
 		F019 /* JamfAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S019 /* JamfAPIService.swift */; };
 		F250 /* EntraGraphService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S250 /* EntraGraphService.swift */; };
+		CBD1433AC8D2FAE90C46A1AC /* EntraAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9120615953C07FD8906E118D /* EntraAuthService.swift */; };
 		F020 /* MobileDeviceInventoryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = S020 /* MobileDeviceInventoryCache.swift */; };
 		F021 /* MobileDeviceInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S021 /* MobileDeviceInventoryService.swift */; };
 		F022 /* MobileDeviceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S022 /* MobileDeviceModels.swift */; };
@@ -83,6 +84,8 @@
 		F075 /* UserInterfaceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S075 /* UserInterfaceConfiguration.swift */; };
 		F076 /* DeviceAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = S076 /* DeviceAction.swift */; };
 		F077 /* DeviceActionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = S077 /* DeviceActionPolicy.swift */; };
+		ED9A21F5B86BA74FA8CA56A1 /* UserSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 757A43D21357918DDBF8CC37 /* UserSession.swift */; };
+		A1C0DE0000000000000CAP02 /* UserCapabilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000CAP01 /* UserCapabilities.swift */; };
 		F078 /* NetworkTuning.swift in Sources */ = {isa = PBXBuildFile; fileRef = S078 /* NetworkTuning.swift */; };
 		F079 /* Branding.swift in Sources */ = {isa = PBXBuildFile; fileRef = S079 /* Branding.swift */; };
 		MB_F001 /* HeliosMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MB_S001 /* HeliosMenuBarApp.swift */; };
@@ -116,6 +119,8 @@
 		MB_F075 /* UserInterfaceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S075 /* UserInterfaceConfiguration.swift */; };
 		MB_F076 /* DeviceAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = S076 /* DeviceAction.swift */; };
 		MB_F077 /* DeviceActionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = S077 /* DeviceActionPolicy.swift */; };
+		D9B1D69830BE7EE7314C4566 /* UserSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 757A43D21357918DDBF8CC37 /* UserSession.swift */; };
+		A1C0DE0000000000000CAP03 /* UserCapabilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000CAP01 /* UserCapabilities.swift */; };
 		MB_F078 /* NetworkTuning.swift in Sources */ = {isa = PBXBuildFile; fileRef = S078 /* NetworkTuning.swift */; };
 		MB_F079 /* Branding.swift in Sources */ = {isa = PBXBuildFile; fileRef = S079 /* Branding.swift */; };
 		CLF1 /* CleanupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR1 /* CleanupModels.swift */; };
@@ -162,6 +167,7 @@
 		S018 /* HealthMetricsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricsCalculator.swift; sourceTree = "<group>"; };
 		S019 /* JamfAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfAPIService.swift; sourceTree = "<group>"; };
 		S250 /* EntraGraphService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntraGraphService.swift; sourceTree = "<group>"; };
+		9120615953C07FD8906E118D /* EntraAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntraAuthService.swift; sourceTree = "<group>"; };
 		S020 /* MobileDeviceInventoryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceInventoryCache.swift; sourceTree = "<group>"; };
 		S021 /* MobileDeviceInventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceInventoryService.swift; sourceTree = "<group>"; };
 		S022 /* MobileDeviceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceModels.swift; sourceTree = "<group>"; };
@@ -213,6 +219,8 @@
 		S075 /* UserInterfaceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInterfaceConfiguration.swift; sourceTree = "<group>"; };
 		S076 /* DeviceAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAction.swift; sourceTree = "<group>"; };
 		S077 /* DeviceActionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceActionPolicy.swift; sourceTree = "<group>"; };
+		757A43D21357918DDBF8CC37 /* UserSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSession.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000CAP01 /* UserCapabilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCapabilities.swift; sourceTree = "<group>"; };
 		S078 /* NetworkTuning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTuning.swift; sourceTree = "<group>"; };
 		S079 /* Branding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Branding.swift; sourceTree = "<group>"; };
 		CLR1 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupModels.swift; sourceTree = "<group>"; };
@@ -292,6 +300,8 @@
 				S005 /* MDMConfiguration.swift */,
 				S076 /* DeviceAction.swift */,
 				S077 /* DeviceActionPolicy.swift */,
+				757A43D21357918DDBF8CC37 /* UserSession.swift */,
+				A1C0DE0000000000000CAP01 /* UserCapabilities.swift */,
 				S006 /* MobileDevice.swift */,
 				S007 /* User.swift */,
 				S060 /* DeviceListItem.swift */,
@@ -346,6 +356,7 @@
 				S018 /* HealthMetricsCalculator.swift */,
 				S019 /* JamfAPIService.swift */,
 				S250 /* EntraGraphService.swift */,
+				9120615953C07FD8906E118D /* EntraAuthService.swift */,
 				S020 /* MobileDeviceInventoryCache.swift */,
 				S021 /* MobileDeviceInventoryService.swift */,
 				S022 /* MobileDeviceModels.swift */,
@@ -672,6 +683,8 @@
 				MB_F075 /* UserInterfaceConfiguration.swift in Sources */,
 				MB_F076 /* DeviceAction.swift in Sources */,
 				MB_F077 /* DeviceActionPolicy.swift in Sources */,
+				D9B1D69830BE7EE7314C4566 /* UserSession.swift in Sources */,
+				A1C0DE0000000000000CAP03 /* UserCapabilities.swift in Sources */,
 				MB_F078 /* NetworkTuning.swift in Sources */,
 				MB_F079 /* Branding.swift in Sources */,
 				MB_F014 /* ComputerInventoryCache.swift in Sources */,
@@ -729,6 +742,8 @@
 				F075 /* UserInterfaceConfiguration.swift in Sources */,
 				F076 /* DeviceAction.swift in Sources */,
 				F077 /* DeviceActionPolicy.swift in Sources */,
+				ED9A21F5B86BA74FA8CA56A1 /* UserSession.swift in Sources */,
+				A1C0DE0000000000000CAP02 /* UserCapabilities.swift in Sources */,
 				F078 /* NetworkTuning.swift in Sources */,
 				F079 /* Branding.swift in Sources */,
 				F012 /* AbmAPIService.swift in Sources */,
@@ -740,6 +755,7 @@
 				F018 /* HealthMetricsCalculator.swift in Sources */,
 				F019 /* JamfAPIService.swift in Sources */,
 				F250 /* EntraGraphService.swift in Sources */,
+				CBD1433AC8D2FAE90C46A1AC /* EntraAuthService.swift in Sources */,
 				F020 /* MobileDeviceInventoryCache.swift in Sources */,
 				F021 /* MobileDeviceInventoryService.swift in Sources */,
 				F022 /* MobileDeviceModels.swift in Sources */,
@@ -918,7 +934,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -946,7 +962,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -974,7 +990,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1004,7 +1020,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;

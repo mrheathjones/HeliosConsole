@@ -195,12 +195,39 @@ struct ActionPlan: Sendable {
     }
 }
 
-enum CleanupAction: String, Sendable {
+enum CleanupAction: String, CaseIterable, Sendable {
     case unmanage = "Unmanage"
     case addToGroup = "Add to Group"
     case moveToSite = "Move to Site"
     case deleteFromProtect = "Delete from Protect"
     case deleteRecord = "Delete Record"
+
+    /// Stable id used in the access profile's `roles.<name>.cleanupActions`
+    /// list. Deliberately NOT the raw value: raw values are DISPLAY copy
+    /// ("Add to Group") and are free to change, which would silently break
+    /// every deployed profile. Renaming one of these strings IS a breaking
+    /// profile change — don't.
+    var configID: String {
+        switch self {
+        case .unmanage: return "unmanage"
+        case .addToGroup: return "addToGroup"
+        case .moveToSite: return "moveToSite"
+        case .deleteFromProtect: return "deleteFromProtect"
+        case .deleteRecord: return "deleteRecord"
+        }
+    }
+}
+
+extension UserCapabilities {
+    /// Whether the user's roles grant a Cleanup action. Matched on
+    /// `configID` (the stable profile id), never the display raw value.
+    ///
+    /// Lives here rather than in UserCapabilities.swift because
+    /// CleanupAction is compiled only into the HeliosConsole target, while
+    /// UserCapabilities is shared with HeliosMenuBar.
+    func canRunCleanupAction(_ action: CleanupAction) -> Bool {
+        cleanupActions.contains(action.configID)
+    }
 }
 
 struct ActionResult: Identifiable, Sendable {

@@ -23,6 +23,9 @@ struct CleanupActionsSheet: View {
     @State private var deleteRecord = false
     @State private var confirming = false
     @State private var phase: Phase = .configure
+    /// Observed so the action gates re-evaluate when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
 
     private enum Phase { case configure, running, done }
 
@@ -30,10 +33,24 @@ struct CleanupActionsSheet: View {
     private let cardBG = Color.white.opacity(0.05)
     private let panelBG = Color(white: 0.11)
 
+    /// Whether the signed-in user's roles grant a Cleanup action. Every
+    /// toggle below is gated on this, and `deniedPlanActions` re-checks it
+    /// before anything runs.
+    private func can(_ action: CleanupAction) -> Bool {
+        session.capabilities.canRunCleanupAction(action)
+    }
+
+    private var hasAnyPermittedAction: Bool {
+        CleanupAction.allCases.contains(where: can)
+    }
+
     /// When on, deleting a Jamf Pro record always deletes the matching
-    /// Jamf Protect record too.
+    /// Jamf Protect record too. Requires the Protect delete grant — the
+    /// convenience must never widen what the user's roles allow.
     private var autoProtectCleanup: Bool {
-        model.settings.isProtectConfigured && model.settings.protectAutoCleanup
+        model.settings.isProtectConfigured
+            && model.settings.protectAutoCleanup
+            && can(.deleteFromProtect)
     }
 
     private var plan: ActionPlan {
@@ -52,8 +69,26 @@ struct CleanupActionsSheet: View {
         return plan
     }
 
+    /// Defense in depth: rows for actions the user's roles don't grant are
+    /// never rendered, so their toggles cannot be on — but enforcement must
+    /// never live only in the UI. Any ungranted action found in the plan
+    /// blocks the whole run rather than silently executing a subset.
+    private var deniedPlanActions: [CleanupAction] {
+        let plan = self.plan
+        var denied: [CleanupAction] = []
+        if plan.unmanage, !can(.unmanage) { denied.append(.unmanage) }
+        if plan.addToGroupID != nil, !can(.addToGroup) { denied.append(.addToGroup) }
+        if plan.moveToSiteID != nil, !can(.moveToSite) { denied.append(.moveToSite) }
+        if plan.deleteFromProtect, !can(.deleteFromProtect) { denied.append(.deleteFromProtect) }
+        if plan.deleteRecord, !can(.deleteRecord) { denied.append(.deleteRecord) }
+        return denied
+    }
+
     private var canRun: Bool {
-        !plan.isEmpty && !model.selectedDevices.isEmpty && !(addToGroup && selectedGroupID == 0)
+        !plan.isEmpty
+            && !model.selectedDevices.isEmpty
+            && !(addToGroup && selectedGroupID == 0)
+            && deniedPlanActions.isEmpty
     }
 
     var body: some View {
@@ -64,7 +99,14 @@ struct CleanupActionsSheet: View {
                 header
                 Divider().background(Color.white.opacity(0.08))
                 switch phase {
-                case .configure: configureView
+                case .configure:
+                    // Roles that grant the cleanup module but no cleanup
+                    // action get a read-only explanation, not dead toggles.
+                    if hasAnyPermittedAction {
+                        configureView
+                    } else {
+                        noActionsView
+                    }
                 case .running:   runningView
                 case .done:      resultsView
                 }
@@ -101,41 +143,55 @@ struct CleanupActionsSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     selectedCard
 
-                    section("Jamf Pro", icon: "server.rack", color: .blue) {
-                        toggleRow("Send Unmanage command",
-                                  icon: "antenna.radiowaves.left.and.right.slash",
-                                  iconColor: .orange, isOn: $unmanage)
-
-                        toggleRow("Add to static group",
-                                  icon: "rectangle.stack.badge.plus",
-                                  iconColor: .blue, isOn: $addToGroup)
-                        if addToGroup { groupPicker }
-
-                        toggleRow("Move to site",
-                                  icon: "building.2",
-                                  iconColor: .teal, isOn: $moveToSite)
-                        if moveToSite { sitePicker }
-                    }
-
-                    section("Cleanup", icon: "trash", color: .red) {
-                        if model.settings.isProtectConfigured {
-                            toggleRow("Delete from Jamf Protect",
-                                      icon: "shield.slash", iconColor: .pink,
-                                      isOn: $deleteFromProtect,
-                                      disabled: autoProtectCleanup && deleteRecord)
-                        }
-                        toggleRow("Delete Jamf Pro record",
-                                  icon: "trash", iconColor: .red,
-                                  isOn: $deleteRecord, destructive: true)
-                            .onChange(of: deleteRecord) { _, isOn in
-                                if autoProtectCleanup && isOn { deleteFromProtect = true }
+                    // Each row is gated on the user's role capabilities; a
+                    // section whose every action is ungranted disappears.
+                    if can(.unmanage) || can(.addToGroup) || can(.moveToSite) {
+                        section("Jamf Pro", icon: "server.rack", color: .blue) {
+                            if can(.unmanage) {
+                                toggleRow("Send Unmanage command",
+                                          icon: "antenna.radiowaves.left.and.right.slash",
+                                          iconColor: .orange, isOn: $unmanage)
                             }
 
-                        if autoProtectCleanup && deleteRecord {
-                            footnote("Jamf Protect cleanup is automatic when deleting records (enabled in Settings).")
+                            if can(.addToGroup) {
+                                toggleRow("Add to static group",
+                                          icon: "rectangle.stack.badge.plus",
+                                          iconColor: .blue, isOn: $addToGroup)
+                                if addToGroup { groupPicker }
+                            }
+
+                            if can(.moveToSite) {
+                                toggleRow("Move to site",
+                                          icon: "building.2",
+                                          iconColor: .teal, isOn: $moveToSite)
+                                if moveToSite { sitePicker }
+                            }
                         }
-                        if deleteRecord {
-                            footnote("Deleting a record does not unenroll the device. If it ever checks in again it will re-enroll as a new record.")
+                    }
+
+                    if can(.deleteFromProtect) || can(.deleteRecord) {
+                        section("Cleanup", icon: "trash", color: .red) {
+                            if model.settings.isProtectConfigured, can(.deleteFromProtect) {
+                                toggleRow("Delete from Jamf Protect",
+                                          icon: "shield.slash", iconColor: .pink,
+                                          isOn: $deleteFromProtect,
+                                          disabled: autoProtectCleanup && deleteRecord)
+                            }
+                            if can(.deleteRecord) {
+                                toggleRow("Delete Jamf Pro record",
+                                          icon: "trash", iconColor: .red,
+                                          isOn: $deleteRecord, destructive: true)
+                                    .onChange(of: deleteRecord) { _, isOn in
+                                        if autoProtectCleanup && isOn { deleteFromProtect = true }
+                                    }
+
+                                if autoProtectCleanup && deleteRecord {
+                                    footnote("Jamf Protect cleanup is automatic when deleting records (enabled in Settings).")
+                                }
+                                if deleteRecord {
+                                    footnote("Deleting a record does not unenroll the device. If it ever checks in again it will re-enroll as a new record.")
+                                }
+                            }
                         }
                     }
                 }
@@ -166,6 +222,31 @@ struct CleanupActionsSheet: View {
                 .padding(20)
             }
         }
+    }
+
+    private var noActionsView: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.12))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundColor(.orange.opacity(0.7))
+            }
+            Text("No Actions Available")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+            Text("Your role does not allow any cleanup actions on these devices.\nContact your administrator to request access.")
+                .font(.system(size: 13))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 
     private var selectedCard: some View {
@@ -340,6 +421,10 @@ struct CleanupActionsSheet: View {
 
                     Button {
                         confirming = false
+                        // Defense in depth: re-check the plan against the
+                        // user's role capabilities immediately before it
+                        // runs — never rely on the toggles being hidden.
+                        guard deniedPlanActions.isEmpty else { return }
                         phase = .running
                         Task {
                             await model.runActions(plan)

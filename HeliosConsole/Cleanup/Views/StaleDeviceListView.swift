@@ -17,6 +17,15 @@ struct StaleDeviceListView: View {
     @State private var showActions = false
     @State private var searchText = ""
     @State private var sortOrder = [KeyPathComparator(\StaleDevice.lastContactTime, order: .forward)]
+    /// Observed so the Actions gate re-evaluates when capabilities land
+    /// after sign-in.
+    @ObservedObject private var session = UserSession.shared
+
+    /// False → the user's roles grant no cleanup action, so the Actions
+    /// button is not rendered (CleanupActionsSheet enforces this too).
+    private var hasAnyPermittedCleanupAction: Bool {
+        CleanupAction.allCases.contains { session.capabilities.canRunCleanupAction($0) }
+    }
 
     /// Devices matching the dashboard filter (before search).
     private var filterMatches: [StaleDevice] {
@@ -234,13 +243,17 @@ struct StaleDeviceListView: View {
 
             Spacer()
 
-            Button {
-                showActions = true
-            } label: {
-                Label("Actions", systemImage: "bolt.fill")
-                    .font(.subheadline.weight(.semibold))
+            // No cleanup action granted to the user's roles → no Actions
+            // button; the sheet behind it would have nothing to offer.
+            if hasAnyPermittedCleanupAction {
+                Button {
+                    showActions = true
+                } label: {
+                    Label("Actions", systemImage: "bolt.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
