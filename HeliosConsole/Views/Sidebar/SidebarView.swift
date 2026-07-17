@@ -156,11 +156,12 @@ struct SidebarView: View {
                 .padding(.vertical, 8)
 
             // Preferences (ui domain showSettings switch) — the user's avatar
-            // stands in for the gear icon.
+            // stands in for the gear icon, and the row is labelled
+            // "Preferences" to match the page header.
             if showSettingsItem {
                 PreferencesSidebarItem(
                     isSelected: selectedDestination == .settings && !isInNestedView,
-                    label: settingsRowLabel,
+                    label: "Preferences",
                     action: {
                         onNavigate(.settings)
                     }
@@ -308,14 +309,6 @@ struct SidebarView: View {
             config: MDMConfigurationManager.shared.configuration,
             capabilities: session.capabilities
         )
-    }
-
-    /// Label for the pinned Preferences row: an admin's ui-domain `settings`
-    /// label override still wins if delivered; otherwise "Preferences".
-    private var settingsRowLabel: String {
-        let override = MDMConfigurationManager.shared.configuration
-            .sidebarItems.first { $0.id == NavigationDestination.settings.rawValue }?.title ?? ""
-        return override.isEmpty ? "Preferences" : override
     }
 
     private static func showsSettings(
