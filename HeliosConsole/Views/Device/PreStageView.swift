@@ -77,6 +77,25 @@ struct PreStageView: View {
     /// card renders this, never the live picker selection, so changing the
     /// picker after a run cannot relabel its steps.
     @State private var executedPreStageName: String?
+
+    // Bulk CSV import (Inventory Preload only — no PreStage change)
+    @State private var showingCSVImporter = false
+    @State private var bulkParseResult: CSVPreloadParser.ParseResult?
+    @State private var bulkFileName: String?
+    @State private var bulkError: String?
+    @State private var isBulkRunning = false
+    @State private var bulkProgress: (done: Int, total: Int, serial: String)?
+    @State private var bulkSummary: BulkSummary?
+
+    struct BulkSummary {
+        let created: Int
+        let alreadyExisted: Int
+        let failed: Int
+        let skippedNoSerial: Int
+        let skippedNoAssetTag: Int
+        let duplicatesInFile: Int
+        let totalRows: Int
+    }
     /// Set only on full success — drives the green summary card.
     @State private var completedSummary: RegistrationSummary?
 
@@ -147,6 +166,11 @@ struct PreStageView: View {
                                 failureCard(error)
                             }
                         }
+
+                        // Bulk import needs no PreStage list — it writes
+                        // preload records only, so it renders in every
+                        // load state.
+                        bulkImportCard
                     }
                     .frame(maxWidth: 560)
                     .frame(maxWidth: .infinity)
@@ -160,6 +184,229 @@ struct PreStageView: View {
                 await loadPreStages()
             }
         }
+        .fileImporter(
+            isPresented: $showingCSVImporter,
+            allowedContentTypes: [.commaSeparatedText, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            handleCSVSelection(result)
+        }
+    }
+
+    // MARK: - Bulk CSV Import
+
+    /// Bulk Inventory Preload from a CSV — asset tags only, no PreStage
+    /// change (matching the script's bulk mode). Rows are parsed with the
+    /// same rules the script used; existing preload records are skipped.
+    private var bulkImportCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "doc.badge.arrow.up")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.purple)
+                Text("Bulk CSV Import")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+
+            Text("Import Inventory Preload records (serial + asset tag) in bulk. The CSV needs a Serial Number column; when a row's Asset Tag is blank, the Computer Name is used if it looks like an asset tag (SH/CH + 6 digits). Records that already exist are skipped. No PreStage assignments are made in bulk.")
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
+
+            if let progress = bulkProgress, isBulkRunning {
+                VStack(alignment: .leading, spacing: 6) {
+                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                    Text("(\(progress.done)/\(progress.total)) \(progress.serial)")
+                        .font(.system(size: 11).monospaced())
+                        .foregroundColor(.gray)
+                }
+            } else if let parsed = bulkParseResult, bulkSummary == nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(bulkFileName ?? "CSV") parsed: \(parsed.totalDataRows) rows, \(parsed.rows.count) valid (\(parsed.skippedNoSerial) without a serial, \(parsed.skippedNoAssetTag) without a resolvable asset tag, \(parsed.duplicatesInFile) in-file duplicates).")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                    HStack {
+                        Button("Import \(parsed.rows.count) Record\(parsed.rows.count == 1 ? "" : "s")") {
+                            Task { await runBulkImport(parsed) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(parsed.rows.isEmpty || isBulkRunning || isExecuting)
+                        Button("Cancel") {
+                            bulkParseResult = nil
+                            bulkFileName = nil
+                        }
+                        .buttonStyle(.bordered)
+                        // A live Cancel during the run would reset the card
+                        // while the import task keeps writing records.
+                        .disabled(isBulkRunning)
+                    }
+                }
+            } else if let summary = bulkSummary {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(summary.failed > 0 ? "Bulk import finished with errors" : "Bulk import complete")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(summary.failed > 0 ? .orange : .green)
+                    bulkSummaryRow("Created", summary.created, .green)
+                    bulkSummaryRow("Already existed (skipped)", summary.alreadyExisted, .gray)
+                    if summary.failed > 0 { bulkSummaryRow("Failed", summary.failed, .red) }
+                    if summary.skippedNoSerial > 0 { bulkSummaryRow("Skipped — no serial", summary.skippedNoSerial, .orange) }
+                    if summary.skippedNoAssetTag > 0 { bulkSummaryRow("Skipped — no asset tag", summary.skippedNoAssetTag, .orange) }
+                    if summary.duplicatesInFile > 0 { bulkSummaryRow("Duplicates in file", summary.duplicatesInFile, .orange) }
+                    Button("Import Another CSV") {
+                        bulkSummary = nil
+                        bulkParseResult = nil
+                        bulkFileName = nil
+                        showingCSVImporter = true
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.top, 6)
+                }
+            } else {
+                Button {
+                    bulkError = nil
+                    showingCSVImporter = true
+                } label: {
+                    Label("Choose CSV…", systemImage: "folder")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isBulkRunning || isExecuting)
+            }
+
+            if let bulkError {
+                Text(bulkError)
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(20)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    private func bulkSummaryRow(_ label: String, _ count: Int, _ color: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.gray)
+            Spacer()
+            Text("\(count)")
+                .font(.system(size: 12, weight: .semibold).monospaced())
+                .foregroundColor(.white)
+        }
+    }
+
+    private func handleCSVSelection(_ result: Result<[URL], Error>) {
+        bulkError = nil
+        bulkSummary = nil
+        bulkParseResult = nil
+
+        switch result {
+        case .failure(let error):
+            bulkError = error.localizedDescription
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                // UTF-8 first; legacy Excel exports (Windows-1252-ish) fall
+                // back to Latin-1, which decodes any byte sequence — serials
+                // and asset tags are ASCII either way.
+                guard let content = String(data: data, encoding: .utf8)
+                        ?? String(data: data, encoding: .isoLatin1) else {
+                    throw CocoaError(.fileReadInapplicableStringEncoding)
+                }
+                bulkParseResult = try CSVPreloadParser.parse(content)
+                bulkFileName = url.lastPathComponent
+            } catch {
+                bulkError = "Could not read the CSV: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    @MainActor
+    private func runBulkImport(_ parsed: CSVPreloadParser.ParseResult) async {
+        guard !isBulkRunning else { return }
+        isBulkRunning = true
+        defer { isBulkRunning = false }
+
+        bulkError = nil  // a prior run's error must never outlive this run
+
+        var created = 0
+        var existed = 0
+        var failed = 0
+        var consecutiveFailures = 0
+
+        do {
+            // Progress renders from the very start — the existing-records
+            // sweep can take a while and must not look idle.
+            bulkProgress = (0, parsed.rows.count, "Reading existing records…")
+            let existingSerials = try await JamfPreStageService.shared.fetchAllPreloadSerials()
+
+            for (index, row) in parsed.rows.enumerated() {
+                bulkProgress = (index + 1, parsed.rows.count, row.serialNumber)
+
+                if existingSerials.contains(row.serialNumber) {
+                    existed += 1
+                    continue
+                }
+                do {
+                    try await JamfPreStageService.shared.createPreloadRecord(
+                        serial: row.serialNumber, assetTag: row.assetTag
+                    )
+                    created += 1
+                    consecutiveFailures = 0
+                } catch {
+                    failed += 1
+                    consecutiveFailures += 1
+                    NSLog("❌ Bulk preload failed for %@: %@", row.serialNumber, error.localizedDescription)
+                    // Systemic failure (expired token, outage): stop burning
+                    // a request-timeout per remaining row.
+                    if consecutiveFailures >= 10 {
+                        failed += parsed.rows.count - index - 1
+                        bulkError = "Import aborted after 10 consecutive failures — the remaining rows were not attempted. Fix the underlying issue (see logs) and re-import; already-created records will be skipped."
+                        break
+                    }
+                }
+            }
+        } catch {
+            bulkError = "Could not read existing Inventory Preload records: \(error.localizedDescription)"
+            bulkProgress = nil
+            ActionLogService.shared.logAction(
+                actionName: "Bulk Preload Import",
+                actionCategory: "Pre-Stage",
+                deviceName: bulkFileName ?? "CSV",
+                deviceSerialNumber: "\(parsed.rows.count) rows",
+                deviceId: bulkFileName ?? "CSV",
+                success: false,
+                errorMessage: "Aborted before import: \(error.localizedDescription)"
+            )
+            return
+        }
+
+        bulkProgress = nil
+        bulkSummary = BulkSummary(
+            created: created,
+            alreadyExisted: existed,
+            failed: failed,
+            skippedNoSerial: parsed.skippedNoSerial,
+            skippedNoAssetTag: parsed.skippedNoAssetTag,
+            duplicatesInFile: parsed.duplicatesInFile,
+            totalRows: parsed.totalDataRows
+        )
+        bulkParseResult = nil
+
+        ActionLogService.shared.logAction(
+            actionName: "Bulk Preload Import",
+            actionCategory: "Pre-Stage",
+            deviceName: bulkFileName ?? "CSV",
+            deviceSerialNumber: "\(parsed.rows.count) rows",
+            deviceId: bulkFileName ?? "CSV",
+            success: failed == 0,
+            errorMessage: "created \(created), existed \(existed), failed \(failed), no-serial \(parsed.skippedNoSerial), no-asset \(parsed.skippedNoAssetTag), dups \(parsed.duplicatesInFile)"
+        )
     }
 
     // MARK: - Data Loading
@@ -460,7 +707,7 @@ struct PreStageView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.purple)
-                .disabled(!isFormValid || isExecuting)
+                .disabled(!isFormValid || isExecuting || isBulkRunning)
             }
         }
         .padding(20)
