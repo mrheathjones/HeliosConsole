@@ -26,6 +26,7 @@ import SwiftUI
 enum DevicesTab: String, CaseIterable, Identifiable {
     case devices
     case abmLookup
+    case prestage
 
     var id: String { rawValue }
 
@@ -33,6 +34,7 @@ enum DevicesTab: String, CaseIterable, Identifiable {
         switch self {
         case .devices: return "Devices"
         case .abmLookup: return "ABM Lookup"
+        case .prestage: return "Pre-Stage"
         }
     }
 
@@ -40,6 +42,7 @@ enum DevicesTab: String, CaseIterable, Identifiable {
         switch self {
         case .devices: return "laptopcomputer"
         case .abmLookup: return "apple.logo"
+        case .prestage: return "shippingbox"
         }
     }
 }
@@ -179,6 +182,8 @@ struct DevicesHomeView: View {
             DevicesView(isInNestedView: $isInNestedView)
         case .abmLookup:
             ABMLookupView()
+        case .prestage:
+            PreStageView()
         }
     }
 }

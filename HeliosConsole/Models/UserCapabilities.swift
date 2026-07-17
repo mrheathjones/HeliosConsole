@@ -69,6 +69,11 @@ struct UserCapabilities: Equatable {
     /// CleanupAction configIDs the user may run.
     let cleanupActions: Set<String>
 
+    /// Jamf Computer PreStage displayNames selectable in the Pre-Stage tab.
+    /// Exact names, plus the reserved literal `all` (case-insensitive)
+    /// meaning every PreStage — interpreted by `canUsePrestage(named:)`.
+    let allowedPrestages: Set<String>
+
     /// Whether the user may export data out of the app.
     let allowExport: Bool
 
@@ -81,6 +86,7 @@ struct UserCapabilities: Equatable {
         computerActions: Set<String>,
         mobileDeviceActions: Set<String>,
         cleanupActions: Set<String>,
+        allowedPrestages: Set<String> = [],
         allowExport: Bool
     ) {
         var seen: Set<String> = []
@@ -104,6 +110,7 @@ struct UserCapabilities: Equatable {
         self.computerActions = computerActions
         self.mobileDeviceActions = mobileDeviceActions
         self.cleanupActions = cleanupActions
+        self.allowedPrestages = allowedPrestages
         self.allowExport = allowExport
     }
 
@@ -130,6 +137,7 @@ struct UserCapabilities: Equatable {
             && lhs.computerActions == rhs.computerActions
             && lhs.mobileDeviceActions == rhs.mobileDeviceActions
             && lhs.cleanupActions == rhs.cleanupActions
+            && lhs.allowedPrestages == rhs.allowedPrestages
             && lhs.allowExport == rhs.allowExport
     }
 
@@ -161,12 +169,14 @@ struct UserCapabilities: Equatable {
         var cleanupActions: Set<String> = []
         var allowExport = false
 
+        var allowedPrestages: Set<String> = []
         for definition in definitions {
             modules.append(contentsOf: definition.effectiveModules)
             deviceTabs.append(contentsOf: definition.effectiveDeviceTabs)
             computerActions.formUnion(definition.effectiveComputerActions)
             mobileDeviceActions.formUnion(definition.effectiveMobileDeviceActions)
             cleanupActions.formUnion(definition.effectiveCleanupActions)
+            allowedPrestages.formUnion(definition.effectiveAllowedPrestages)
             allowExport = allowExport || definition.effectiveAllowExport
         }
 
@@ -176,6 +186,7 @@ struct UserCapabilities: Equatable {
             computerActions: computerActions,
             mobileDeviceActions: mobileDeviceActions,
             cleanupActions: cleanupActions,
+            allowedPrestages: allowedPrestages,
             allowExport: allowExport
         )
     }
@@ -205,5 +216,22 @@ struct UserCapabilities: Equatable {
     /// `canRunComputerAction(_:)` — user layer only.
     func canRunMobileDeviceAction(_ action: DeviceAction) -> Bool {
         mobileDeviceActions.contains(action.rawValue)
+    }
+
+    /// Whether any held role's `allowedPrestages` carries the reserved
+    /// `all` literal (case-insensitive).
+    var allowsAllPrestages: Bool {
+        allowedPrestages.contains { $0.caseInsensitiveCompare("all") == .orderedSame }
+    }
+
+    /// Whether the user may select the named PreStage in the Pre-Stage
+    /// tab. The sentinel is interpreted BEFORE name matching, so a
+    /// PreStage literally named "all" can never be matched by name; real
+    /// names compare exactly after trimming (entries were trimmed at
+    /// decode).
+    func canUsePrestage(named name: String) -> Bool {
+        if allowsAllPrestages { return true }
+        let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allowedPrestages.contains(candidate)
     }
 }
