@@ -1,0 +1,1193 @@
+//
+//  ABMLookupView.swift
+//  HeliosConsole
+//
+//  Apple Business Manager org-inventory lookup. Renders the full ABM device
+//  sweep from ABMDeviceCache (populated on demand via ABMAPIService: MDM
+//  server list → org device sweep → deviceId→serverId assignment map), with
+//  search over serial / model / asset tag, Assigned/Unassigned filter chips,
+//  a per-MDM-server filter menu, and a detail sheet that lazily fetches
+//  AppleCare coverage per device. Asset tags come from a serial→assetTag
+//  join against the Jamf computer inventory cache — ABM itself carries no
+//  asset tags. If the core domain's appleBusinessManager block is not
+//  delivered by profile, the whole tab is a not-configured notice.
+//
+
+import SwiftUI
+
+// MARK: - Assignment Filter
+
+private enum ABMAssignmentFilter: String, CaseIterable, Identifiable {
+    case all
+    case assigned
+    case unassigned
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .assigned: return "Assigned"
+        case .unassigned: return "Unassigned"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .all: return .gray
+        case .assigned: return .green
+        case .unassigned: return .orange
+        }
+    }
+}
+
+// MARK: - ABM Lookup View
+
+struct ABMLookupView: View {
+    @ObservedObject private var abmService = ABMAPIService.shared
+    @ObservedObject private var cache = ABMDeviceCache.shared
+
+    @State private var searchText = ""
+    @State private var assignmentFilter: ABMAssignmentFilter = .all
+    @State private var selectedServerId: String?
+    @State private var selectedDevice: ABMOrgDevice?
+    @State private var isLoading = false
+    @State private var loadError: String?
+
+    /// serial (uppercased) → asset tag, joined from the Jamf computer
+    /// inventory cache. Rebuilt on load/refresh — never inside `body`,
+    /// where an O(n) sweep per evaluation would be far too hot.
+    @State private var assetTagsBySerial: [String: String] = [:]
+
+    @FocusState private var isSearchFocused: Bool
+
+    // MARK: - Derived Data
+
+    private var filteredDevices: [ABMOrgDevice] {
+        let query = searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        return cache.devices.filter { device in
+            switch assignmentFilter {
+            case .all:
+                break
+            case .assigned:
+                if !device.isAssigned { return false }
+            case .unassigned:
+                if device.isAssigned { return false }
+            }
+
+            if let serverId = selectedServerId,
+               cache.assignmentMap[device.id] != serverId {
+                return false
+            }
+
+            if !query.isEmpty {
+                let assetTag = assetTagsBySerial[device.serialNumber.uppercased()] ?? ""
+                let matches = device.serialNumber.lowercased().contains(query)
+                    || (device.deviceModel ?? "").lowercased().contains(query)
+                    || assetTag.lowercased().contains(query)
+                if !matches { return false }
+            }
+
+            return true
+        }
+    }
+
+    private var assignedCount: Int {
+        cache.devices.filter { $0.isAssigned }.count
+    }
+
+    private var unassignedCount: Int {
+        cache.devices.count - assignedCount
+    }
+
+    private func count(for filter: ABMAssignmentFilter) -> Int {
+        switch filter {
+        case .all: return cache.devices.count
+        case .assigned: return assignedCount
+        case .unassigned: return unassignedCount
+        }
+    }
+
+    private var selectedServerName: String? {
+        guard let id = selectedServerId else { return nil }
+        return cache.mdmServers.first { $0.id == id }?.serverName
+    }
+
+    private var hasActiveFilters: Bool {
+        !searchText.isEmpty || assignmentFilter != .all || selectedServerId != nil
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        ZStack {
+            // Animated background matching app design
+            AnimatedBackgroundView(animate: .constant(true))
+
+            if !abmService.isConfigured {
+                notConfiguredView
+            } else {
+                VStack(spacing: 0) {
+                    headerSection
+                    toolbarSection
+
+                    if isLoading && cache.devices.isEmpty {
+                        loadingView
+                    } else if let error = loadError, cache.devices.isEmpty {
+                        errorView(error: error)
+                    } else if cache.devices.isEmpty {
+                        emptyStateView
+                    } else if filteredDevices.isEmpty {
+                        emptySearchView
+                    } else {
+                        contentView
+                    }
+                }
+            }
+        }
+        .task {
+            rebuildAssetTagMap()
+            // Gate on isCacheValid, not hasCachedData: a tenant whose ABM
+            // org is genuinely empty would otherwise re-sweep on every
+            // tab entry (hasCachedData requires a non-empty device list).
+            if abmService.isConfigured && !cache.isCacheValid && !isLoading {
+                await loadInventory()
+            }
+        }
+        .sheet(item: $selectedDevice) { device in
+            ABMDeviceDetailSheet(
+                device: device,
+                assignedServer: cache.assignedServer(forDeviceId: device.id),
+                assetTag: assetTagsBySerial[device.serialNumber.uppercased()]
+            )
+        }
+    }
+
+    // MARK: - Data Loading
+
+    /// Full inventory load: server list → device sweep → assignment map,
+    /// then one atomic cache update. @MainActor because ABMDeviceCache is
+    /// main-actor isolated; the service calls themselves hop off to await.
+    @MainActor
+    private func loadInventory() async {
+        guard abmService.isConfigured else { return }
+        // Reentrancy guard: Try Again / empty-state Refresh can be clicked
+        // while a sweep is already running — never stack a second sweep.
+        guard !isLoading else { return }
+
+        isLoading = true
+        loadError = nil
+
+        do {
+            let servers = try await ABMAPIService.shared.fetchMdmServers()
+            let devices = try await ABMAPIService.shared.fetchAllOrgDevices()
+            let assignmentMap = try await ABMAPIService.shared.buildAssignmentMap(servers: servers)
+
+            cache.updateCache(devices: devices, mdmServers: servers, assignmentMap: assignmentMap)
+            rebuildAssetTagMap()
+        } catch {
+            loadError = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    /// Rebuilds the serial→assetTag join from the Jamf computer inventory
+    /// cache. O(n) over the computer list, run only on load/refresh.
+    @MainActor
+    private func rebuildAssetTagMap() {
+        var map: [String: String] = [:]
+        let computers = ComputerInventoryCache.shared.computers
+        map.reserveCapacity(computers.count)
+
+        for computer in computers {
+            if let serial = computer.hardware?.serialNumber,
+               let assetTag = computer.general?.assetTag,
+               !assetTag.isEmpty {
+                map[serial.uppercased()] = assetTag
+            }
+        }
+
+        assetTagsBySerial = map
+    }
+
+    @MainActor
+    private func refresh() async {
+        // Deliberately NOT cache.clearCache() first: loadInventory commits
+        // atomically on success, so fetching before swapping keeps the
+        // last-known-good inventory on screen through a failed refresh.
+        // Only the AppleCare coverage cache is dropped up front (stale
+        // coverage is the one thing a refresh must not preserve).
+        ABMAPIService.shared.clearCache()
+        cache.invalidateCache()
+        await loadInventory()
+    }
+
+    // MARK: - Header
+
+    private var headerSection: some View {
+        HStack(alignment: .center, spacing: 20) {
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.blue.opacity(0.2), Color.cyan.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .cyan],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("ABM Lookup")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+
+                    HStack(spacing: 8) {
+                        Text("\(cache.devices.count) devices in Apple Business Manager")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+
+                        if let lastFetch = cache.lastFetchDate {
+                            Text("•")
+                                .foregroundColor(.gray)
+                            Text("Updated \(lastFetch.formatted(date: .omitted, time: .shortened))")
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Refresh button — clears the cache and reloads
+            Button {
+                Task {
+                    await refresh()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text("Refresh")
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoading)
+        }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 24)
+        .background(Color.black.opacity(0.3))
+    }
+
+    // MARK: - Toolbar Section
+
+    private var toolbarSection: some View {
+        HStack(spacing: 16) {
+            // Assignment filter chips
+            HStack(spacing: 8) {
+                ForEach(ABMAssignmentFilter.allCases) { filter in
+                    filterChip(
+                        title: filter.title,
+                        count: count(for: filter),
+                        isSelected: assignmentFilter == filter,
+                        color: filter.color
+                    ) {
+                        assignmentFilter = filter
+                    }
+                }
+            }
+
+            // MDM server filter menu
+            serverFilterMenu
+
+            Spacer()
+
+            // Results count
+            if hasActiveFilters {
+                Text("\(filteredDevices.count) of \(cache.devices.count) shown")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+            }
+
+            // Search bar
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.gray)
+
+                TextField("", text: $searchText, prompt: Text("Search serial, model, asset tag...")
+                    .foregroundColor(.gray.opacity(0.6)))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white)
+                    .focused($isSearchFocused)
+
+                if !searchText.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            searchText = ""
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(width: 280)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSearchFocused ? Color.blue.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.15))
+    }
+
+    private var serverFilterMenu: some View {
+        Menu {
+            Button("Any Server") {
+                selectedServerId = nil
+            }
+
+            if !cache.mdmServers.isEmpty {
+                Divider()
+
+                ForEach(cache.mdmServers) { server in
+                    Button {
+                        selectedServerId = server.id
+                    } label: {
+                        if selectedServerId == server.id {
+                            Label(server.serverName, systemImage: "checkmark")
+                        } else {
+                            Text(server.serverName)
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 11, weight: .medium))
+                Text(selectedServerName ?? "Any Server")
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundColor(selectedServerId != nil ? .white : .white.opacity(0.8))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(selectedServerId != nil ? Color.blue : Color.white.opacity(0.05))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(selectedServerId != nil ? Color.blue : Color.white.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private func filterChip(title: String, count: Int, isSelected: Bool, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(isSelected ? Color.white.opacity(0.3) : color.opacity(0.2))
+                    .cornerRadius(4)
+            }
+            .foregroundColor(isSelected ? .white : .white.opacity(0.8))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? color : Color.white.opacity(0.05))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? color : Color.white.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Content
+
+    private var contentView: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                ForEach(filteredDevices) { device in
+                    ABMDeviceRow(
+                        device: device,
+                        serverName: cache.assignedServer(forDeviceId: device.id)?.serverName,
+                        assetTag: assetTagsBySerial[device.serialNumber.uppercased()]
+                    ) {
+                        selectedDevice = device
+                    }
+                }
+            }
+            .padding(32)
+        }
+    }
+
+    // MARK: - Not Configured
+
+    private var notConfiguredView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: 120, height: 120)
+
+                Image(systemName: "apple.logo")
+                    .font(.system(size: 48, weight: .medium))
+                    .foregroundColor(.blue.opacity(0.6))
+            }
+
+            VStack(spacing: 12) {
+                Text("Apple Business Manager Is Not Configured")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text("ABM lookups require the core domain's appleBusinessManager block and its credentials private key, delivered by configuration profile. Contact your administrator to enable the integration.")
+                    .font(.system(size: 16))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Loading View
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Loading Apple Business Manager inventory...")
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+            Spacer()
+        }
+    }
+
+    // MARK: - Error View
+
+    private func errorView(error: String) -> some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.red.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.red)
+            }
+
+            VStack(spacing: 8) {
+                Text("Unable to Load ABM Inventory")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text(error)
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 450)
+            }
+
+            Button {
+                Task {
+                    await loadInventory()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Try Again")
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.blue)
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Empty States
+
+    /// Empty ORG INVENTORY — ABM answered but returned no devices.
+    private var emptyStateView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: 120, height: 120)
+
+                Image(systemName: "apple.logo")
+                    .font(.system(size: 48, weight: .medium))
+                    .foregroundColor(.blue.opacity(0.6))
+            }
+
+            VStack(spacing: 12) {
+                Text("No Devices in Apple Business Manager")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text("The organization's ABM inventory is empty.\nDevices will appear here once added to Apple Business Manager.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 400)
+            }
+
+            Button {
+                Task {
+                    await refresh()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Refresh")
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.blue)
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+    }
+
+    /// Empty SEARCH RESULT — inventory exists, filters matched nothing.
+    private var emptySearchView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.gray.opacity(0.1))
+                    .frame(width: 120, height: 120)
+
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 48, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.6))
+            }
+
+            VStack(spacing: 12) {
+                Text("No Matching Devices")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text("None of the \(cache.devices.count) devices in Apple Business Manager match the current search and filters.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 400)
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    searchText = ""
+                    assignmentFilter = .all
+                    selectedServerId = nil
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark.circle")
+                    Text("Clear Filters")
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Product Family Icon
+
+/// SF Symbol for an ABM productFamily string. Shared by the row and the
+/// detail sheet.
+private func abmFamilyIcon(for productFamily: String?) -> String {
+    let family = (productFamily ?? "").lowercased()
+    if family.contains("iphone") { return "iphone" }
+    if family.contains("ipad") { return "ipad" }
+    if family.contains("tv") { return "appletv" }
+    if family.contains("watch") { return "applewatch" }
+    if family.contains("vision") { return "visionpro" }
+    if family.contains("mac") { return "laptopcomputer" }
+    return "questionmark.square"
+}
+
+// MARK: - ABM Device Row
+
+struct ABMDeviceRow: View {
+    let device: ABMOrgDevice
+    let serverName: String?
+    let assetTag: String?
+    let onTap: () -> Void
+
+    @State private var isHovered = false
+
+    private var statusColor: Color {
+        device.isAssigned ? .green : .orange
+    }
+
+    private var statusTitle: String {
+        device.isAssigned ? "ASSIGNED" : "UNASSIGNED"
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 16) {
+                // Product family icon tile
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: abmFamilyIcon(for: device.productFamily))
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+
+                // Device info
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(device.serialNumber)
+                            .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+
+                        // Assignment status capsule
+                        Text(statusTitle)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(statusColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(statusColor.opacity(0.15)))
+
+                        if device.isAssigned, let serverName {
+                            HStack(spacing: 4) {
+                                Image(systemName: "server.rack")
+                                    .font(.system(size: 9))
+                                Text(serverName)
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                        }
+                    }
+
+                    HStack(spacing: 12) {
+                        if let model = device.deviceModel {
+                            Text(model)
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                        }
+
+                        if let color = device.color, !color.isEmpty {
+                            Text("•")
+                                .foregroundColor(.gray.opacity(0.5))
+                            Text(color.capitalized)
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                        }
+                    }
+
+                    HStack(spacing: 12) {
+                        if let assetTag {
+                            HStack(spacing: 4) {
+                                Image(systemName: "tag.fill")
+                                    .font(.system(size: 10))
+                                Text(assetTag)
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.blue)
+                        }
+
+                        if let added = device.addedToOrgDate {
+                            HStack(spacing: 4) {
+                                Image(systemName: "calendar.badge.plus")
+                                    .font(.system(size: 10))
+                                Text("Added \(added.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.system(size: 11))
+                            }
+                            .foregroundColor(.gray.opacity(0.7))
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.5))
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(isHovered ? 0.06 : 0.03))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(isHovered ? 0.1 : 0.05), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - ABM Device Detail Sheet
+
+struct ABMDeviceDetailSheet: View {
+    let device: ABMOrgDevice
+    let assignedServer: ABMMdmServer?
+    let assetTag: String?
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var coverages: [AppleCareCoverage] = []
+    @State private var isLoadingCoverage = true
+    @State private var coverageUnavailable = false
+
+    private var statusColor: Color {
+        device.isAssigned ? .green : .orange
+    }
+
+    private var statusTitle: String {
+        device.isAssigned ? "ASSIGNED" : "UNASSIGNED"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with gradient accent
+            VStack(spacing: 16) {
+                HStack(alignment: .top) {
+                    // Product family icon
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(width: 96, height: 96)
+
+                        Image(systemName: abmFamilyIcon(for: device.productFamily))
+                            .font(.system(size: 40, weight: .medium))
+                            .foregroundColor(.white.opacity(0.85))
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(device.serialNumber)
+                            .font(.system(size: 22, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+
+                        if let model = device.deviceModel {
+                            Text(model)
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                        }
+
+                        // Status badge
+                        HStack(spacing: 6) {
+                            Image(systemName: device.isAssigned ? "checkmark.circle.fill" : "circle.dashed")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(statusTitle)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundColor(statusColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(statusColor.opacity(0.2))
+                        .cornerRadius(6)
+                    }
+                    .padding(.leading, 8)
+
+                    Spacer()
+
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.gray)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(Color.white.opacity(0.15)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
+            .background(Color.white.opacity(0.03))
+
+            Divider()
+                .background(Color.white.opacity(0.1))
+
+            // Content
+            ScrollView {
+                VStack(spacing: 16) {
+                    deviceCard
+                    identifiersCard
+                    assignmentCard
+                    datesCard
+                    appleCareCard
+                }
+                .padding(20)
+            }
+        }
+        .frame(width: 520, height: 640)
+        .background(.ultraThinMaterial.opacity(0.8))
+        .background(Color(white: 0.06).opacity(0.7))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+        .task {
+            await loadCoverage()
+        }
+    }
+
+    // MARK: - Cards
+
+    private var deviceCard: some View {
+        detailCard(title: "Device", icon: abmFamilyIcon(for: device.productFamily), iconColors: [.blue, .cyan]) {
+            VStack(spacing: 0) {
+                if let model = device.deviceModel {
+                    detailRow(label: "Model", value: model, isFirst: true)
+                }
+
+                if let family = device.productFamily {
+                    detailRow(label: "Product Family", value: family)
+                }
+
+                if let productType = device.productType {
+                    detailRow(label: "Product Type", value: productType, monospaced: true)
+                }
+
+                if let capacity = device.deviceCapacity {
+                    detailRow(label: "Capacity", value: capacity)
+                }
+
+                if let color = device.color, !color.isEmpty {
+                    detailRow(label: "Color", value: color.capitalized, isLast: true)
+                }
+            }
+        }
+    }
+
+    private var identifiersCard: some View {
+        detailCard(title: "Identifiers", icon: "number", iconColors: [.purple, .pink]) {
+            VStack(spacing: 0) {
+                detailRow(label: "Serial Number", value: device.serialNumber, monospaced: true, isFirst: true)
+
+                if let assetTag {
+                    detailRow(label: "Asset Tag", value: assetTag, isLast: true)
+                }
+            }
+        }
+    }
+
+    private var assignmentCard: some View {
+        detailCard(title: "Assignment", icon: "server.rack", iconColors: [.green, .mint]) {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Status")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+
+                    Spacer()
+
+                    Text(statusTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(statusColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(statusColor.opacity(0.15)))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+
+                if let server = assignedServer {
+                    detailRow(label: "MDM Server", value: server.serverName)
+
+                    if let serverType = server.serverType {
+                        detailRow(label: "Server Type", value: serverType, isLast: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private var datesCard: some View {
+        detailCard(title: "Dates", icon: "calendar", iconColors: [.orange, .yellow]) {
+            VStack(spacing: 0) {
+                if let added = formatISODate(device.addedToOrgDateTime) {
+                    detailRow(label: "Added to Org", value: added, isFirst: true)
+                }
+
+                if let updated = formatISODate(device.updatedDateTime) {
+                    detailRow(label: "Last Updated", value: updated)
+                }
+
+                if let ordered = formatISODate(device.orderDateTime) {
+                    detailRow(label: "Order Date", value: ordered)
+                }
+
+                if let orderNumber = device.orderNumber, !orderNumber.isEmpty {
+                    detailRow(label: "Order Number", value: orderNumber, monospaced: true, isLast: true)
+                }
+            }
+        }
+    }
+
+    private var appleCareCard: some View {
+        detailCard(title: "AppleCare", icon: "cross.case", iconColors: [.red, .orange]) {
+            VStack(spacing: 0) {
+                if isLoadingCoverage {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                        Text("Checking coverage...")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                } else if coverageUnavailable {
+                    HStack {
+                        Text("AppleCare information unavailable")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                } else if coverages.isEmpty {
+                    HStack {
+                        Text("No coverage records for this device")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                } else {
+                    ForEach(coverages) { coverage in
+                        coverageRow(coverage)
+
+                        if coverage.id != coverages.last?.id {
+                            Divider()
+                                .background(Color.white.opacity(0.06))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func coverageRow(_ coverage: AppleCareCoverage) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(coverage.description)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+
+                Text(coverage.isActive ? "ACTIVE" : "INACTIVE")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(coverage.isActive ? .green : .gray)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill((coverage.isActive ? Color.green : Color.gray).opacity(0.15)))
+
+                Spacer()
+            }
+
+            if let end = coverage.endDate {
+                HStack(spacing: 6) {
+                    Text("Ends \(end.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+
+                    if let days = coverage.daysRemaining {
+                        Text("•")
+                            .foregroundColor(.gray.opacity(0.5))
+
+                        if coverage.isExpired {
+                            Text("Expired \(-days) day\(days == -1 ? "" : "s") ago")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.red)
+                        } else {
+                            Text("\(days) day\(days == 1 ? "" : "s") remaining")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(coverage.isExpiringSoon ? .orange : .gray)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - AppleCare Loading
+
+    /// Fail-soft: coverage is a nice-to-have on top of the org record, so
+    /// any error collapses to a plain "unavailable" line, never an alert.
+    @MainActor
+    private func loadCoverage() async {
+        isLoadingCoverage = true
+        coverageUnavailable = false
+
+        do {
+            coverages = try await ABMAPIService.shared.getAppleCareCoverage(forSerialNumber: device.serialNumber)
+        } catch {
+            coverageUnavailable = true
+        }
+
+        isLoadingCoverage = false
+    }
+
+    // MARK: - Card Helpers
+
+    private func detailCard<Content: View>(
+        title: String,
+        icon: String,
+        iconColors: [Color],
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Card header
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(colors: iconColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+                .background(Color.white.opacity(0.1))
+
+            content()
+        }
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func detailRow(
+        label: String,
+        value: String,
+        monospaced: Bool = false,
+        isFirst: Bool = false,
+        isLast: Bool = false
+    ) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(.gray)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: 13, weight: .medium, design: monospaced ? .monospaced : .default))
+                .foregroundColor(.white)
+                .textSelection(.enabled)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func formatISODate(_ isoString: String?) -> String? {
+        guard let date = ABMDateParser.date(from: isoString) else { return nil }
+        return Self.displayFormatter.string(from: date)
+    }
+
+    private static let displayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
+// MARK: - Preview
+
+#if DEBUG
+#Preview("ABM Lookup") {
+    ABMLookupView()
+        .frame(width: 1200, height: 800)
+}
+#endif

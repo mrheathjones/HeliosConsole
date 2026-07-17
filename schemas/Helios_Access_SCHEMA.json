@@ -46,7 +46,6 @@
                 "announcements",
                 "logs",
                 "reports",
-                "enrollments",
                 "cleanup",
                 "settings",
                 "myDevice"
@@ -57,7 +56,7 @@
           "deviceTabs": {
             "type": "array",
             "title": "Devices-View Tabs (for this role)",
-            "description": "Tab ids this role may open INSIDE the Devices module (requires `devices` in modules — without it this list is unreachable). ROLE-DRIVEN ONLY, like modules. Absent or empty = the base device list only, no extra tabs. ARRAY ORDER IS THE TAB ORDER after the app-defined base tab, with the same multi-role union rule as modules (roles walked in authored order, first appearance wins). `abmLookup` is the Apple Business Manager inventory/lookup tab; `prestage` is the Jamf PreStage registration tab. BOTH TABS SHIP IN AN UPCOMING RELEASE: these ids may be pre-staged safely and render nothing until then (once live, abmLookup additionally requires the core domain's appleBusinessManager block or it renders an unconfigured notice). Unknown ids are accepted and skipped without error, so newer profiles deploy safely to older builds.",
+            "description": "Tab ids this role may open INSIDE the Devices module (requires `devices` in modules — without it this list is unreachable). ROLE-DRIVEN ONLY, like modules. Absent or empty = the base device list only, no extra tabs. ARRAY ORDER IS THE TAB ORDER after the app-defined base tab, with the same multi-role union rule as modules (roles walked in authored order, first appearance wins). `abmLookup` is the Apple Business Manager inventory/lookup tab (LIVE — requires the core domain's appleBusinessManager block or it renders an unconfigured notice); `prestage` is the Jamf PreStage registration tab (ships in an upcoming release — the id may be pre-staged safely and renders nothing until then). Unknown ids are accepted and skipped without error, so newer profiles deploy safely to older builds.",
             "items": {
               "type": "string",
               "title": "Tab ID",

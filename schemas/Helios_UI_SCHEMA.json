@@ -64,12 +64,6 @@
           ],
           "default": "system"
         },
-        "showEnrollments": {
-          "type": "boolean",
-          "title": "Show Enrollments",
-          "description": "Show the Enrollments area in the app.",
-          "default": true
-        },
         "showAnnouncements": {
           "type": "boolean",
           "title": "Show Announcements",

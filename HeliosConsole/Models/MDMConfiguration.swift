@@ -675,7 +675,6 @@ struct MDMConfiguration: Codable {
         SidebarItemConfig(id: "announcements", icon: "megaphone", title: "Announcements"),
         SidebarItemConfig(id: "logs", icon: "doc.text.magnifyingglass", title: "Logs"),
         SidebarItemConfig(id: "reports", icon: "chart.bar.doc.horizontal", title: "Reports"),
-        SidebarItemConfig(id: "enrollments", icon: "person.badge.plus", title: "Enrollments"),
         SidebarItemConfig(id: "cleanup", icon: "wand.and.sparkles", title: "Cleanup"),
         SidebarItemConfig(id: "settings", icon: "gearshape", title: "Settings")
     ]
