@@ -743,6 +743,18 @@ struct DeviceView: View {
             // keep the switch exhaustive and safe.
             await MainActor.run { showingUnlockAccountSheet = true }
             return
+        case .abmAssign, .abmUnassign:
+            // Grantable ahead of the execution UI (ships in a follow-up PR)
+            // so profiles can be staged — until then, fail loudly, never
+            // silently.
+            await MainActor.run {
+                commandResult = CommandResult(
+                    success: false,
+                    title: actionPolicy.menuLabel(for: action),
+                    message: "ABM \(action == .abmAssign ? "assignment" : "unassignment") is not available in this build yet. The action is granted by your profile and will activate in an upcoming release."
+                )
+                showingCommandAlert = true
+            }
         }
         
         // Centralized logging for all MDM commands (except Screen Share which logs internally)

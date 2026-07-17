@@ -17,6 +17,8 @@
 //    • modules              → sidebar/route ids (NavigationDestination raw values),
 //                             ORDERED — the position of an id in a role's
 //                             `modules` array IS its sidebar row order
+//    • deviceTabs           → Devices-view tab ids (e.g. abmLookup, prestage),
+//                             ORDERED like modules — array position is tab order
 //    • computerActions      → DeviceAction raw values
 //    • mobileDeviceActions  → DeviceAction raw values
 //    • cleanupActions       → CleanupAction.configID values
@@ -49,6 +51,15 @@ struct UserCapabilities: Equatable {
     /// itself stays ordered. Derived — excluded from `==` (see below).
     private let moduleSet: Set<String>
 
+    /// Devices-view tab ids the user may open (e.g. `abmLookup`,
+    /// `prestage`), ordered like `modules`: array position is tab position
+    /// after the app-defined base tab, first appearance wins on union. The
+    /// base device list is gated by the `devices` module, not listed here.
+    let deviceTabs: [String]
+
+    /// `deviceTabs` as a set for the O(1) gate. Derived — excluded from `==`.
+    private let deviceTabSet: Set<String>
+
     /// DeviceAction raw values the user may run on computers.
     let computerActions: Set<String>
 
@@ -66,6 +77,7 @@ struct UserCapabilities: Equatable {
     /// later repeats are dropped (never moved).
     init(
         modules: [String],
+        deviceTabs: [String],
         computerActions: Set<String>,
         mobileDeviceActions: Set<String>,
         cleanupActions: Set<String>,
@@ -79,6 +91,16 @@ struct UserCapabilities: Equatable {
         }
         self.modules = ordered
         self.moduleSet = seen
+
+        var seenTabs: Set<String> = []
+        var orderedTabs: [String] = []
+        orderedTabs.reserveCapacity(deviceTabs.count)
+        for tab in deviceTabs where seenTabs.insert(tab).inserted {
+            orderedTabs.append(tab)
+        }
+        self.deviceTabs = orderedTabs
+        self.deviceTabSet = seenTabs
+
         self.computerActions = computerActions
         self.mobileDeviceActions = mobileDeviceActions
         self.cleanupActions = cleanupActions
@@ -90,6 +112,7 @@ struct UserCapabilities: Equatable {
     /// user's role names match no definition in the profile.
     static let none = UserCapabilities(
         modules: [],
+        deviceTabs: [],
         computerActions: [],
         mobileDeviceActions: [],
         cleanupActions: [],
@@ -103,6 +126,7 @@ struct UserCapabilities: Equatable {
     /// lands.
     static func == (lhs: UserCapabilities, rhs: UserCapabilities) -> Bool {
         lhs.modules == rhs.modules
+            && lhs.deviceTabs == rhs.deviceTabs
             && lhs.computerActions == rhs.computerActions
             && lhs.mobileDeviceActions == rhs.mobileDeviceActions
             && lhs.cleanupActions == rhs.cleanupActions
@@ -131,6 +155,7 @@ struct UserCapabilities: Equatable {
     /// Every other list is an unordered Set: only modules drive a layout.
     static func union(_ definitions: [AccessConfiguration.RoleDefinition]) -> UserCapabilities {
         var modules: [String] = []
+        var deviceTabs: [String] = []
         var computerActions: Set<String> = []
         var mobileDeviceActions: Set<String> = []
         var cleanupActions: Set<String> = []
@@ -138,6 +163,7 @@ struct UserCapabilities: Equatable {
 
         for definition in definitions {
             modules.append(contentsOf: definition.effectiveModules)
+            deviceTabs.append(contentsOf: definition.effectiveDeviceTabs)
             computerActions.formUnion(definition.effectiveComputerActions)
             mobileDeviceActions.formUnion(definition.effectiveMobileDeviceActions)
             cleanupActions.formUnion(definition.effectiveCleanupActions)
@@ -146,6 +172,7 @@ struct UserCapabilities: Equatable {
 
         return UserCapabilities(
             modules: modules,
+            deviceTabs: deviceTabs,
             computerActions: computerActions,
             mobileDeviceActions: mobileDeviceActions,
             cleanupActions: cleanupActions,
@@ -158,6 +185,13 @@ struct UserCapabilities: Equatable {
     /// is for the gate, and they can never disagree (both come from `init`).
     func canAccess(module: String) -> Bool {
         moduleSet.contains(module)
+    }
+
+    /// Whether the user may open a Devices-view tab id. Exact,
+    /// case-sensitive; same array-for-layout / set-for-gate split as
+    /// `canAccess(module:)`.
+    func canAccess(deviceTab: String) -> Bool {
+        deviceTabSet.contains(deviceTab)
     }
 
     /// Whether the user's roles grant a computer action. This is the

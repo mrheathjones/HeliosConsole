@@ -36,6 +36,9 @@ enum DeviceAction: String, CaseIterable, Identifiable {
     case unlockUserAccount
     // Inventory
     case sendBlankPush
+    // Apple Business Manager
+    case abmAssign
+    case abmUnassign
 
     var id: String { rawValue }
 
@@ -47,6 +50,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case security = "Security"
         case userManagement = "User Management"
         case inventory = "Inventory"
+        case appleBusinessManager = "Apple Business Manager"
 
         var title: String { rawValue }
     }
@@ -63,6 +67,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
             return .userManagement
         case .sendBlankPush:
             return .inventory
+        case .abmAssign, .abmUnassign:
+            return .appleBusinessManager
         }
     }
 
@@ -84,6 +90,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewFileVaultKey: return "FileVault Key"
         case .unlockUserAccount: return "Unlock User Account"
         case .sendBlankPush: return "Send Blank Push"
+        case .abmAssign: return "Assign to MDM Server"
+        case .abmUnassign: return "Unassign from MDM Server"
         }
     }
 
@@ -95,10 +103,12 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         }
     }
 
-    /// True for actions that call the Jamf Pro API (everything except
-    /// Screen Share, which opens Apple's local Screen Sharing app). The
-    /// features domain's `computers.enableAPIActions` kill switch applies
-    /// only to these.
+    /// True for actions that call a management API — Jamf Pro, or Apple
+    /// Business Manager for the abmAssign/abmUnassign pair. Everything
+    /// except Screen Share, which opens Apple's local Screen Sharing app.
+    /// The features domain's `computers.enableAPIActions` kill switch
+    /// applies to all of these: switching API actions off means no remote
+    /// mutations from this Mac, regardless of which API they ride.
     var isJamfAPICommand: Bool {
         self != .screenShare
     }
@@ -123,6 +133,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return "Send Blank Push?"
         case .screenShare: return "Screen Share?"
         case .unlockUserAccount: return "Unlock User Account?"
+        case .abmAssign: return "Assign to MDM Server?"
+        case .abmUnassign: return "Unassign from MDM Server?"
         }
     }
 
@@ -142,6 +154,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return "This will send an APNs (Apple Push Notification) to the device, prompting it to check in with Jamf Pro. Use this to verify device connectivity or to trigger pending MDM commands."
         case .screenShare: return "This will open a screen sharing session to the device using Apple's built-in Screen Sharing app. If the device is on VPN, the VPN IP address will be used."
         case .unlockUserAccount: return "This will unlock a local user account on the device. This action is logged for security auditing."
+        case .abmAssign: return "This will assign the device's serial number to the selected MDM server in Apple Business Manager. Nothing changes on the device now — the assignment determines which MDM the device enrolls with at its next Automated Device Enrollment. If the device is currently assigned to a different MDM server, it will be reassigned."
+        case .abmUnassign: return "This will remove the device's MDM server assignment in Apple Business Manager. Nothing changes on the device now — but until it is reassigned, the device cannot enroll via Automated Device Enrollment."
         }
     }
 
@@ -160,6 +174,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return "bell.badge"
         case .screenShare: return "shared.with.you"
         case .unlockUserAccount: return "person.badge.key"
+        case .abmAssign: return "externaldrive.badge.plus"
+        case .abmUnassign: return "externaldrive.badge.minus"
         }
     }
 
@@ -176,6 +192,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return .blue
         case .screenShare: return .cyan
         case .unlockUserAccount: return .blue
+        case .abmAssign: return .blue
+        case .abmUnassign: return .orange
         }
     }
 
@@ -194,6 +212,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return "Send Push"
         case .screenShare: return "Connect"
         case .unlockUserAccount: return "Unlock"
+        case .abmAssign: return "Assign"
+        case .abmUnassign: return "Unassign"
         }
     }
 
@@ -206,7 +226,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
 
     var isWarning: Bool {
         switch self {
-        case .disableBluetooth, .disableRemoteDesktop, .restart, .restartSilent, .shutdown, .viewLocalAdminPassword, .viewFileVaultKey: return true
+        case .disableBluetooth, .disableRemoteDesktop, .restart, .restartSilent, .shutdown, .viewLocalAdminPassword, .viewFileVaultKey, .abmAssign, .abmUnassign: return true
         default: return false
         }
     }
@@ -227,6 +247,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return "Send Blank Push"
         case .screenShare: return "Screen Share"
         case .unlockUserAccount: return "Unlock User Account"
+        case .abmAssign: return "ABM Assign to MDM"
+        case .abmUnassign: return "ABM Unassign from MDM"
         }
     }
 
@@ -242,6 +264,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
             return "User Management"
         case .sendBlankPush:
             return "Inventory"
+        case .abmAssign, .abmUnassign:
+            return "Apple Business Manager"
         }
     }
 }

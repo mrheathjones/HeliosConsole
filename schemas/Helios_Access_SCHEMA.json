@@ -54,6 +54,20 @@
             },
             "default": []
           },
+          "deviceTabs": {
+            "type": "array",
+            "title": "Devices-View Tabs (for this role)",
+            "description": "Tab ids this role may open INSIDE the Devices module (requires `devices` in modules — without it this list is unreachable). ROLE-DRIVEN ONLY, like modules. Absent or empty = the base device list only, no extra tabs. ARRAY ORDER IS THE TAB ORDER after the app-defined base tab, with the same multi-role union rule as modules (roles walked in authored order, first appearance wins). `abmLookup` is the Apple Business Manager inventory/lookup tab; `prestage` is the Jamf PreStage registration tab. BOTH TABS SHIP IN AN UPCOMING RELEASE: these ids may be pre-staged safely and render nothing until then (once live, abmLookup additionally requires the core domain's appleBusinessManager block or it renders an unconfigured notice). Unknown ids are accepted and skipped without error, so newer profiles deploy safely to older builds.",
+            "items": {
+              "type": "string",
+              "title": "Tab ID",
+              "enum": [
+                "abmLookup",
+                "prestage"
+              ]
+            },
+            "default": []
+          },
           "computerActions": {
             "type": "array",
             "title": "Allowed Computer Actions — usable by THIS ROLE (layer 2 of 2)",
@@ -82,7 +96,9 @@
                 "renewMDMProfile",
                 "sendCustomCommand",
                 "installPackage",
-                "runPolicy"
+                "runPolicy",
+                "abmAssign",
+                "abmUnassign"
               ]
             },
             "default": []
@@ -206,7 +222,9 @@
                       "renewMDMProfile",
                       "sendCustomCommand",
                       "installPackage",
-                      "runPolicy"
+                      "runPolicy",
+                      "abmAssign",
+                      "abmUnassign"
                     ]
                   },
                   "enabled": {
@@ -222,8 +240,8 @@
                   },
                   "options": {
                     "type": "object",
-                    "title": "Action Options (Return to Service)",
-                    "description": "Consulted ONLY by the returnToService action; ignored for every other id. Both toggles default true, so omitting this object keeps the original full-decommission behavior. The erase always runs first and ALWAYS waits for the device to acknowledge ERASE_DEVICE — no cleanup step runs without that acknowledgment. deleteEntraObject auto-skips when Entra isn't configured.",
+                    "title": "Action Options (Return to Service / ABM Assign / ABM Unassign)",
+                    "description": "Per-action tuning. The deleteJamfRecord/deleteEntraObject toggles are consulted ONLY by returnToService (both default true, so omitting this object keeps the original full-decommission behavior; the erase always runs first and ALWAYS waits for the device to acknowledge ERASE_DEVICE). The allowed* keys are consulted ONLY by abmAssign/abmUnassign — whose execution UI ships in an upcoming release; granting them today shows the menu items with a 'not available in this build yet' notice — and default EMPTY: an abmAssign/abmUnassign grant without allowedMdmServers is inert (fail-closed; there is no safe default target).",
                     "properties": {
                       "deleteJamfRecord": {
                         "type": "boolean",
@@ -236,6 +254,32 @@
                         "title": "Delete Entra Device Object",
                         "description": "Delete the device object from Microsoft Entra after the erase is acknowledged, so the device can re-enroll cleanly.",
                         "default": true
+                      },
+                      "allowedMdmServers": {
+                        "type": "array",
+                        "title": "Allowed MDM Servers (ABM assign/unassign)",
+                        "description": "ABM MDM server names this grant may target — assign to (abmAssign) or unassign from (abmUnassign). Each entry must match the server's ABM serverName EXACTLY (case-sensitive), with ONE exception: the literal word `all` (any letter case) is RESERVED and grants EVERY server in the tenant. Because `all` is interpreted before any name matching, an ABM server actually named \"all\" can never be individually granted — rename it in ABM if you have one. Absent or empty = no server may be targeted; the action stays visible per its grant but has nothing to offer (fail-closed). Typical support role: [\"Jamf Cloud_Prod\"]. Typical admin role: [\"all\"].",
+                        "items": {
+                          "type": "string",
+                          "title": "ABM Server Name (or `all`)"
+                        },
+                        "default": []
+                      },
+                      "allowPrestageOnAssign": {
+                        "type": "boolean",
+                        "title": "Offer PreStage Registration After Assign",
+                        "description": "Whether abmAssign may offer the optional Jamf PreStage registration step after a successful ABM assignment. The step is always operator-optional; this toggle controls whether it is offered at all. Absent = false (fail-closed).",
+                        "default": false
+                      },
+                      "allowedPrestages": {
+                        "type": "array",
+                        "title": "Allowed PreStages (with the above)",
+                        "description": "Jamf Computer PreStage Enrollment displayNames offerable when allowPrestageOnAssign is true. Same matching rules as allowedMdmServers, including the reserved `all` literal. Absent or empty = no PreStage may be offered even when allowPrestageOnAssign is true (fail-closed).",
+                        "items": {
+                          "type": "string",
+                          "title": "PreStage Display Name (or `all`)"
+                        },
+                        "default": []
                       }
                     }
                   }
