@@ -105,7 +105,7 @@
     "sidebarItems": {
       "type": "array",
       "title": "Sidebar Item Overrides (optional)",
-      "description": "Optional per-row LABEL and ICON overrides for the sidebar. COSMETIC ONLY — this list no longer controls PRESENCE (the `isEnabled` key was removed in 2.3) or ORDER. A row appears because the signed-in user's role grants its module (access domain roles[].modules), and its position is that module's array position there; an id absent from this list simply uses the app's built-in label and icon. Pick a known row id from the dropdown and set displayName and/or icon; leave a field blank to keep the built-in. Unknown ids are skipped. The `title` key was renamed to `displayName` in 2.3 but is still accepted as an alias so existing profiles keep their labels. The `order` key remains retired and ignored (the app logs a notice once). See docs/ConfigProfileMigration.md.",
+      "description": "Optional per-row LABEL and ICON overrides for the sidebar — COSMETIC ONLY. A row appears because the signed-in user's role grants its module (access roles[].modules), and its order is that module's array position there; this list never controls presence or order. Pick a known row id from the dropdown and set displayName and/or icon; leave a field blank to keep the app's built-in. An id absent from this list uses the built-in label and icon; unknown ids are skipped. (`title` is still accepted as an alias for `displayName` so existing profiles keep their labels.)",
       "items": {
         "type": "object",
         "properties": {
@@ -120,8 +120,7 @@
               "logs",
               "reports",
               "cleanup",
-              "settings",
-              "myDevice"
+              "settings"
             ]
           },
           "displayName": {

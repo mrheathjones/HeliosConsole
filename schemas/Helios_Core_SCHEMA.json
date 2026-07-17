@@ -34,12 +34,6 @@
           "description": "Name of the Jamf API Role used when provisioning per-user API clients. Load-bearing — per-user API client provisioning targets this role name; only change it if the role in Jamf Pro is renamed. NEUTRAL default — deliver your org’s real Jamf API Role name; provisioning targets this role.",
           "default": "HeliosConsoleAPIRole"
         },
-        "screenShareEnabled": {
-          "type": "boolean",
-          "title": "Enable Screen Share (DEPRECATED)",
-          "description": "DEPRECATED as of access schema 2.1 — the access domain's deviceActions allow-list is authoritative for the screenShare action and this key is ignored by the app. Will be removed in a later major. Migrate the grant to deviceActions.computer.actions[id=screenShare] in the access profile.",
-          "default": false
-        },
         "connectionTimeout": {
           "type": "integer",
           "title": "Connection Timeout (seconds)",

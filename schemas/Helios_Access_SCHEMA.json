@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.access",
   "title": "Helios Console — Access",
-  "description": "Role-capability configuration for the Helios Console macOS app. Preference domain MUST be com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile. NOTHING IS HARDCODED IN THE APP: every capability a user has — which sidebar modules render, which device actions they may run, which cleanup sub-actions they may run, whether they may export data out of the app — is defined by the `roles` block below. Roles are ARBITRARY, ADMIN-NAMED capability sets; the app ships no built-in role names, no built-in tiers, and no built-in capability defaults. IDENTITY: when the core domain sets signIn.method=entra, the signed-in user's role names come from the Entra token's roles claim; otherwise the machine-scoped `role` key below names a single role. A user matching several roles receives the UNION of their capabilities. FAIL-CLOSED GUARANTEE: no `roles` block — or a role name matching no entry's `name` field — grants NOTHING; a Mac that never receives this profile runs Helios as an EMPTY app (no modules, no actions), so under-scoping is safe, over-scoping is not. GATING IS ROLE-ONLY: the `roles` block carries every capability — which modules render, which device actions run, ABM/PreStage targets, Return-to-Service cleanup, export. The former top-level `deviceActions` machine allow-list has been REMOVED; there is no machine-scoped second layer. Menu labels and icons are cosmetic and live in the ui domain (deviceActionLabels), not here. SCOPING: because the `roles` block now carries every capability, it must reach every Mac whose users need one — scope this profile (with the `role` appropriate to each population) to ALL Macs running Helios, not admin Macs only. PAIRED SCOPING: any variant whose roles grant destructive computerActions (e.g. wipe, returnToService) must be scoped to the same Macs as any write-capable variant of the com.herojoneslabs.helios.console.credentials profile (see docs/ConfigProfileMigration.md). SECURITY: managed-preference plists are world-readable on disk — every value delivered here is visible to any local user of the Mac.",
+  "description": "Role-capability configuration for the Helios Console macOS app. Preference domain MUST be com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile. NOTHING IS HARDCODED IN THE APP: every capability a user has — which sidebar modules render, which device actions they may run, which cleanup sub-actions they may run, whether they may export data out of the app — is defined by the `roles` block below. Roles are ARBITRARY, ADMIN-NAMED capability sets; the app ships no built-in role names, no built-in tiers, and no built-in capability defaults. IDENTITY: when the core domain sets signIn.method=entra, the signed-in user's role names come from the Entra token's roles claim; otherwise the machine-scoped `role` key below names a single role. A user matching several roles receives the UNION of their capabilities. FAIL-CLOSED GUARANTEE: no `roles` block — or a role name matching no entry's `name` field — grants NOTHING; a Mac that never receives this profile runs Helios as an EMPTY app (no modules, no actions), so under-scoping is safe, over-scoping is not. GATING IS ROLE-ONLY: the `roles` block carries every capability — which modules render, which device actions run, ABM/PreStage targets, Return-to-Service cleanup, export. There is no machine-scoped second layer. Menu labels and icons are cosmetic and live in the ui domain (deviceActionLabels), not here. SCOPING: because the `roles` block now carries every capability, it must reach every Mac whose users need one — scope this profile (with the `role` appropriate to each population) to ALL Macs running Helios, not admin Macs only. PAIRED SCOPING: any variant whose roles grant destructive computerActions (e.g. wipe, returnToService) must be scoped to the same Macs as any write-capable variant of the com.herojoneslabs.helios.console.credentials profile (see docs/ConfigProfileMigration.md). SECURITY: managed-preference plists are world-readable on disk — every value delivered here is visible to any local user of the Mac.",
   "type": "object",
   "properties": {
     "configurationVersion": {
@@ -36,7 +36,7 @@
           "modules": {
             "type": "array",
             "title": "Modules (sidebar / route ids)",
-            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. ARRAY ORDER IS THE SIDEBAR ORDER for this role: the first id is the TOPMOST row and the rest follow in listed order, so arranging this list arranges that role's sidebar — enabling a module and placing it are the same edit, and two roles may order the same modules differently. There is no `order` key anywhere: the ui domain's sidebarItems carries label and icon overrides only (it no longer controls presence), and the position of an entry in it means nothing. `settings` is PINNED below the sidebar divider no matter where you place it here — listing it grants it, its position is ignored. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). Ids that are unknown or NOT YET IMPLEMENTED are ACCEPTED but render nothing today and are skipped without error: `myDevice` is RESERVED for a per-user single-device view shipping in a FOLLOW-UP PR, so you may pre-stage it safely (a role of `myDevice` + `settings` shows Settings alone for now). MULTI-ROLE UNION ORDER: a user matching several roles gets ONE merged list, built by walking the `roles` array IN THE ORDER IT IS AUTHORED HERE — never the order the Entra token's roles claim happens to list them, which is Entra's to choose and may change between sign-ins — appending each matched role's modules in listed order, FIRST APPEARANCE WINS: a module already contributed by an earlier role keeps its earlier position, and a later role listing it again is ignored (never re-ordered, never duplicated).",
+            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. ARRAY ORDER IS THE SIDEBAR ORDER for this role: the first id is the TOPMOST row and the rest follow in listed order, so arranging this list arranges that role's sidebar — enabling a module and placing it are the same edit, and two roles may order the same modules differently. There is no `order` key anywhere: the ui domain's sidebarItems carries label and icon overrides only (it no longer controls presence), and the position of an entry in it means nothing. `settings` is PINNED below the sidebar divider no matter where you place it here — listing it grants it, its position is ignored. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). Ids the app does not implement are ACCEPTED but render nothing and are skipped without error, so newer profiles deploy safely to older builds. MULTI-ROLE UNION ORDER: a user matching several roles gets ONE merged list, built by walking the `roles` array IN THE ORDER IT IS AUTHORED HERE — never the order the Entra token's roles claim happens to list them, which is Entra's to choose and may change between sign-ins — appending each matched role's modules in listed order, FIRST APPEARANCE WINS: a module already contributed by an earlier role keeps its earlier position, and a later role listing it again is ignored (never re-ordered, never duplicated).",
             "items": {
               "type": "string",
               "title": "Module ID",
@@ -47,8 +47,7 @@
                 "logs",
                 "reports",
                 "cleanup",
-                "settings",
-                "myDevice"
+                "settings"
               ]
             },
             "default": []
@@ -70,7 +69,7 @@
           "computerActions": {
             "type": "array",
             "title": "Allowed Computer Actions — usable by THIS ROLE",
-            "description": "Computer DeviceAction ids this role may see and run. GATING IS ROLE-ONLY: there is no machine-scoped second layer any more (the old top-level deviceActions allow-list was removed) — an action renders and executes exactly when a matched role lists its id here, and is hidden AND blocked otherwise. UNIONED across a user's matched roles. Absent or empty = no computer actions for this role. Menu label and icon are cosmetic overrides delivered in the ui domain's deviceActionLabels list, not here. Reserved ids (lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, runPolicy) render nothing even when listed.",
+            "description": "Computer DeviceAction ids this role may see and run — the single gating layer. An action renders and executes exactly when a matched role lists its id here, and is hidden AND blocked otherwise. UNIONED across a user's matched roles. Absent or empty = no computer actions for this role. Menu label and icon are cosmetic and live in the ui domain's deviceActionLabels list, not here. Ids the app does not implement are accepted but never render, so newer profiles deploy safely to older builds.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -86,16 +85,9 @@
                 "disableBluetooth",
                 "viewFileVaultKey",
                 "viewLocalAdminPassword",
-                "viewRecoveryLockPassword",
                 "screenShare",
                 "unlockUserAccount",
-                "updateInventory",
-                "lock",
                 "wipe",
-                "renewMDMProfile",
-                "sendCustomCommand",
-                "installPackage",
-                "runPolicy",
                 "abmAssign",
                 "abmUnassign"
               ]
@@ -105,7 +97,7 @@
           "mobileDeviceActions": {
             "type": "array",
             "title": "Allowed Mobile Device Actions — usable by THIS ROLE",
-            "description": "Mobile-device DeviceAction ids this role may see and run. GATING IS ROLE-ONLY, exactly like computerActions — no machine-scoped layer. UNIONED across a user's matched roles. Forward-looking — the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
+            "description": "Mobile-device DeviceAction ids this role may run — role-only gating, like computerActions. UNIONED across matched roles. Forward-looking: the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -113,16 +105,7 @@
                 "sendBlankPush",
                 "restart",
                 "shutdown",
-                "lock",
-                "wipe",
-                "clearPasscode",
-                "enableLostMode",
-                "disableLostMode",
-                "playLostModeSound",
-                "updateInventory",
-                "renewMDMProfile",
-                "enableActivationLock",
-                "clearActivationLock"
+                "wipe"
               ]
             },
             "default": []
@@ -130,7 +113,7 @@
           "cleanupActions": {
             "type": "array",
             "title": "Allowed Cleanup Sub-Actions (for this role)",
-            "description": "Cleanup sub-actions this role may run. ROLE-DRIVEN ONLY — there is no machine-scoped allow-list for cleanup sub-actions (unlike device actions). Absent or empty = none, even when the role's modules include `cleanup`: the module then renders with nothing runnable in it. Grant `cleanup` in modules AND the sub-actions here to make the module useful. deleteFromProtect requires the core domain's jamfProtect block to be configured; deleteRecord and unmanage are destructive — pair them with write-capable credentials scoping.",
+            "description": "Cleanup sub-actions this role may run. ROLE-DRIVEN ONLY — like every capability in this domain, cleanup sub-actions are gated solely by the role. Absent or empty = none, even when the role's modules include `cleanup`: the module then renders with nothing runnable in it. Grant `cleanup` in modules AND the sub-actions here to make the module useful. deleteFromProtect requires the core domain's jamfProtect block to be configured; deleteRecord and unmanage are destructive — pair them with write-capable credentials scoping.",
             "items": {
               "type": "string",
               "title": "Cleanup Action ID",
