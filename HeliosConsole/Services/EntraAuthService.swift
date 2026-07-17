@@ -93,6 +93,11 @@ final class EntraAuthService: NSObject {
 
     private let allowedGroupIds: [String]
 
+    /// Graph host for the fail-soft profile-photo fetch — from the same
+    /// cloud-instance config as everything else (gov clouds use a different
+    /// Graph host, never hardcode the global one).
+    private let graphHost: String
+
     private let session: URLSession
 
     /// Kept strong for the lifetime of the browser hand-off — deallocating
@@ -110,6 +115,7 @@ final class EntraAuthService: NSObject {
         }
         self.definedRoleNamesForDiagnostics = roleDefinitions.keys.sorted()
         self.allowedGroupIds = configuration.effectiveEntraAllowedGroupIds
+        self.graphHost = configuration.entraGraphHost
 
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = NetworkTuning.requestTimeout
@@ -187,6 +193,87 @@ final class EntraAuthService: NSObject {
             tokens.refreshToken = refreshToken
         }
         return try identity(from: tokens, expectedNonce: nil)
+    }
+
+    // MARK: - Profile photo (fail-soft, off the sign-in critical path)
+
+    /// Outcome of the profile-photo fetch. `rotatedRefreshToken` is non-nil
+    /// only when Entra rotated the token during the redemption — the caller
+    /// should persist it so the session keeps the freshest token.
+    struct ProfilePhotoResult {
+        let photoData: Data?
+        let rotatedRefreshToken: String?
+    }
+
+    /// Fetch the operator's directory photo from Microsoft Graph. The
+    /// refresh token is redeemed for a User.Read access token in a SEPARATE
+    /// request — never as part of the sign-in scope — so a tenant that has
+    /// not consented to User.Read loses the photo and nothing else
+    /// (docs/EntraAuthSetup.md covers the consent). Every failure is soft:
+    /// log and return no photo, never throw into the caller's session flow.
+    func fetchProfilePhoto(refreshToken: String) async -> ProfilePhotoResult {
+        do {
+            let (accessToken, rotated) = try await requestGraphAccessToken(refreshToken: refreshToken)
+            // Sized variant first (small download); some accounts serve only
+            // the original photo, so fall back to it before giving up.
+            for path in ["photos/240x240", "photo"] {
+                if let data = try await requestPhotoData(path: path, accessToken: accessToken) {
+                    return ProfilePhotoResult(photoData: data, rotatedRefreshToken: rotated)
+                }
+            }
+            return ProfilePhotoResult(photoData: nil, rotatedRefreshToken: rotated)
+        } catch {
+            NSLog("ℹ️ Entra profile photo unavailable (non-fatal): %@", error.localizedDescription)
+            return ProfilePhotoResult(photoData: nil, rotatedRefreshToken: nil)
+        }
+    }
+
+    /// Redeem the refresh token for a Graph access token. Separate from
+    /// `requestTokens` because this response is not required to carry an
+    /// id_token — only the access token matters here.
+    private func requestGraphAccessToken(refreshToken: String) async throws -> (accessToken: String, rotatedRefreshToken: String?) {
+        guard let url = URL(string: "https://\(authorityHost)/\(tenantId)/oauth2/v2.0/token") else {
+            throw AuthError.tokenExchangeFailed("Invalid token endpoint URL")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = EntraGraphService.formURLEncode([
+            "grant_type": "refresh_token",
+            "refresh_token": refreshToken,
+            "client_id": clientId,
+            "scope": "https://\(graphHost)/User.Read"
+        ]).data(using: .utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw AuthError.tokenExchangeFailed("No HTTP response")
+        }
+        guard http.statusCode == 200 else {
+            let detail = EntraGraphService.extractGraphError(data) ?? "HTTP \(http.statusCode)"
+            throw AuthError.tokenExchangeFailed(detail)
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let accessToken = json["access_token"] as? String, !accessToken.isEmpty else {
+            throw AuthError.tokenExchangeFailed("Response contained no access token")
+        }
+        return (accessToken, json["refresh_token"] as? String)
+    }
+
+    /// GET one photo variant. Nil (not an error) on 404 — Graph answers 404
+    /// both when the account has no photo and when a size is unsupported.
+    private func requestPhotoData(path: String, accessToken: String) async throws -> Data? {
+        guard let url = URL(string: "https://\(graphHost)/v1.0/me/\(path)/$value") else {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { return nil }
+        if http.statusCode == 200, !data.isEmpty { return data }
+        if http.statusCode == 404 { return nil }
+        throw AuthError.tokenExchangeFailed("Graph photo request failed (HTTP \(http.statusCode))")
     }
 
     // MARK: - Browser hand-off

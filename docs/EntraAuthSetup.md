@@ -119,15 +119,25 @@ In the **Microsoft Entra admin center** (`entra.microsoft.com`) → **Identity �
 | `profile` | Delegated | No |
 | `email` | Delegated | No |
 | `offline_access` | Delegated | No |
+| `User.Read` | Delegated | No — but see the profile-photo note below |
 
-This is the default OpenID Connect set and nothing more — Helios only needs identity and
+The first four are the default OpenID Connect set — Helios only needs identity and
 a refresh token. **No admin-consent-requiring permission is needed**; do not add Graph
-application permissions or anything beyond the four above. (You may still click *Grant
+application permissions or anything beyond the five above. (You may still click *Grant
 admin consent* to suppress the one-time per-user consent prompt — optional.)
 
 The app requests scopes `openid profile email offline_access` and runs the
 authorization-code + PKCE flow against
 `https://login.microsoftonline.com/{tenantId}` (host varies with `cloudInstance`, §6).
+
+**Profile photo (`User.Read`) — optional and fail-soft.** After sign-in succeeds, the app
+redeems the refresh token for a Graph `User.Read` access token in a **separate** request
+and fetches the operator's directory photo (`/me/photo`) for display in Settings →
+Profile. `User.Read` is deliberately **not** part of the sign-in scope, so it can never
+block sign-in: if the permission is missing or unconsented, that separate redemption
+fails quietly and the app falls back to an initials avatar (or the user's locally chosen
+photo). To show directory photos, add delegated `User.Read` and grant admin consent
+(or let each user consent once, if your tenant allows user consent).
 
 ---
 

@@ -468,6 +468,39 @@ class AuthViewModel: ObservableObject {
         hasSeenWelcome = true
         isLoggedIn = true
         isLoading = false
+
+        fetchEntraProfilePhoto(refreshToken: identity.refreshToken, forEmail: identity.email)
+    }
+
+    /// Fail-soft directory-photo fetch, OFF the sign-in critical path: the
+    /// photo needs a Graph User.Read token the sign-in scopes deliberately
+    /// don't request, so it is redeemed separately here — a tenant that
+    /// never consented to User.Read just gets the initials avatar
+    /// (docs/EntraAuthSetup.md), and no failure in this path can touch the
+    /// session itself.
+    @MainActor
+    private func fetchEntraProfilePhoto(refreshToken: String?, forEmail email: String) {
+        guard let refreshToken, !refreshToken.isEmpty,
+              let service = EntraAuthService(configuration: mdmConfiguration) else {
+            return
+        }
+        Task { @MainActor in
+            let result = await service.fetchProfilePhoto(refreshToken: refreshToken)
+            // The session may have ended (logout, idle lock) or changed hands
+            // while the fetch was in flight — a late photo must not attach to
+            // it, and a late token must not resurrect cleared credentials.
+            guard self.isLoggedIn, UserSession.shared.email == email else { return }
+            if let data = result.photoData, let image = NSImage(data: data) {
+                UserSession.shared.setProfilePhoto(image)
+            }
+            // Entra may rotate the refresh token during the redemption; keep
+            // the freshest one or the next restore redeems a stale token.
+            if self.allowRememberMe,
+               let rotated = result.rotatedRefreshToken, !rotated.isEmpty,
+               !self.keychain.saveEntraRefreshToken(rotated) {
+                NSLog("⚠️ Failed to save the rotated Entra refresh token")
+            }
+        }
     }
 
     func logout() {

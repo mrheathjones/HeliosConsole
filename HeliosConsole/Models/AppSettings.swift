@@ -43,6 +43,18 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Avatar Style
+
+/// How the operator's avatar is rendered. Purely cosmetic and local to this
+/// Mac. `.auto` preserves the original behavior (directory photo if present,
+/// else initials); the others are explicit picks from Settings → Profile.
+enum AvatarStyle: String, CaseIterable {
+    case auto       // Entra directory photo if present, else initials
+    case initials   // initials on the chosen palette color
+    case symbol     // an SF Symbol on the chosen palette color
+    case photo      // the locally chosen custom photo
+}
+
 // MARK: - App Settings Manager
 
 class AppSettings: ObservableObject {
@@ -57,6 +69,9 @@ class AppSettings: ObservableObject {
         static let showDeviceIcons = "helios.showDeviceIcons"
         static let defaultItemsPerPage = "helios.defaultItemsPerPage"
         static let autoRefreshInterval = "helios.autoRefreshInterval"
+        static let avatarStyle = "helios.avatarStyle"
+        static let avatarColorIndex = "helios.avatarColorIndex"
+        static let avatarSymbol = "helios.avatarSymbol"
     }
     
     // MARK: - Published Properties
@@ -94,6 +109,32 @@ class AppSettings: ObservableObject {
         didSet {
             defaults.set(autoRefreshInterval, forKey: Keys.autoRefreshInterval)
         }
+    }
+
+    /// The operator's locally chosen avatar, persisted as a small JPEG in
+    /// Application Support. Purely cosmetic and local to this Mac — in the
+    /// UI it takes precedence over the Entra directory photo, and it is
+    /// never uploaded anywhere. Nil = fall back to the directory photo or
+    /// the initials avatar.
+    @Published var customProfilePicture: NSImage? {
+        didSet {
+            persistCustomProfilePicture()
+        }
+    }
+
+    /// Which avatar style renders. Cosmetic, local to this Mac.
+    @Published var avatarStyle: AvatarStyle {
+        didSet { defaults.set(avatarStyle.rawValue, forKey: Keys.avatarStyle) }
+    }
+
+    /// Palette index for the generated (initials / symbol) avatar.
+    @Published var avatarColorIndex: Int {
+        didSet { defaults.set(avatarColorIndex, forKey: Keys.avatarColorIndex) }
+    }
+
+    /// SF Symbol name for the `.symbol` avatar style.
+    @Published var avatarSymbol: String {
+        didSet { defaults.set(avatarSymbol, forKey: Keys.avatarSymbol) }
     }
     
     // MARK: - Computed Properties
@@ -179,6 +220,21 @@ class AppSettings: ObservableObject {
         self.showDeviceIcons = defaults.object(forKey: Keys.showDeviceIcons) as? Bool ?? true
         self.defaultItemsPerPage = defaults.object(forKey: Keys.defaultItemsPerPage) as? Int ?? 25
         self.autoRefreshInterval = defaults.object(forKey: Keys.autoRefreshInterval) as? Int ?? 0
+
+        // Avatar. A prior build stored only a custom photo (no style key yet);
+        // preserve that choice by defaulting an absent style to .photo when a
+        // photo exists, else .auto (directory-photo-or-initials, the original
+        // behavior).
+        let loadedPicture = Self.loadCustomProfilePicture()
+        self.customProfilePicture = loadedPicture
+        if let raw = defaults.string(forKey: Keys.avatarStyle),
+           let style = AvatarStyle(rawValue: raw) {
+            self.avatarStyle = style
+        } else {
+            self.avatarStyle = loadedPicture != nil ? .photo : .auto
+        }
+        self.avatarColorIndex = defaults.object(forKey: Keys.avatarColorIndex) as? Int ?? 0
+        self.avatarSymbol = defaults.string(forKey: Keys.avatarSymbol) ?? "person.fill"
         
         // Apply initial appearance
         Task { @MainActor in
@@ -240,5 +296,86 @@ class AppSettings: ObservableObject {
         showDeviceIcons = true
         defaultItemsPerPage = 25
         autoRefreshInterval = 0
+        customProfilePicture = nil
+        avatarStyle = .auto
+        avatarColorIndex = 0
+        avatarSymbol = "person.fill"
+    }
+
+    // MARK: - Custom profile picture persistence
+
+    private static var customProfilePictureURL: URL? {
+        guard let base = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first else { return nil }
+        return base
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "HeliosConsole", isDirectory: true)
+            .appendingPathComponent("ProfilePicture.jpg")
+    }
+
+    private static func loadCustomProfilePicture() -> NSImage? {
+        guard let url = customProfilePictureURL,
+              let data = try? Data(contentsOf: url) else { return nil }
+        return NSImage(data: data)
+    }
+
+    private func persistCustomProfilePicture() {
+        guard let url = Self.customProfilePictureURL else { return }
+        guard let image = customProfilePicture else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        guard let data = Self.jpegData(for: image, maxPixels: 512) else {
+            NSLog("⚠️ Could not encode the chosen profile picture — not saved")
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: .atomic)
+        } catch {
+            NSLog("⚠️ Could not save the profile picture: %@", error.localizedDescription)
+        }
+    }
+
+    /// Downscale to at most `maxPixels` on the long edge and JPEG-encode —
+    /// the avatar renders at ~80 pt, so storing a full camera image is waste.
+    private static func jpegData(for image: NSImage, maxPixels: CGFloat) -> Data? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+        let scale = min(1, maxPixels / max(width, height, 1))
+        let pixelsWide = max(1, Int(width * scale))
+        let pixelsHigh = max(1, Int(height * scale))
+
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .calibratedRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return nil }
+        rep.size = NSSize(width: pixelsWide, height: pixelsHigh)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(
+            in: NSRect(x: 0, y: 0, width: pixelsWide, height: pixelsHigh),
+            from: .zero,
+            operation: .copy,
+            fraction: 1
+        )
+        NSGraphicsContext.restoreGraphicsState()
+
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
     }
 }
