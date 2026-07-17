@@ -56,7 +56,7 @@
           },
           "computerActions": {
             "type": "array",
-            "title": "Allowed Computer Actions (for this role)",
+            "title": "Allowed Computer Actions — usable by THIS ROLE (layer 2 of 2)",
             "description": "Computer DeviceAction ids this role may USE. TWO LAYERS, BOTH MUST ALLOW: deviceActions.computer.actions below decides which actions EXIST on this Mac (enabled state, menu label, Return-to-Service options); THIS list decides which of those the role may see and run. Only the intersection renders and executes — an id listed here that the machine allow-list does not grant (or grants with enabled=false) stays hidden AND blocked, and an id the allow-list grants that no matched role lists stays hidden AND blocked. Absent or empty = no computer actions for this role. Reserved ids (lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, runPolicy) render nothing regardless of either layer.",
             "items": {
               "type": "string",
@@ -89,7 +89,7 @@
           },
           "mobileDeviceActions": {
             "type": "array",
-            "title": "Allowed Mobile Device Actions (for this role)",
+            "title": "Allowed Mobile Device Actions — usable by THIS ROLE (layer 2 of 2)",
             "description": "Mobile-device DeviceAction ids this role may USE. Same two-layer rule as computerActions: deviceActions.mobileDevice.actions decides existence, this list decides role access, and only the intersection renders. Forward-looking — the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
             "items": {
               "type": "string",
@@ -169,7 +169,7 @@
     },
     "deviceActions": {
       "type": "object",
-      "title": "Device Actions (machine allow-list — layer 1 of 2)",
+      "title": "Device Actions — available on THIS MAC (layer 1 of 2; layer 2 is each role's Allowed Actions, under Role Definitions)",
       "description": "STRICT FAIL-CLOSED per-action allow-list for the device Actions menu. LAYER 1 OF 2: this block decides which actions EXIST on THIS Mac (enabled state, menu label, Return-to-Service options); a `roles` entry's computerActions / mobileDeviceActions decide which of those a given USER may see and run. An action renders and executes only when BOTH layers allow it — neither layer can expand what the other denies. If no actions array is delivered for a platform, that platform's Actions menu is HIDDEN ENTIRELY. If the array is present, ONLY listed actions with enabled=true are shown (and executable) — an id not listed, or listed with enabled=false, is hidden AND blocked at execution. Unknown ids are ignored (logged once) so newer profiles deploy safely to older app builds. The computer id \"wipe\" is now IMPLEMENTED — a bare erase (ERASE_DEVICE with recovery PIN) that ALWAYS waits for the device to acknowledge and keeps the Jamf record and Entra object; lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, and runPolicy remain reserved — granting them renders nothing. displayName overrides the menu label only. LEGACY: the app still decodes the pre-2.1 boolean-map shape (e.g. computer.restart=true) when no actions array is delivered — explicitly delivered keys become grants, and the old per-key defaults are no longer applied — but this schema (2.1+) exposes ONLY the actions array; computer/mobileDevice reject any other property, so profiles built or edited from this schema cannot reintroduce the old flat keys. Migrate deployed legacy profiles to the actions array. The core domain's jamfPro.screenShareEnabled key is DEPRECATED: once an allow-list is delivered it is authoritative for screenShare too.",
       "properties": {
         "computer": {
