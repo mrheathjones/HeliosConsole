@@ -2,14 +2,14 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.ui",
   "title": "Helios Console — Branding & UX",
-  "description": "Managed configuration for Helios Console branding and user-experience settings. Preference domain MUST be com.herojoneslabs.helios.console.ui — deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings (External Applications / Custom Schema) scoped to ALL managed Macs running Helios. This domain carries NO secrets and no destructive capability; it is safe to scope broadly. Values are FORCED and take effect at the next app relaunch. NOTE: sidebarItems and authentication are both ENFORCED in views — see docs/ConfigProfileMigration.md for the per-key enforcement-status table.",
+  "description": "Managed configuration for Helios Console branding and user-experience settings. Preference domain MUST be com.herojoneslabs.helios.console.ui — deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings (External Applications / Custom Schema) scoped to ALL managed Macs running Helios. This domain carries NO secrets and no destructive capability; it is safe to scope broadly. Values are FORCED and take effect at the next app relaunch. NOTE: sidebarItems, deviceTabs, and deviceActionLabels are COSMETIC label/icon overrides only — they never grant or gate anything (all gating is role-only in the access domain); authentication is enforced in the sign-in/session views. See docs/ConfigProfileMigration.md for the per-key enforcement-status table.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
-      "default": "2.2"
+      "default": "2.3"
     },
     "userInterface": {
       "type": "object",
@@ -104,33 +104,115 @@
     },
     "sidebarItems": {
       "type": "array",
-      "title": "Sidebar Items (optional override)",
-      "description": "Optional custom sidebar item list. Leave empty to use the app's built-in sidebar. Renamed from the legacy top-level key 'SidebarItems' — camelCase is required in this domain. ENFORCED, but for PRESENCE (isEnabled), LABEL (title), and ICON ONLY — ids must be route ids; unknown ids are skipped. THIS LIST DOES NOT CONTROL ORDER, and the position of an entry here means nothing: SIDEBAR ORDER COMES FROM THE ACCESS DOMAIN, specifically the array order of each role's roles[].modules list (first = topmost), so order is set per role alongside the grant itself. The `order` key was REMOVED in 2.2; a profile still delivering it decodes fine but the key is IGNORED (the app logs a notice once). See docs/ConfigProfileMigration.md.",
+      "title": "Sidebar Item Overrides (optional)",
+      "description": "Optional per-row LABEL and ICON overrides for the sidebar. COSMETIC ONLY — this list no longer controls PRESENCE (the `isEnabled` key was removed in 2.3) or ORDER. A row appears because the signed-in user's role grants its module (access domain roles[].modules), and its position is that module's array position there; an id absent from this list simply uses the app's built-in label and icon. Pick a known row id from the dropdown and set displayName and/or icon; leave a field blank to keep the built-in. Unknown ids are skipped. The `title` key was renamed to `displayName` in 2.3 but is still accepted as an alias so existing profiles keep their labels. The `order` key remains retired and ignored (the app logs a notice once). See docs/ConfigProfileMigration.md.",
       "items": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "title": "ID",
-            "description": "Unique identifier for the sidebar item."
+            "title": "Row ID",
+            "description": "Which sidebar row this override applies to. Pick a known route id.",
+            "enum": [
+              "dashboard",
+              "devices",
+              "announcements",
+              "logs",
+              "reports",
+              "cleanup",
+              "settings",
+              "myDevice"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "title": "Display Name",
+            "description": "Label to show for this row. Blank = the app's built-in label.",
+            "default": ""
           },
           "icon": {
             "type": "string",
-            "title": "Icon",
-            "description": "SF Symbol name for the sidebar item."
-          },
-          "title": {
-            "type": "string",
-            "title": "Title",
-            "description": "Display title for the sidebar item."
-          },
-          "isEnabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "description": "Whether the item is shown.",
-            "default": true
+            "title": "Icon (SF Symbol)",
+            "description": "Free-form SF Symbol name for this row (e.g. gearshape). Blank = the app's built-in icon.",
+            "default": ""
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "deviceTabs": {
+      "type": "array",
+      "title": "Devices-Tab Label Overrides (optional)",
+      "description": "Optional per-tab LABEL renames for the tabs inside the Devices module. RENAME ONLY — Devices tabs carry no icon override. COSMETIC ONLY: a tab appears because the signed-in user's role grants it (access domain roles[].deviceTabs); this list only relabels one already granted. Pick a known tab id from the dropdown and set displayName; an id absent from this list keeps the tab's built-in title.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Tab ID",
+            "description": "Which Devices tab this rename applies to.",
+            "enum": [
+              "devices",
+              "abmLookup",
+              "prestage"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "title": "Display Name",
+            "description": "Label to show for this tab. Blank = the tab's built-in title.",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "deviceActionLabels": {
+      "type": "array",
+      "title": "Device-Action Label Overrides (optional)",
+      "description": "Optional per-action LABEL and ICON overrides for the device Actions menu. COSMETIC ONLY: an action's AVAILABILITY is gated ROLE-ONLY by the access domain (roles[].computerActions / roles[].mobileDeviceActions) — this list only relabels/re-icons an action a role already grants and never makes one appear. Pick a known action id from the dropdown and set displayName and/or icon; leave a field blank to keep the built-in. Confirmation-dialog safety copy is app-built-in and is NEVER overridable here.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Action ID",
+            "description": "Which device action this override applies to.",
+            "enum": [
+              "enableBluetooth",
+              "disableBluetooth",
+              "enableRemoteDesktop",
+              "disableRemoteDesktop",
+              "screenShare",
+              "restart",
+              "restartSilent",
+              "shutdown",
+              "wipe",
+              "returnToService",
+              "viewLocalAdminPassword",
+              "viewFileVaultKey",
+              "unlockUserAccount",
+              "sendBlankPush",
+              "abmAssign",
+              "abmUnassign"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "title": "Display Name",
+            "description": "Menu label to show for this action. Blank = the action's built-in label.",
+            "default": ""
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon (SF Symbol)",
+            "description": "Free-form SF Symbol name for this action (e.g. bolt.fill). Blank = the action's built-in icon.",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
       },
       "default": []
     },

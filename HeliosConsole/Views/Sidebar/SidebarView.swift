@@ -224,11 +224,15 @@ struct SidebarView: View {
         )
     }
 
-    /// The MACHINE-scoped half of a route's gate, in ONE place: the ui
-    /// domain's sidebarItems presence/isEnabled plus the per-module kill
-    /// switches (showAnnouncements / features.reports, and
-    /// showSettings for the pinned Settings row). Says nothing about the
-    /// USER layer — intersect it with `capabilities.canAccess(module:)`.
+    /// The MACHINE-scoped half of a route's gate, in ONE place: the per-module
+    /// kill switches (showAnnouncements / features.reports, and showSettings
+    /// for the pinned Settings row). Says nothing about the USER layer —
+    /// intersect it with `capabilities.canAccess(module:)`.
+    ///
+    /// The ui domain's sidebarItems NO LONGER gates presence: a module the
+    /// role grants shows even when no sidebarItems entry exists for it
+    /// (sidebarItems supplies label/icon overrides only). Presence is the
+    /// role's `modules` grant, intersected with the kill switches below.
     ///
     /// Shared by the sidebar rows, `availableDestination(matching:config:capabilities:)`
     /// and DashboardView's route gate, so a module killed on this Mac can
@@ -238,8 +242,6 @@ struct SidebarView: View {
         let ui = config.userInterfaceExtras
         switch destination {
         case .settings:
-            // Pinned below the divider — deliberately not a sidebarItems
-            // entry, so presence there is not part of its rule.
             return ui?.effectiveShowSettings ?? true
         case .announcements where ui?.effectiveShowAnnouncements == false:
             return false
@@ -248,7 +250,9 @@ struct SidebarView: View {
         default:
             break
         }
-        return config.sidebarItems.contains { $0.id == destination.rawValue && $0.isEnabled }
+        // No sidebarItems presence gate: a role-granted module shows here
+        // unless one of the kill switches above prunes it.
+        return true
     }
 
     /// Shared with `availableDestination(matching:config:capabilities:)` so the

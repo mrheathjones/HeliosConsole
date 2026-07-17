@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.access",
   "title": "Helios Console — Access",
-  "description": "Role-capability configuration for the Helios Console macOS app. Preference domain MUST be com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile. NOTHING IS HARDCODED IN THE APP: every capability a user has — which sidebar modules render, which device actions they may run, which cleanup sub-actions they may run, whether they may export data out of the app — is defined by the `roles` block below. Roles are ARBITRARY, ADMIN-NAMED capability sets; the app ships no built-in role names, no built-in tiers, and no built-in capability defaults. IDENTITY: when the core domain sets signIn.method=entra, the signed-in user's role names come from the Entra token's roles claim; otherwise the machine-scoped `role` key below names a single role. A user matching several roles receives the UNION of their capabilities. FAIL-CLOSED GUARANTEE: no `roles` block — or a role name matching no entry's `name` field — grants NOTHING; a Mac that never receives this profile runs Helios as an EMPTY app (no modules, no actions), so under-scoping is safe, over-scoping is not. SCOPING CHANGED IN 2.4: because the `roles` block now carries every capability, it must reach every Mac whose users need one — scope this profile (with the `role`/`deviceActions` appropriate to each population) to ALL Macs running Helios, not admin Macs only. PAIRED SCOPING: any variant whose roles grant destructive computerActions (e.g. wipe, returnToService) must be scoped to the same Macs as any write-capable variant of the com.herojoneslabs.helios.console.credentials profile (see docs/ConfigProfileMigration.md). SECURITY: managed-preference plists are world-readable on disk — every value delivered here is visible to any local user of the Mac.",
+  "description": "Role-capability configuration for the Helios Console macOS app. Preference domain MUST be com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile. NOTHING IS HARDCODED IN THE APP: every capability a user has — which sidebar modules render, which device actions they may run, which cleanup sub-actions they may run, whether they may export data out of the app — is defined by the `roles` block below. Roles are ARBITRARY, ADMIN-NAMED capability sets; the app ships no built-in role names, no built-in tiers, and no built-in capability defaults. IDENTITY: when the core domain sets signIn.method=entra, the signed-in user's role names come from the Entra token's roles claim; otherwise the machine-scoped `role` key below names a single role. A user matching several roles receives the UNION of their capabilities. FAIL-CLOSED GUARANTEE: no `roles` block — or a role name matching no entry's `name` field — grants NOTHING; a Mac that never receives this profile runs Helios as an EMPTY app (no modules, no actions), so under-scoping is safe, over-scoping is not. GATING IS ROLE-ONLY: the `roles` block carries every capability — which modules render, which device actions run, ABM/PreStage targets, Return-to-Service cleanup, export. The former top-level `deviceActions` machine allow-list has been REMOVED; there is no machine-scoped second layer. Menu labels and icons are cosmetic and live in the ui domain (deviceActionLabels), not here. SCOPING: because the `roles` block now carries every capability, it must reach every Mac whose users need one — scope this profile (with the `role` appropriate to each population) to ALL Macs running Helios, not admin Macs only. PAIRED SCOPING: any variant whose roles grant destructive computerActions (e.g. wipe, returnToService) must be scoped to the same Macs as any write-capable variant of the com.herojoneslabs.helios.console.credentials profile (see docs/ConfigProfileMigration.md). SECURITY: managed-preference plists are world-readable on disk — every value delivered here is visible to any local user of the Mac.",
   "type": "object",
   "properties": {
     "configurationVersion": {
@@ -22,7 +22,7 @@
     "roles": {
       "type": "array",
       "title": "Role Definitions (capability sets)",
-      "description": "THE capability source of truth — a LIST of arbitrary, ADMIN-NAMED capability sets. Each entry carries its role name in the `name` field (e.g. Helios.Admin, Helios.Support, HelpDesk.Tier1); the app ships no built-in names and no defaults, so whatever you define here is exactly what exists. NAME MATCHING IS EXACT AND CASE-SENSITIVE: in Entra sign-in mode a `name` must equal an app-role VALUE on the sign-in app registration character-for-character; in MDM mode it must equal the `role` key above. MULTI-ROLE = UNION: a user matching several entries receives the union of every matched role's lists, and allowExport is OR'd across them. A cleanup-only role (modules = [cleanup]) is a supported pattern — assign it alongside another role and the union applies. FAIL-CLOSED: an absent `roles` block, or a role name matching no entry, grants NOTHING — in Entra mode such a user is REFUSED sign-in; in MDM mode the user signs in to an empty app. There is deliberately NO default for this block: a default would be a hardcoded capability, which is precisely what this model removes. Unknown ids inside a role's lists are IGNORED (logged once) so newer profiles deploy safely to older app builds. EDGE CASES: an entry with a missing or blank `name` is SKIPPED (it is unreachable — no role name could match it); two entries sharing a `name` are UNIONED (later entries add to, never replace, earlier ones), so a duplicate can only ever widen that name's grants. JAMF EDITOR NOTE: this block is a LIST OF OBJECTS precisely so Jamf Pro's Application & Custom Settings form generator can render it — a dictionary keyed by admin-chosen role names could only be expressed as `additionalProperties`, which that editor cannot render, forcing raw XML editing. Same idiom as deviceActions.computer.actions below. See Deployment/sample.mobileconfig for a working example.",
+      "description": "THE capability source of truth — a LIST of arbitrary, ADMIN-NAMED capability sets. Each entry carries its role name in the `name` field (e.g. Helios.Admin, Helios.Support, HelpDesk.Tier1); the app ships no built-in names and no defaults, so whatever you define here is exactly what exists. NAME MATCHING IS EXACT AND CASE-SENSITIVE: in Entra sign-in mode a `name` must equal an app-role VALUE on the sign-in app registration character-for-character; in MDM mode it must equal the `role` key above. MULTI-ROLE = UNION: a user matching several entries receives the union of every matched role's lists, and allowExport is OR'd across them. A cleanup-only role (modules = [cleanup]) is a supported pattern — assign it alongside another role and the union applies. FAIL-CLOSED: an absent `roles` block, or a role name matching no entry, grants NOTHING — in Entra mode such a user is REFUSED sign-in; in MDM mode the user signs in to an empty app. There is deliberately NO default for this block: a default would be a hardcoded capability, which is precisely what this model removes. Unknown ids inside a role's lists are IGNORED (logged once) so newer profiles deploy safely to older app builds. EDGE CASES: an entry with a missing or blank `name` is SKIPPED (it is unreachable — no role name could match it); two entries sharing a `name` are UNIONED (later entries add to, never replace, earlier ones), so a duplicate can only ever widen that name's grants. JAMF EDITOR NOTE: this block is a LIST OF OBJECTS precisely so Jamf Pro's Application & Custom Settings form generator can render it — a dictionary keyed by admin-chosen role names could only be expressed as `additionalProperties`, which that editor cannot render, forcing raw XML editing. See Deployment/sample.mobileconfig for a working example.",
       "items": {
         "type": "object",
         "title": "Role Definition",
@@ -36,7 +36,7 @@
           "modules": {
             "type": "array",
             "title": "Modules (sidebar / route ids)",
-            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. ARRAY ORDER IS THE SIDEBAR ORDER for this role: the first id is the TOPMOST row and the rest follow in listed order, so arranging this list arranges that role's sidebar — enabling a module and placing it are the same edit, and two roles may order the same modules differently. There is no `order` key anywhere: the ui domain's sidebarItems carries presence, label, and icon only, and the position of an entry in it means nothing. `settings` is PINNED below the sidebar divider no matter where you place it here — listing it grants it, its position is ignored. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). Ids that are unknown or NOT YET IMPLEMENTED are ACCEPTED but render nothing today and are skipped without error: `myDevice` is RESERVED for a per-user single-device view shipping in a FOLLOW-UP PR, so you may pre-stage it safely (a role of `myDevice` + `settings` shows Settings alone for now). MULTI-ROLE UNION ORDER: a user matching several roles gets ONE merged list, built by walking the `roles` array IN THE ORDER IT IS AUTHORED HERE — never the order the Entra token's roles claim happens to list them, which is Entra's to choose and may change between sign-ins — appending each matched role's modules in listed order, FIRST APPEARANCE WINS: a module already contributed by an earlier role keeps its earlier position, and a later role listing it again is ignored (never re-ordered, never duplicated).",
+            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. ARRAY ORDER IS THE SIDEBAR ORDER for this role: the first id is the TOPMOST row and the rest follow in listed order, so arranging this list arranges that role's sidebar — enabling a module and placing it are the same edit, and two roles may order the same modules differently. There is no `order` key anywhere: the ui domain's sidebarItems carries label and icon overrides only (it no longer controls presence), and the position of an entry in it means nothing. `settings` is PINNED below the sidebar divider no matter where you place it here — listing it grants it, its position is ignored. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). Ids that are unknown or NOT YET IMPLEMENTED are ACCEPTED but render nothing today and are skipped without error: `myDevice` is RESERVED for a per-user single-device view shipping in a FOLLOW-UP PR, so you may pre-stage it safely (a role of `myDevice` + `settings` shows Settings alone for now). MULTI-ROLE UNION ORDER: a user matching several roles gets ONE merged list, built by walking the `roles` array IN THE ORDER IT IS AUTHORED HERE — never the order the Entra token's roles claim happens to list them, which is Entra's to choose and may change between sign-ins — appending each matched role's modules in listed order, FIRST APPEARANCE WINS: a module already contributed by an earlier role keeps its earlier position, and a later role listing it again is ignored (never re-ordered, never duplicated).",
             "items": {
               "type": "string",
               "title": "Module ID",
@@ -69,8 +69,8 @@
           },
           "computerActions": {
             "type": "array",
-            "title": "Allowed Computer Actions — usable by THIS ROLE (layer 2 of 2)",
-            "description": "Computer DeviceAction ids this role may USE. TWO LAYERS, BOTH MUST ALLOW: deviceActions.computer.actions below decides which actions EXIST on this Mac (enabled state, menu label, Return-to-Service options); THIS list decides which of those the role may see and run. Only the intersection renders and executes — an id listed here that the machine allow-list does not grant (or grants with enabled=false) stays hidden AND blocked, and an id the allow-list grants that no matched role lists stays hidden AND blocked. Absent or empty = no computer actions for this role. Reserved ids (lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, runPolicy) render nothing regardless of either layer.",
+            "title": "Allowed Computer Actions — usable by THIS ROLE",
+            "description": "Computer DeviceAction ids this role may see and run. GATING IS ROLE-ONLY: there is no machine-scoped second layer any more (the old top-level deviceActions allow-list was removed) — an action renders and executes exactly when a matched role lists its id here, and is hidden AND blocked otherwise. UNIONED across a user's matched roles. Absent or empty = no computer actions for this role. Menu label and icon are cosmetic overrides delivered in the ui domain's deviceActionLabels list, not here. Reserved ids (lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, runPolicy) render nothing even when listed.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -104,8 +104,8 @@
           },
           "mobileDeviceActions": {
             "type": "array",
-            "title": "Allowed Mobile Device Actions — usable by THIS ROLE (layer 2 of 2)",
-            "description": "Mobile-device DeviceAction ids this role may USE. Same two-layer rule as computerActions: deviceActions.mobileDevice.actions decides existence, this list decides role access, and only the intersection renders. Forward-looking — the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
+            "title": "Allowed Mobile Device Actions — usable by THIS ROLE",
+            "description": "Mobile-device DeviceAction ids this role may see and run. GATING IS ROLE-ONLY, exactly like computerActions — no machine-scoped layer. UNIONED across a user's matched roles. Forward-looking — the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -144,15 +144,51 @@
             },
             "default": []
           },
+          "allowedMdmServers": {
+            "type": "array",
+            "title": "Allowed MDM Servers (ABM assign / unassign)",
+            "description": "ABM MDM server names this role may target — assign devices TO (abmAssign) and unassign FROM (abmUnassign). GATING IS ROLE-ONLY. Each entry must match the server's ABM serverName EXACTLY (case-sensitive), with ONE exception: the RESERVED literal `all` (any letter case) grants EVERY server in the tenant. Because `all` is interpreted before any name matching, an ABM server actually named \"all\" can never be individually granted — rename it in ABM if you have one. Absent or empty = the abmAssign/abmUnassign actions may still be granted via computerActions but have nothing to target, so they are inert (fail-closed; there is no safe default target). UNIONED across a user's matched roles. Typical support role: [\"Jamf Cloud_Prod\"]. Typical admin role: [\"all\"].",
+            "items": {
+              "type": "string",
+              "title": "ABM Server Name (or `all`)"
+            },
+            "default": []
+          },
           "allowedPrestages": {
             "type": "array",
-            "title": "Allowed PreStages (Pre-Stage tab)",
-            "description": "Jamf Computer PreStage Enrollment displayNames this role may select in the Devices module's Pre-Stage tab (grant the tab itself via deviceTabs: prestage). Each entry must match a PreStage displayName EXACTLY (case-sensitive), except the RESERVED literal `all` (any letter case), which grants every PreStage — a PreStage actually named \"all\" can never be individually granted; rename it in Jamf if one exists. Absent or empty = the tab offers no PreStages even when granted (fail-closed). UNIONED across a user's matched roles. Distinct from deviceActions options.allowedPrestages, which scopes the abmAssign prestage-on-assign step, not this tab. Typical support role: a curated list of names. Typical admin role: [\"all\"].",
+            "title": "Allowed PreStages (Pre-Stage tab + prestage-on-assign)",
+            "description": "Jamf Computer PreStage Enrollment displayNames this role may select — BOTH in the Devices module's Pre-Stage tab (grant the tab itself via deviceTabs: prestage) AND in the optional prestage-on-assign step after abmAssign (see allowPrestageOnAssign). Each entry must match a PreStage displayName EXACTLY (case-sensitive), except the RESERVED literal `all` (any letter case), which grants every PreStage — a PreStage actually named \"all\" can never be individually granted; rename it in Jamf if one exists. Absent or empty = no PreStage offered even when the tab or the assign step is granted (fail-closed). UNIONED across a user's matched roles. Typical support role: a curated list of names. Typical admin role: [\"all\"].",
             "items": {
               "type": "string",
               "title": "PreStage Display Name (or `all`)"
             },
             "default": []
+          },
+          "allowPrestageOnAssign": {
+            "type": "boolean",
+            "title": "Offer PreStage Registration After ABM Assign",
+            "description": "Whether abmAssign may offer the optional Jamf PreStage registration step after a successful ABM assignment. GATING IS ROLE-ONLY. The step is always operator-optional; this toggle controls whether it is offered at all, and the PreStages it may offer come from this role's allowedPrestages list. Absent = false (fail-closed). OR'd across a user's matched roles.",
+            "default": false
+          },
+          "returnToServiceOptions": {
+            "type": "object",
+            "title": "Return to Service — post-erase cleanup (for this role)",
+            "description": "Post-erase cleanup steps the returnToService action performs, scoped to THIS role. GATING IS ROLE-ONLY. The erase ALWAYS runs first and ALWAYS waits for the device to acknowledge ERASE_DEVICE; only these cleanup steps are configurable. Both toggles default true (full decommission), so omitting this object preserves the original behavior. Multi-role: each toggle is OR'd across a user's matched roles — any granting role enabling a step enables it.",
+            "properties": {
+              "deleteJamfRecord": {
+                "type": "boolean",
+                "title": "Delete Jamf Pro Record",
+                "description": "Remove the computer record from Jamf Pro after the erase is acknowledged.",
+                "default": true
+              },
+              "deleteEntraObject": {
+                "type": "boolean",
+                "title": "Delete Entra Device Object",
+                "description": "Delete the device object from Microsoft Entra after the erase is acknowledged, so the device can re-enroll cleanly.",
+                "default": true
+              }
+            },
+            "additionalProperties": false
           },
           "allowExport": {
             "type": "boolean",
@@ -189,274 +225,6 @@
           "title": "Default Site ID",
           "description": "Jamf site ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
           "default": ""
-        }
-      }
-    },
-    "deviceActions": {
-      "type": "object",
-      "title": "Device Actions — available on THIS MAC (layer 1 of 2; layer 2 is each role's Allowed Actions, under Role Definitions)",
-      "description": "STRICT FAIL-CLOSED per-action allow-list for the device Actions menu. LAYER 1 OF 2: this block decides which actions EXIST on THIS Mac (enabled state, menu label, Return-to-Service options); a `roles` entry's computerActions / mobileDeviceActions decide which of those a given USER may see and run. An action renders and executes only when BOTH layers allow it — neither layer can expand what the other denies. If no actions array is delivered for a platform, that platform's Actions menu is HIDDEN ENTIRELY. If the array is present, ONLY listed actions with enabled=true are shown (and executable) — an id not listed, or listed with enabled=false, is hidden AND blocked at execution. Unknown ids are ignored (logged once) so newer profiles deploy safely to older app builds. The computer id \"wipe\" is now IMPLEMENTED — a bare erase (ERASE_DEVICE with recovery PIN) that ALWAYS waits for the device to acknowledge and keeps the Jamf record and Entra object; lock, viewRecoveryLockPassword, updateInventory, renewMDMProfile, sendCustomCommand, installPackage, and runPolicy remain reserved — granting them renders nothing. displayName overrides the menu label only. LEGACY: the app still decodes the pre-2.1 boolean-map shape (e.g. computer.restart=true) when no actions array is delivered — explicitly delivered keys become grants, and the old per-key defaults are no longer applied — but this schema (2.1+) exposes ONLY the actions array; computer/mobileDevice reject any other property, so profiles built or edited from this schema cannot reintroduce the old flat keys. Migrate deployed legacy profiles to the actions array. The core domain's jamfPro.screenShareEnabled key is DEPRECATED: once an allow-list is delivered it is authoritative for screenShare too.",
-      "properties": {
-        "computer": {
-          "type": "object",
-          "title": "Computer (macOS) Actions",
-          "properties": {
-            "actions": {
-              "type": "array",
-              "title": "Allowed Computer Actions",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "title": "Action ID",
-                    "enum": [
-                      "sendBlankPush",
-                      "restart",
-                      "restartSilent",
-                      "shutdown",
-                      "returnToService",
-                      "enableRemoteDesktop",
-                      "disableRemoteDesktop",
-                      "enableBluetooth",
-                      "disableBluetooth",
-                      "viewFileVaultKey",
-                      "viewLocalAdminPassword",
-                      "viewRecoveryLockPassword",
-                      "screenShare",
-                      "unlockUserAccount",
-                      "updateInventory",
-                      "lock",
-                      "wipe",
-                      "renewMDMProfile",
-                      "sendCustomCommand",
-                      "installPackage",
-                      "runPolicy",
-                      "abmAssign",
-                      "abmUnassign"
-                    ]
-                  },
-                  "enabled": {
-                    "type": "boolean",
-                    "title": "Enabled",
-                    "default": true
-                  },
-                  "displayName": {
-                    "type": "string",
-                    "title": "Menu Label Override",
-                    "description": "Overrides the Actions-menu label ONLY. Confirmation-dialog safety copy is app-built-in and never profile-controlled. Empty = built-in label.",
-                    "default": ""
-                  },
-                  "options": {
-                    "type": "object",
-                    "title": "Action Options (Return to Service / ABM Assign / ABM Unassign)",
-                    "description": "Per-action tuning. The deleteJamfRecord/deleteEntraObject toggles are consulted ONLY by returnToService (both default true, so omitting this object keeps the original full-decommission behavior; the erase always runs first and ALWAYS waits for the device to acknowledge ERASE_DEVICE). The allowed* keys are consulted ONLY by abmAssign/abmUnassign — whose execution UI ships in an upcoming release; granting them today shows the menu items with a 'not available in this build yet' notice — and default EMPTY: an abmAssign/abmUnassign grant without allowedMdmServers is inert (fail-closed; there is no safe default target).",
-                    "properties": {
-                      "deleteJamfRecord": {
-                        "type": "boolean",
-                        "title": "Delete Jamf Pro Record",
-                        "description": "Remove the computer record from Jamf Pro after the erase is acknowledged.",
-                        "default": true
-                      },
-                      "deleteEntraObject": {
-                        "type": "boolean",
-                        "title": "Delete Entra Device Object",
-                        "description": "Delete the device object from Microsoft Entra after the erase is acknowledged, so the device can re-enroll cleanly.",
-                        "default": true
-                      },
-                      "allowedMdmServers": {
-                        "type": "array",
-                        "title": "Allowed MDM Servers (ABM assign/unassign)",
-                        "description": "ABM MDM server names this grant may target — assign to (abmAssign) or unassign from (abmUnassign). Each entry must match the server's ABM serverName EXACTLY (case-sensitive), with ONE exception: the literal word `all` (any letter case) is RESERVED and grants EVERY server in the tenant. Because `all` is interpreted before any name matching, an ABM server actually named \"all\" can never be individually granted — rename it in ABM if you have one. Absent or empty = no server may be targeted; the action stays visible per its grant but has nothing to offer (fail-closed). Typical support role: [\"Jamf Cloud_Prod\"]. Typical admin role: [\"all\"].",
-                        "items": {
-                          "type": "string",
-                          "title": "ABM Server Name (or `all`)"
-                        },
-                        "default": []
-                      },
-                      "allowPrestageOnAssign": {
-                        "type": "boolean",
-                        "title": "Offer PreStage Registration After Assign",
-                        "description": "Whether abmAssign may offer the optional Jamf PreStage registration step after a successful ABM assignment. The step is always operator-optional; this toggle controls whether it is offered at all. Absent = false (fail-closed).",
-                        "default": false
-                      },
-                      "allowedPrestages": {
-                        "type": "array",
-                        "title": "Allowed PreStages (with the above)",
-                        "description": "Jamf Computer PreStage Enrollment displayNames offerable when allowPrestageOnAssign is true. Same matching rules as allowedMdmServers, including the reserved `all` literal. Absent or empty = no PreStage may be offered even when allowPrestageOnAssign is true (fail-closed).",
-                        "items": {
-                          "type": "string",
-                          "title": "PreStage Display Name (or `all`)"
-                        },
-                        "default": []
-                      }
-                    }
-                  }
-                }
-              },
-              "default": [
-                {
-                  "id": "sendBlankPush",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "restart",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "restartSilent",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "shutdown",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "enableRemoteDesktop",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "disableRemoteDesktop",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "enableBluetooth",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "disableBluetooth",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "viewFileVaultKey",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "viewLocalAdminPassword",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "unlockUserAccount",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "wipe",
-                  "enabled": false,
-                  "displayName": ""
-                },
-                {
-                  "id": "returnToService",
-                  "enabled": false,
-                  "displayName": "",
-                  "options": {
-                    "deleteJamfRecord": true,
-                    "deleteEntraObject": true
-                  }
-                },
-                {
-                  "id": "screenShare",
-                  "enabled": false,
-                  "displayName": ""
-                },
-                {
-                  "id": "updateInventory",
-                  "enabled": false,
-                  "displayName": ""
-                }
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "mobileDevice": {
-          "type": "object",
-          "title": "Mobile Device Actions",
-          "description": "Forward-looking: the mobile device detail view has no actions menu yet. Any future menu is built from this allow-list from day one.",
-          "properties": {
-            "actions": {
-              "type": "array",
-              "title": "Allowed Mobile Device Actions",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "title": "Action ID",
-                    "enum": [
-                      "sendBlankPush",
-                      "restart",
-                      "shutdown",
-                      "lock",
-                      "wipe",
-                      "clearPasscode",
-                      "enableLostMode",
-                      "disableLostMode",
-                      "playLostModeSound",
-                      "updateInventory",
-                      "renewMDMProfile",
-                      "enableActivationLock",
-                      "clearActivationLock"
-                    ]
-                  },
-                  "enabled": {
-                    "type": "boolean",
-                    "title": "Enabled",
-                    "default": true
-                  },
-                  "displayName": {
-                    "type": "string",
-                    "title": "Menu Label Override",
-                    "description": "Overrides the Actions-menu label ONLY. Confirmation-dialog safety copy is app-built-in and never profile-controlled. Empty = built-in label.",
-                    "default": ""
-                  }
-                }
-              },
-              "default": [
-                {
-                  "id": "sendBlankPush",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "restart",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "updateInventory",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "lock",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "clearPasscode",
-                  "enabled": true,
-                  "displayName": ""
-                },
-                {
-                  "id": "wipe",
-                  "enabled": false,
-                  "displayName": ""
-                }
-              ]
-            }
-          },
-          "additionalProperties": false
         }
       }
     }
