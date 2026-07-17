@@ -710,7 +710,7 @@ struct ReportsView: View {
     // MARK: - Health Scorecard Content
 
     private var scorecardFilename: String {
-        ExportNaming.filename("Helios", "Health-Scorecard", date: Date())
+        ExportNaming.filename(Branding.title, "Health-Scorecard", date: Date())
     }
 
     private var scorecardContent: some View {
@@ -1479,7 +1479,7 @@ struct ReportsView: View {
     // MARK: - Export
 
     private var exportFilename: String {
-        ExportNaming.filename("Helios", "Device-Report", date: Date())
+        ExportNaming.filename(Branding.title, "Device-Report", date: Date())
     }
 
     private func buildExportTable() -> ReportTable {

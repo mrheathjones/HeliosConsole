@@ -41,7 +41,7 @@ struct ProtectDeviceListView: View {
     }
 
     private var exportFilename: String {
-        ExportNaming.filename("Helios", filter.title, date: Date())
+        ExportNaming.filename(Branding.title, filter.title, date: Date())
     }
 
     private func buildTable() -> ReportTable {
@@ -50,7 +50,7 @@ struct ProtectDeviceListView: View {
             subtitle += " • search “\(searchText)”"
         }
         return ReportBuilders.protectTable(
-            title: "Helios Cleanup — \(filter.title)",
+            title: "\(Branding.title) Cleanup — \(filter.title)",
             subtitle: subtitle,
             devices: visibleDevices,
             staleDays: model.settings.staleDays,

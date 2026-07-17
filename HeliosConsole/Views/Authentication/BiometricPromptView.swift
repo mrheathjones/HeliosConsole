@@ -25,7 +25,7 @@ struct BiometricPromptView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color.blue.opacity(0.3), Color.cyan.opacity(0.2)],
+                                    colors: Branding.accentGradient.map { $0.opacity(0.25) },
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -37,7 +37,7 @@ struct BiometricPromptView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color.blue, Color.cyan],
+                                    colors: Branding.accentGradient,
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -56,23 +56,25 @@ struct BiometricPromptView: View {
                     
                     VStack(spacing: 12) {
                         HStack(spacing: 12) {
-                            Text("Helios")
+                            Text(Branding.title)
                                 .font(.system(size: 36, weight: .semibold))
                                 .foregroundColor(.white)
-                            
-                            Text("Console")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 4)
-                                .background(
-                                    LinearGradient(
-                                        colors: [Color.blue, Color.cyan],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
+
+                            if !Branding.subtitle.isEmpty {
+                                Text(Branding.subtitle)
+                                    .font(.system(size: 36, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        LinearGradient(
+                                            colors: Branding.accentGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
                                     )
-                                )
-                                .cornerRadius(10)
+                                    .cornerRadius(10)
+                            }
                         }
                         
                         Text("Unlock with \(viewModel.biometricManager.biometricType.displayName)")
@@ -117,13 +119,13 @@ struct BiometricPromptView: View {
                         .frame(height: 56)
                         .background(
                             LinearGradient(
-                                colors: [Color.blue, Color.cyan],
+                                colors: Branding.accentGradient,
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .cornerRadius(12)
-                        .shadow(color: Color.blue.opacity(0.5), radius: 20, x: 0, y: 10)
+                        .shadow(color: Branding.accentColor.opacity(0.5), radius: 20, x: 0, y: 10)
                     }
                     .buttonStyle(ScaleButtonStyle())
                     

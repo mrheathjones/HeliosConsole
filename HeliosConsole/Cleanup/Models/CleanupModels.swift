@@ -225,7 +225,7 @@ enum JamfCleanupError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            "Cleanup isn't configured yet. Helios needs a Jamf Pro URL and master API client."
+            "Cleanup isn't configured yet. \(Branding.title) needs a Jamf Pro URL and master API client."
         case .badURL:
             "The Jamf Pro server URL is not a valid URL."
         case .http(let code, let body):

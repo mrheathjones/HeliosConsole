@@ -108,32 +108,20 @@ struct SidebarView: View {
     
     private var headerView: some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.blue, Color.cyan],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 36, height: 36)
-                
-                Image(systemName: "sun.max.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            
+            BrandMark(size: 36)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text("Helios")
+                Text(Branding.title)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(isDark ? .white : .primary)
-                
-                Text("Console")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.gray)
+
+                if !Branding.subtitle.isEmpty {
+                    Text(Branding.subtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.gray)
+                }
             }
-            
+
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -375,7 +363,7 @@ struct LogoutConfirmationModal: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(isDark ? .white : .primary)
                     
-                    Text("Are you sure you want to log out of Helios Console?")
+                    Text("Are you sure you want to log out of \(Branding.productName)?")
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)

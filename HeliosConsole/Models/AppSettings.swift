@@ -157,12 +157,19 @@ class AppSettings: ObservableObject {
     // MARK: - Initialization
     
     private init() {
-        // Load appearance mode
+        // Load appearance mode. A user's own saved choice always wins; on
+        // first launch (no saved value) the ui domain's defaultColorScheme
+        // seeds it (schema default "system"). The old behavior forced dark.
         if let savedMode = defaults.string(forKey: Keys.appearanceMode),
            let mode = AppearanceMode(rawValue: savedMode) {
             self.appearanceMode = mode
         } else {
-            self.appearanceMode = .dark
+            switch MDMConfigurationManager.shared.configuration
+                .userInterfaceExtras?.effectiveColorScheme ?? .system {
+            case .light: self.appearanceMode = .light
+            case .dark: self.appearanceMode = .dark
+            case .system: self.appearanceMode = .system
+            }
         }
         
         // Load biometrics setting

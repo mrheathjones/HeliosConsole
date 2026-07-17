@@ -85,7 +85,7 @@ private struct MenuBarLabel: View {
         // Fallback SF Symbol
         return NSImage(
             systemSymbolName: "sun.max.fill",
-            accessibilityDescription: "Helios"
+            accessibilityDescription: Branding.title
         ) ?? NSImage()
     }
 }
@@ -131,7 +131,7 @@ struct MenuBarContentView: View {
                 )
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("Helios Console")
+                Text(Branding.productName)
                     .font(.system(size: 13, weight: .semibold))
                 Text("Quick Device Search")
                     .font(.system(size: 10))

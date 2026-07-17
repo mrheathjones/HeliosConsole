@@ -42,7 +42,7 @@ struct StaleDeviceListView: View {
     }
 
     private var exportFilename: String {
-        ExportNaming.filename("Helios", filter.title, date: Date())
+        ExportNaming.filename(Branding.title, filter.title, date: Date())
     }
 
     /// Builds a report from exactly what the list currently shows.
@@ -52,7 +52,7 @@ struct StaleDeviceListView: View {
             subtitle += " • search “\(searchText)”"
         }
         return ReportBuilders.deviceTable(
-            title: "Helios Cleanup — \(filter.title)",
+            title: "\(Branding.title) Cleanup — \(filter.title)",
             subtitle: subtitle,
             devices: visibleDevices,
             columns: ReportColumn.allCases,
