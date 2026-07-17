@@ -74,12 +74,25 @@ struct MDMConfiguration: Codable {
     /// a value matching no definition grants nothing (fail-closed).
     let role: String?
 
-    /// NAME INDEX over the access domain's `roles` array, built once at
-    /// composition by `roleIndex(from:)` so lookup stays O(1). The value is a
+    /// The access domain's `roles` array AS DELIVERED — profile order intact.
+    /// This is the ordered source of truth: a role's `modules` array position
+    /// is its sidebar order, and across roles the union walks THIS array (see
+    /// `capabilities(forRoleNames:)` and `UserCapabilities.union(_:)`), so the
+    /// order must survive composition. `roleDefinitions` below is only a
+    /// lookup index derived from it — a dictionary has no stable order and
+    /// could never carry this.
+    let orderedRoleDefinitions: [AccessConfiguration.RoleDefinition]
+
+    /// NAME INDEX over `orderedRoleDefinitions`, derived once in `init` by
+    /// `roleIndex(from:)` so membership lookup stays O(1). The value is a
     /// LIST because duplicate names are legal and UNION together — see
     /// `roleIndex(from:)` for why. `[:]` when the domain or the block is
     /// absent — in which case EVERY user resolves to `UserCapabilities.none`.
-    /// Resolve through `capabilities(forRoleNames:)`, never by hand.
+    ///
+    /// UNORDERED BY NATURE — for membership tests (`hasAnyDefinedRole(in:)`)
+    /// and diagnostics only. Anything order-sensitive must read
+    /// `orderedRoleDefinitions`. Resolve capabilities through
+    /// `capabilities(forRoleNames:)`, never by hand.
     let roleDefinitions: [String: [AccessConfiguration.RoleDefinition]]
     /// Stale threshold (days without check-in) used by Cleanup.
     let cleanupStaleDays: Int
@@ -189,9 +202,27 @@ struct MDMConfiguration: Codable {
     /// A user holding several defined roles gets the UNION of their
     /// capabilities — as does a user holding ONE name that the profile
     /// defines more than once (see `roleIndex(from:)`).
+    ///
+    /// ORDER: matched definitions are handed to `UserCapabilities.union(_:)`
+    /// in the order they appear in the PROFILE's `roles` array — NOT in
+    /// `names` order. That matters because module order is sidebar order:
+    /// `names` is the token's roles claim, whose order Entra chooses and may
+    /// vary between sign-ins, so ordering by it would make a user's sidebar
+    /// shuffle for no reason the admin can see or control. Filtering the
+    /// ordered array (rather than looking each name up in the dictionary
+    /// index, which has no order) is what pins the result to the profile.
+    /// Duplicate names still union: every entry carrying a matched name is
+    /// kept, each in its own array position.
+    ///
+    /// Nameless entries can never match — the same rule `roleIndex(from:)`
+    /// applies — which also stops an empty `role` key resolving to anything.
     func capabilities(forRoleNames names: [String]) -> UserCapabilities {
-        let definitions = roleDefinitions
-        return UserCapabilities.union(names.flatMap { definitions[$0] ?? [] })
+        let requested = Set(names)
+        let matched = orderedRoleDefinitions.filter { definition in
+            let name = definition.effectiveName
+            return !name.isEmpty && requested.contains(name)
+        }
+        return UserCapabilities.union(matched)
     }
 
     /// True when at least one name matches a defined role — i.e. the
@@ -398,7 +429,7 @@ struct MDMConfiguration: Codable {
         abmKeyId: String?,
         abmPrivateKey: String?,
         role: String? = nil,
-        roleDefinitions: [String: [AccessConfiguration.RoleDefinition]] = [:],
+        roles: [AccessConfiguration.RoleDefinition] = [],
         cleanupStaleDays: Int = 90,
         cleanupDefaultStaticGroupID: String? = nil,
         cleanupDefaultSiteID: String? = nil,
@@ -441,7 +472,10 @@ struct MDMConfiguration: Codable {
         self.abmKeyId = abmKeyId
         self.abmPrivateKey = abmPrivateKey
         self.role = role
-        self.roleDefinitions = roleDefinitions
+        // The index is DERIVED here rather than passed in, so the ordered
+        // array and its name index cannot drift apart at any call site.
+        self.orderedRoleDefinitions = roles
+        self.roleDefinitions = MDMConfiguration.roleIndex(from: roles)
         self.cleanupStaleDays = cleanupStaleDays
         self.cleanupDefaultStaticGroupID = cleanupDefaultStaticGroupID
         self.cleanupDefaultSiteID = cleanupDefaultSiteID
@@ -462,6 +496,14 @@ struct MDMConfiguration: Codable {
     }
 
     // MARK: - Composition from the five managed domains
+
+    /// Fires the removed-`order`-key notice EXACTLY once per launch, however
+    /// many times configuration is composed (the manager reloads on profile
+    /// change). A `static let` is lazy and thread-safe, so touching it is the
+    /// whole mechanism — `_ = MDMConfiguration.legacyOrderKeyWarning`.
+    private static let legacyOrderKeyWarning: Void = {
+        print("⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).")
+    }()
 
     /// Resolved Entra Graph credentials (pointer domain → values), produced
     /// by the aggregation layer's resolver from `CoreConfiguration.entra`.
@@ -511,16 +553,21 @@ struct MDMConfiguration: Codable {
                     id: $0.effectiveID,
                     icon: $0.effectiveIcon,
                     title: $0.effectiveTitle,
-                    isEnabled: $0.effectiveIsEnabled,
-                    order: $0.effectiveOrder
+                    isEnabled: $0.effectiveIsEnabled
                 )
             }
+        // A profile still carrying the removed `order` key decodes fine (extra
+        // keys are ignored) — which is exactly why it needs saying out loud,
+        // or an admin edits Order, sees nothing move, and has no clue why.
+        if deliveredSidebar.contains(where: { $0.deliveredLegacyOrder }) {
+            _ = MDMConfiguration.legacyOrderKeyWarning
+        }
         // Falling back to the built-in sidebar silently discards a delivered
-        // order — say so, or an admin sees the default order with no clue why.
+        // label/icon — say so, or an admin sees built-in rows with no clue why.
         if !deliveredSidebar.isEmpty && managedSidebar.isEmpty {
             print("⚠️ ui.sidebarItems: \(deliveredSidebar.count) item(s) delivered but none usable "
                   + "(each needs a non-empty id and isEnabled != false) — using the built-in sidebar, "
-                  + "so any delivered order is IGNORED")
+                  + "so any delivered label/icon is IGNORED")
         } else if deliveredSidebar.count != managedSidebar.count {
             let dropped = deliveredSidebar.filter { !$0.isUsable }.map { $0.effectiveID.isEmpty ? "(no id)" : $0.effectiveID }
             print("⚠️ ui.sidebarItems: skipped \(dropped.count) unusable item(s): \(dropped.joined(separator: ", "))")
@@ -556,7 +603,9 @@ struct MDMConfiguration: Codable {
             // Fail-closed: absent access domain → nil role name and no role
             // definitions → every user resolves to UserCapabilities.none.
             role: access?.role,
-            roleDefinitions: MDMConfiguration.roleIndex(from: access?.effectiveRoles ?? []),
+            // Passed as the DELIVERED ARRAY, not a pre-built index: profile
+            // order is load-bearing (module order = sidebar order).
+            roles: access?.effectiveRoles ?? [],
             cleanupStaleDays: access?.effectiveCleanup.effectiveStaleDays ?? 90,
             cleanupDefaultStaticGroupID: access?.cleanup?.defaultStaticGroupID,
             cleanupDefaultSiteID: access?.cleanup?.defaultSiteID,
@@ -580,19 +629,22 @@ struct MDMConfiguration: Codable {
         )
     }
     
+    /// One resolved sidebar item: PRESENCE (id + isEnabled) and PRESENTATION
+    /// (title/icon overrides — empty means "use the destination's built-in").
+    /// Deliberately carries NO order: a row's position comes from where its id
+    /// sits in the signed-in user's role `modules` array (access domain), so
+    /// the ui domain has no say in it and this type nothing to sort by.
     struct SidebarItemConfig: Codable, Identifiable {
         let id: String
         let icon: String
         let title: String
         let isEnabled: Bool
-        let order: Int
-        
-        init(id: String, icon: String, title: String, isEnabled: Bool = true, order: Int) {
+
+        init(id: String, icon: String, title: String, isEnabled: Bool = true) {
             self.id = id
             self.icon = icon
             self.title = title
             self.isEnabled = isEnabled
-            self.order = order
         }
     }
     
@@ -603,8 +655,8 @@ struct MDMConfiguration: Codable {
     /// existed in this app.)
     ///
     /// INVARIANT: this list MUST enumerate EVERY module id a role can grant.
-    /// SidebarView renders (this list, or the ui domain's sidebarItems
-    /// override) ∩ (the user's role `modules`), so an id missing here can
+    /// SidebarView renders (the user's ordered role `modules`) ∩ (this list,
+    /// or the ui domain's sidebarItems override), so an id missing here can
     /// NEVER appear on a Mac that gets no sidebarItems override — the
     /// presentation layer would silently swallow a grant the admin made.
     /// This list is presentation only; it grants nothing on its own.
@@ -613,15 +665,19 @@ struct MDMConfiguration: Codable {
     /// never had to carry it.) `myDevice` is deliberately ABSENT — it is
     /// reserved for a follow-up PR and has no NavigationDestination case, so
     /// it would be skipped anyway.
+    ///
+    /// The ORDER of this array is not meaningful — row order comes from each
+    /// role's `modules` array (access domain). These entries exist to supply
+    /// presence plus the built-in label/icon.
     static let defaultSidebarItems: [SidebarItemConfig] = [
-        SidebarItemConfig(id: "dashboard", icon: "square.grid.2x2", title: "Dashboard", order: 1),
-        SidebarItemConfig(id: "devices", icon: "desktopcomputer", title: "Devices", order: 2),
-        SidebarItemConfig(id: "announcements", icon: "megaphone", title: "Announcements", order: 3),
-        SidebarItemConfig(id: "logs", icon: "doc.text.magnifyingglass", title: "Logs", order: 4),
-        SidebarItemConfig(id: "reports", icon: "chart.bar.doc.horizontal", title: "Reports", order: 5),
-        SidebarItemConfig(id: "enrollments", icon: "person.badge.plus", title: "Enrollments", order: 6),
-        SidebarItemConfig(id: "cleanup", icon: "wand.and.sparkles", title: "Cleanup", order: 7),
-        SidebarItemConfig(id: "settings", icon: "gearshape", title: "Settings", order: 8)
+        SidebarItemConfig(id: "dashboard", icon: "square.grid.2x2", title: "Dashboard"),
+        SidebarItemConfig(id: "devices", icon: "desktopcomputer", title: "Devices"),
+        SidebarItemConfig(id: "announcements", icon: "megaphone", title: "Announcements"),
+        SidebarItemConfig(id: "logs", icon: "doc.text.magnifyingglass", title: "Logs"),
+        SidebarItemConfig(id: "reports", icon: "chart.bar.doc.horizontal", title: "Reports"),
+        SidebarItemConfig(id: "enrollments", icon: "person.badge.plus", title: "Enrollments"),
+        SidebarItemConfig(id: "cleanup", icon: "wand.and.sparkles", title: "Cleanup"),
+        SidebarItemConfig(id: "settings", icon: "gearshape", title: "Settings")
     ]
 
     // Default configuration (fallback when no managed domain is delivered).

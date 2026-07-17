@@ -252,12 +252,30 @@
 			     of those each role may use. Only the intersection renders.
 			     modules and cleanupActions are role-driven only.
 
+			     SIDEBAR ORDER LIVES HERE: each role's "modules" ARRAY
+			     ORDER is that role's sidebar order (first = topmost).
+			     There is no "order" key — not here and not in the ui
+			     domain, whose sidebarItems now carries presence, label,
+			     and icon only. Arrange a role's modules and you have
+			     arranged its sidebar; different roles may order the same
+			     modules differently. "settings" is pinned below the
+			     divider wherever it appears, and is listed LAST below to
+			     read the way it renders.
+
+			     Multi-role users get ONE merged list: this "roles" array
+			     is walked in the order authored here (NOT the order the
+			     Entra roles claim lists them), each matched role's
+			     modules appended in listed order, first appearance wins.
+
 			     Sign Out lives in the sidebar, so a role without the
 			     "settings" module is not stranded. -->
 			<key>roles</key>
 			<array>
 
-				<!-- Full access, including the destructive Cleanup module. -->
+				<!-- Full access, including the destructive Cleanup module.
+				     modules order = sidebar order: Dashboard lands first,
+				     the destructive Cleanup module sits last of the real
+				     rows, and settings is pinned below the divider. -->
 				<dict>
 					<key>name</key>
 					<string>Helios.Admin</string>
@@ -310,7 +328,8 @@
 				     destructive erase paths, but NO Cleanup module and no
 				     credential/secret disclosure (viewLocalAdminPassword,
 				     viewFileVaultKey) or account-state change
-				     (unlockUserAccount). -->
+				     (unlockUserAccount). Same sidebar order as
+				     Helios.Admin, minus the cleanup row. -->
 				<dict>
 					<key>name</key>
 					<string>Helios.Support</string>
@@ -354,7 +373,8 @@
 				     accepted today but INERT (unknown ids are ignored), so
 				     this role currently renders Settings only and its benign
 				     actions have no surface to appear on yet. Pre-staging it
-				     is safe. -->
+				     is safe. It is listed FIRST so that it lands at the top
+				     of the sidebar once it ships — no edit needed then. -->
 				<dict>
 					<key>name</key>
 					<string>Helios.User</string>

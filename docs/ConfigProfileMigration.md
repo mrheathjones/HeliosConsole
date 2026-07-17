@@ -2,13 +2,22 @@
 
 **Date:** 2026-07-10 · **Branch:** `feature/config-domain-split` · **Cutover:** HARD (no fallback)
 
-> **Updated 2026-07-16 (`feature/entra-auth`, schemas: core **2.4**, access **2.5**):** access control was reworked
+> **Updated 2026-07-16 (`feature/entra-auth`, schemas: core **2.4**, access **2.6**, ui **2.2**):** access control was reworked
 > from fixed tiers to **admin-defined role capability sets**. Nothing about access is
 > hardcoded in the app any more. `signIn.entra.adminRoles`/`operatorRoles`/`cleanupRoles`
 > and `deviceActions.*.actions[].requiredTier` are **removed**; the access domain's new
 > `roles` block is the sole source of capability, and the access profile's **scope changes
 > from admin Macs to all Macs**. This is another HARD cutover — see
 > *Role-capability model* and *BREAKING: migrating from the 2.3 tier model* in §2.
+>
+> **Sidebar order moved to the access domain (access 2.6, ui 2.2).** `ui.sidebarItems[].order`
+> is **REMOVED**: a role's **`modules` array order IS its sidebar order** (first = topmost), so
+> enabling a module and placing it are one edit in one place, and each role orders its own
+> rows. `ui.sidebarItems` now carries **presence (`isEnabled`), label, and icon only** — its
+> own list position means nothing. A profile still delivering `order` decodes fine and the key
+> is **IGNORED**; the app logs once:
+> `⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).`
+> See *Sidebar order (access 2.6 / ui 2.2)* in §2.
 
 Helios Console 2.x reads its managed configuration from **five preference domains**, each
 deployed as its **own** Jamf Pro *Application & Custom Settings* configuration profile. The
@@ -90,12 +99,14 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 | — (NEW in 2.1) | core | `jamfPro.eraseAckTimeoutSeconds` / `jamfPro.eraseAckPollIntervalSeconds` | **ENFORCED** — EVERY erase (Erase Device / Return to Service) waits for the `ERASE_DEVICE` acknowledgment (defaults 180 s timeout / 15 s poll interval; clamped 30–1800 / 5–120) |
 | — (NEW in core 2.3) | core | `signIn.*` — interactive sign-in (method + public-client Entra settings) | **ENFORCED** — login flow + **identity only**; see the *Interactive sign-in* section below for the per-key table and fail-closed rules |
 | — (NEW in access **2.4**; **array in 2.5**) | **access** | **`roles`** — array of admin-named capability-set objects, each with a `name` (`modules`, `computerActions`, `mobileDeviceActions`, `cleanupActions`, `allowExport`) | **ENFORCED** — the sole source of every user capability; see the *Role-capability model* section below |
+| — (**access 2.6**) | **access** | `roles[].modules` — **array order is now SIGNIFICANT** | **ENFORCED** — a role's `modules` array order IS its sidebar order (first = topmost). No key or profile change is required: an existing `modules` list keeps working and simply renders in the order it is already written. Reorder the array to reorder that role's sidebar; see *Sidebar order (access 2.6 / ui 2.2)* below |
 | — (access 2.3, **REMOVED in 2.4**) | **access** | ~~`deviceActions.*.actions[].requiredTier`~~ — **DELETED**, superseded by per-role action lists | **BREAKING** — the key is gone from the schema and ignored by the app. Move each action's grant into the `computerActions` / `mobileDeviceActions` list of every role that should have it |
 | — (core 2.3, **REMOVED in 2.4**) | core | ~~`signIn.entra.adminRoles` / `operatorRoles` / `cleanupRoles`~~ — **DELETED**, role names are now the `roles` entries' `name` fields | **BREAKING** — the keys are gone from the schema and ignored. An Entra app-role **Value** is matched directly against a `roles` entry's `name` |
 | `userInterface.supportURL` | ui | `userInterface.supportURL` | **ENFORCED** — LoginView |
 | `userInterface.appTitle` / `appSubtitle` | ui | same keys (`appSubtitle` default now `"Console"`) | **ENFORCED** — all brand surfaces via the Branding helper (empty appSubtitle hides the badge) |
 | `userInterface.companyName` / `logoURL` / `accentColor` / `defaultColorScheme` / `showEnrollments` / `showAnnouncements` / `showSettings` | ui | same keys + NEW `tagline` / `footerText` / `documentationURL` / `feedbackURL` | **ENFORCED** — Branding helper feeds every brand surface: appTitle/appSubtitle (login, welcome, sidebar, biometric prompt, menu bar, About, PDF footer, export filenames, logout/biometric copy), accentColor (brand gradients derive from it when delivered; built-in blue→cyan otherwise), logoURL (BrandMark replaces the built-in sun tile), companyName (fallback = product name), defaultColorScheme (seeds first-launch appearance; user's own choice wins thereafter), show* switches (sidebar). supportURL placeholder fallback removed — absent key hides the login help link and About row. documentationURL/feedbackURL wire the previously dead About links + welcome Learn More |
-| `SidebarItems` (top-level, PascalCase) | ui | **`sidebarItems`** (RENAMED — camelCase) | **ENFORCED** — SidebarView renders from the configured list (presence/order/label/icon; ids must be route ids: dashboard, devices, announcements, logs, reports, enrollments, settings; unknown ids skipped; Cleanup stays role-gated; Settings pinned + gated by `showSettings`). Built-in default list fixed — it referenced routes (enterprise/groundcontrol/depsearch) that never existed |
+| `SidebarItems` (top-level, PascalCase) | ui | **`sidebarItems`** (RENAMED — camelCase) | **ENFORCED for presence/label/icon ONLY** — this list decides whether a row exists on this Mac (`isEnabled`) and what it looks like; ids must be route ids: dashboard, devices, announcements, logs, reports, enrollments, settings; unknown ids skipped; Cleanup stays role-gated; Settings pinned + gated by `showSettings`. **It does NOT control order** (see the `order` row below) and its own list position is meaningless. Built-in default list fixed — it referenced routes (enterprise/groundcontrol/depsearch) that never existed |
+| `SidebarItems[].order` → `sidebarItems[].order` (**REMOVED in ui 2.2**) | ui | ~~`sidebarItems[].order`~~ — **DELETED**, superseded by each role's `modules` array order (access domain) | **BREAKING (cosmetic only — never fails a decode)** — the key is gone from the schema and IGNORED by the app; a profile still delivering it decodes fine (extra plist keys are ignored) and logs once: `⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).` Arrange each role's `modules` array instead — first id = topmost row |
 | `authentication.*` | ui | `authentication.*` (unchanged) | **ENFORCED** (as of the Entra sign-in PR — previously parsed only) — `requireBiometric`, `allowBiometricSetup`, `sessionTimeout`, and `allowRememberMe` are enforced by the sign-in/session layer. Keys, types, and defaults unchanged |
 | `role` (top-level) | **access** | `role` — **enum DROPPED in 2.4**: now a FREE-FORM string naming a `roles` entry's `name`; still no default, still fail-closed. Consulted **only** when Entra sign-in is not configured | **ENFORCED** — resolves the user's single role in MDM sign-in mode; ignored entirely when `signIn.method=entra` |
 | `cleanup.staleDays` | access | `cleanup.staleDays` (default now **90**; Int or String accepted) | **ENFORCED as a default** — CleanupSettings / CleanupDashboardView; an in-app edit stores a local override that wins (§4 step 6) |
@@ -169,7 +180,7 @@ which case the access domain's `role` key names the user's role instead.
 - `allowedGroupIds` is a **sign-in** gate only — it never grants capabilities. Group
   membership maps to nothing; only role names do.
 
-### Role-capability model (access 2.5 — REPLACES tier gating)
+### Role-capability model (access 2.6 — REPLACES tier gating)
 
 **Nothing about access is hardcoded in the app any more.** There are no built-in tiers, no
 built-in role names, and no built-in capability defaults. The app reads the access domain's
@@ -221,7 +232,7 @@ roles = (
 | Key | Type | Absent = | Valid ids |
 |---|---|---|---|
 | `name` | string | **entry SKIPPED** (see below) | **Admin-chosen.** Must equal an Entra app-role **Value** (Entra mode) or the `role` key (MDM mode), **exactly, case-sensitively** |
-| `modules` | array of string | no modules | `dashboard`, `devices`, `announcements`, `logs`, `reports`, `enrollments`, `cleanup`, `settings`, plus `myDevice` (**reserved** — accepted but inert, see below) |
+| `modules` | array of string | no modules | `dashboard`, `devices`, `announcements`, `logs`, `reports`, `enrollments`, `cleanup`, `settings`, plus `myDevice` (**reserved** — accepted but inert, see below). **Array order = sidebar order** — see *Sidebar order* below |
 | `computerActions` | array of string | no computer actions | the `deviceActions.computer.actions[].id` set (`sendBlankPush`, `restart`, `restartSilent`, `shutdown`, `returnToService`, `enableRemoteDesktop`, `disableRemoteDesktop`, `enableBluetooth`, `disableBluetooth`, `viewFileVaultKey`, `viewLocalAdminPassword`, `screenShare`, `unlockUserAccount`, `wipe`; the reserved ids render nothing) |
 | `mobileDeviceActions` | array of string | no mobile actions | the `deviceActions.mobileDevice.actions[].id` set — forward-looking, no mobile actions menu exists yet |
 | `cleanupActions` | array of string | no cleanup actions | `unmanage`, `addToGroup`, `moveToSite`, `deleteFromProtect`, `deleteRecord` |
@@ -246,6 +257,57 @@ matched roles) if cleanup technicians should be able to export their device list
 It is accepted in `modules` today but **inert** — unknown/unimplemented ids are ignored
 (logged once), which is also what lets newer profiles deploy safely to older app builds. You
 can pre-stage it; it simply renders nothing until that PR lands.
+
+#### Sidebar order (access 2.6 / ui 2.2)
+
+**A role's `modules` array order IS its sidebar order.** The first id is the topmost row;
+the rest follow in listed order. There is no `order` key anywhere — when you set a module,
+you set its position in the same edit, in the same place, and each role gets its own
+ordering for free:
+
+```
+roles = (
+  {
+    name    = "Helios.Support";
+    modules = ( devices, dashboard, logs, settings );   // Devices renders FIRST
+  },
+  {
+    name    = "Helios.Admin";
+    modules = ( dashboard, devices, cleanup, settings ); // Dashboard renders first
+  },
+)
+```
+
+Rules:
+
+- **`settings` is pinned** below the sidebar divider wherever you list it. Listing it grants
+  it; its position is ignored. (Sign Out sits below it and is never gated.)
+- **Unknown / not-yet-implemented ids are skipped** with no error and no gap — `myDevice`
+  today. Ordering around a pre-staged id is safe.
+- **The machine layer still prunes.** A module a role grants but this Mac disables — via
+  `ui.sidebarItems[].isEnabled`, `ui.userInterface.showAnnouncements` / `showEnrollments` /
+  `showSettings`, or `features.reports.enabled` — renders **no row**, and the rows after it
+  simply close up. Order never widens access; the two layers still intersect.
+- **`ui.sidebarItems` no longer orders anything.** It supplies presence (`isEnabled`), label,
+  and icon for an id; its own list position is meaningless. Its `order` key is **removed in
+  ui 2.2** — a profile still delivering it decodes fine (extra plist keys are ignored) and
+  the key is **IGNORED**, logged once at load:
+  `⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).`
+
+**Union order (multi-role users).** One merged list, resolved deterministically:
+
+1. Walk the `roles` **array in the order it is authored in the profile** — *not* the order
+   the Entra token's `roles` claim lists them. The claim's order is Entra's to choose and can
+   change between sign-ins; the profile is the admin's version-controlled statement of
+   intent, so it is the one that decides layout.
+2. Within each matched role, append its `modules` in listed order.
+3. **First appearance wins.** A module an earlier role already contributed keeps its earlier
+   position — a later role listing it again is ignored. Never re-ordered, never duplicated.
+
+So for a user holding both roles in the example above, `Helios.Support` is authored first and
+its order leads: **devices, dashboard, logs**, then `Helios.Admin` contributes only what is
+new — **cleanup** — and `settings` stays pinned. To change that, reorder the `roles` array
+itself.
 
 #### Naming and union semantics
 

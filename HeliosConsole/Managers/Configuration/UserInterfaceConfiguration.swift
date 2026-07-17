@@ -55,20 +55,16 @@ struct UserInterfaceConfiguration: Codable {
         nonEmptyTrimmed(configurationVersion) ?? "2.0"
     }
 
-    /// Sidebar override sorted by `order` (ascending), ties broken by the order
-    /// the admin listed them in. Empty when the profile does not deliver one —
-    /// callers fall back to the built-in sidebar.
+    /// The delivered sidebar override, AS DELIVERED. Empty when the profile
+    /// does not deliver one — callers fall back to the built-in sidebar.
     ///
-    /// `order` is optional, so an admin who arranges the rows in the profile
-    /// editor without typing numbers leaves every item at the same effective
-    /// order. Swift's sort is not stable, so tying on delivered index is what
-    /// makes that arrangement survive — without it the list comes out in an
-    /// arbitrary order and the admin's intent is silently lost.
+    /// NOT SORTED, and there is nothing to sort by: this list is a set of
+    /// per-id overrides (presence, label, icon), not an arrangement. Row order
+    /// is the access domain's job — it is the position of an id in the
+    /// signed-in user's role `modules` array — so ordering here would only be
+    /// a second, conflicting answer to a question this domain no longer asks.
     var effectiveSidebarItems: [SidebarItemSetting] {
-        (sidebarItems ?? [])
-            .enumerated()
-            .sorted { ($0.element.effectiveOrder, $0.offset) < ($1.element.effectiveOrder, $1.offset) }
-            .map(\.element)
+        sidebarItems ?? []
     }
 }
 
@@ -161,13 +157,61 @@ struct UserInterfaceSettings: Codable {
 // MARK: - sidebarItems section
 
 /// One entry of the optional `sidebarItems` override array
-/// ({id, icon, title, isEnabled, order}).
+/// ({id, icon, title, isEnabled}).
+///
+/// This entry answers WHETHER a row exists on this Mac and WHAT it looks like.
+/// It deliberately cannot answer WHERE it sits: the removed `order` key moved
+/// to the access domain, where a role's `modules` array position IS its
+/// sidebar order — so enabling a module and placing it are one edit, in one
+/// place, and can be set per role.
 struct SidebarItemSetting: Codable {
     var id: String?
     var icon: String?
     var title: String?
     var isEnabled: Bool?
-    var order: Int?
+
+    /// True when the profile still delivers the REMOVED `order` key. Codable
+    /// ignores unknown keys, so such a profile decodes cleanly and `order`
+    /// simply does nothing — invisible unless we look for it, which is what
+    /// this flag is for (MDMConfiguration logs the notice once).
+    /// Not part of the wire format: absent from CodingKeys, so it is neither
+    /// decoded nor encoded.
+    var deliveredLegacyOrder: Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case id, icon, title, isEnabled
+    }
+
+    /// The `order` key as it used to be declared — probed for, never read.
+    private enum LegacyCodingKeys: String, CodingKey {
+        case order
+    }
+
+    init(
+        id: String? = nil,
+        icon: String? = nil,
+        title: String? = nil,
+        isEnabled: Bool? = nil
+    ) {
+        self.id = id
+        self.icon = icon
+        self.title = title
+        self.isEnabled = isEnabled
+    }
+
+    /// Mirrors what synthesis would do for the four live keys, plus the
+    /// legacy-`order` probe. Note it must NOT reject an entry carrying
+    /// `order`: already-deployed profiles have one, and failing the decode
+    /// would drop the item's label/icon over a key we chose to retire.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        icon = try container.decodeIfPresent(String.self, forKey: .icon)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled)
+        deliveredLegacyOrder = (try? decoder.container(keyedBy: LegacyCodingKeys.self))?
+            .contains(.order) ?? false
+    }
 
     var effectiveID: String { nonEmptyTrimmed(id) ?? "" }
 
@@ -182,14 +226,11 @@ struct SidebarItemSetting: Codable {
 
     var effectiveIsEnabled: Bool { isEnabled ?? true }
 
-    /// Sort order (ascending). Items without one sink to the end.
-    var effectiveOrder: Int { order ?? Int.max }
-
     /// Usable = enabled with a non-empty id. `title` and `icon` are OPTIONAL in
     /// the schema and SidebarView falls back to the destination's built-in
     /// label/icon, so requiring them here would discard items the app renders
     /// fine — and discarding every item silently reverts the whole sidebar to
-    /// the built-in default order, ignoring the admin's `order` values.
+    /// the built-in list, ignoring the admin's label/icon overrides.
     var isUsable: Bool {
         effectiveIsEnabled && !effectiveID.isEmpty
     }

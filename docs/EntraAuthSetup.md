@@ -397,6 +397,40 @@ example, and `schemas/Helios_Access_SCHEMA.json` for every valid id:
 > - Two entries sharing a `name` are **unioned**, not replaced. A later entry adds to the
 >   earlier one, so a duplicate can only ever widen that name's grants — never silently
 >   drop a grant based on array order.
+>
+> A third follows as of **access 2.6**: this array's **order is significant** — it decides
+> the sidebar order for users holding more than one role. See *Sidebar order* below.
+
+#### Sidebar order (access 2.6 / ui 2.2)
+
+**Each role's `modules` array order IS that role's sidebar order** — first id = topmost row.
+There is no `order` key: `ui.sidebarItems` carries presence (`isEnabled`), label, and icon
+only, and its `order` key was **removed in ui 2.2**. A profile still delivering `order`
+decodes fine and the key is **IGNORED**, logged once at load:
+
+```
+⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).
+```
+
+In the example above a `Helios.Support` holder sees **Dashboard, Devices, Reports**, with
+Settings pinned below the divider (`settings` is pinned wherever you list it). Reorder that
+`modules` array and the sidebar reorders — nothing else to touch, and a second role can order
+the same modules differently.
+
+**Union order.** This matters most here: Entra is the mode where a user can hold several
+roles at once. `Helios.Support` + `Helios.CleanupTech` above resolves to **Dashboard,
+Devices, Reports, Cleanup**:
+
+1. The **profile's `roles` array order** decides which role's ordering leads — **not** the
+   order the ID token's `roles` claim happens to list them. That claim's order is Entra's to
+   choose and can differ between sign-ins; ordering by it would shuffle a user's sidebar for
+   no reason you could see or control. `Helios.Support` is authored first above, so its
+   modules lead.
+2. Within each matched role, its `modules` append in listed order.
+3. **First appearance wins** — a module an earlier role already contributed keeps its
+   position; a later role listing it again is ignored, never moved and never duplicated.
+
+To change a multi-role user's layout, reorder the `roles` array itself.
 
 > **Scope the access profile to every Mac running Helios.** Through 2.3 it was admin-Macs-
 > only; from 2.4 on it carries every capability, so a Mac without it renders an **empty app**.

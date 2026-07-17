@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
-      "default": "2.1"
+      "default": "2.2"
     },
     "userInterface": {
       "type": "object",
@@ -111,7 +111,7 @@
     "sidebarItems": {
       "type": "array",
       "title": "Sidebar Items (optional override)",
-      "description": "Optional custom sidebar item list. Leave empty to use the app's built-in sidebar. Renamed from the legacy top-level key 'SidebarItems' — camelCase is required in this domain. ENFORCED — SidebarView renders from this list when delivered (presence/order/label/icon; ids must be route ids, unknown ids are skipped); see docs/ConfigProfileMigration.md.",
+      "description": "Optional custom sidebar item list. Leave empty to use the app's built-in sidebar. Renamed from the legacy top-level key 'SidebarItems' — camelCase is required in this domain. ENFORCED, but for PRESENCE (isEnabled), LABEL (title), and ICON ONLY — ids must be route ids; unknown ids are skipped. THIS LIST DOES NOT CONTROL ORDER, and the position of an entry here means nothing: SIDEBAR ORDER COMES FROM THE ACCESS DOMAIN, specifically the array order of each role's roles[].modules list (first = topmost), so order is set per role alongside the grant itself. The `order` key was REMOVED in 2.2; a profile still delivering it decodes fine but the key is IGNORED (the app logs a notice once). See docs/ConfigProfileMigration.md.",
       "items": {
         "type": "object",
         "properties": {
@@ -135,11 +135,6 @@
             "title": "Enabled",
             "description": "Whether the item is shown.",
             "default": true
-          },
-          "order": {
-            "type": "integer",
-            "title": "Order",
-            "description": "Sort order, ascending (1 = topmost). OPTIONAL: items without an order keep the order they are listed in here, and items sharing an order stay in listed order — so you can simply arrange the rows in this editor and leave Order blank. Mixing both works: numbered items sort by number first, unnumbered ones follow in listed order."
           }
         }
       },

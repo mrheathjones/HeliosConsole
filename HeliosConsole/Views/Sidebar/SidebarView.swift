@@ -211,13 +211,13 @@ struct SidebarView: View {
     /// Sidebar contents are the INTERSECTION of two independent layers, both
     /// of which must allow a row (fail-closed — neither widens the other):
     ///
+    ///   User layer — the signed-in user's role `modules`, which also fix the
+    ///     ROW ORDER (see `resolvedEntries`). Cleanup is NOT special-cased any
+    ///     more: it is the `cleanup` module id like every other row.
     ///   Machine layer — the ui domain's sidebarItems controls presence,
-    ///     order, label, and icon (ids must be NavigationDestination raw
-    ///     values; unknown ids are skipped), and the
+    ///     label, and icon (ids must be NavigationDestination raw values;
+    ///     unknown ids are skipped), and the
     ///     showAnnouncements/showEnrollments/reports switches prune further.
-    ///   User layer — the signed-in user's role modules must contain the
-    ///     destination id. Cleanup is NOT special-cased any more: it is the
-    ///     `cleanup` module id like every other row.
     ///
     /// Settings is pinned below the divider (gated the same way there).
     private var mainNavigationEntries: [ResolvedSidebarEntry] {
@@ -258,32 +258,43 @@ struct SidebarView: View {
 
     /// Shared with `availableDestination(matching:config:capabilities:)` so the
     /// rows a user can click and the route the app lands on can never disagree.
+    ///
+    /// ROW ORDER IS `capabilities.modules` ORDER — that is why this iterates
+    /// the user's modules rather than `config.sidebarItems`. A role's `modules`
+    /// array position IS its sidebar position (first = topmost), so ordering
+    /// falls out per role for free and an admin sets access and placement in
+    /// the same edit. Multi-role users get the profile's `roles` array order,
+    /// first appearance winning — resolved upstream in
+    /// `UserCapabilities.union(_:)`, which also de-duplicates, so no id can
+    /// yield two rows here.
+    ///
+    /// `config.sidebarItems` is still consulted — but only as the MACHINE
+    /// layer (presence/isEnabled, via `machineAllows`) and for label/icon
+    /// overrides. It no longer has any say in placement.
     private static func resolvedEntries(
         config: MDMConfiguration,
         capabilities: UserCapabilities
     ) -> [ResolvedSidebarEntry] {
         var entries: [ResolvedSidebarEntry] = []
-        // Stable: `config.sidebarItems` already arrives ordered (managed items
-        // by order-then-delivered-position, defaults by their explicit order).
-        // A plain sorted(by:) here would re-scramble equal `order` values,
-        // undoing the arrangement the config layer just resolved.
-        let ordered = config.sidebarItems
-            .enumerated()
-            .sorted { ($0.element.order, $0.offset) < ($1.element.order, $1.offset) }
-            .map(\.element)
-        for item in ordered where item.isEnabled {
-            guard let destination = NavigationDestination(rawValue: item.id) else {
-                print("⚠️ ui: sidebarItems id '\(item.id)' does not match any view — skipped")
+        for moduleID in capabilities.modules {
+            // Ids with no view: unknown, or granted ahead of the feature
+            // landing (`myDevice`). Accepted by the schema and inert here —
+            // pre-staging a grant must never crash or blank the sidebar.
+            guard let destination = NavigationDestination(rawValue: moduleID) else {
+                print("⚠️ access.roles: module id '\(moduleID)' does not match any view — skipped")
                 continue
             }
             guard destination != .settings else { continue } // pinned below the divider
             guard machineAllows(destination, config: config) else { continue }
-            guard capabilities.canAccess(module: destination.rawValue) else { continue }
-            guard !entries.contains(where: { $0.destination == destination }) else { continue }
+            // Presentation override for this id, when the ui domain delivered
+            // one; empty fields fall back to the destination's built-ins.
+            let override = config.sidebarItems.first { $0.id == destination.rawValue }
+            let title = override?.title ?? ""
+            let icon = override?.icon ?? ""
             entries.append(ResolvedSidebarEntry(
                 destination: destination,
-                title: item.title.isEmpty ? destination.title : item.title,
-                icon: item.icon.isEmpty ? destination.icon : item.icon
+                title: title.isEmpty ? destination.title : title,
+                icon: icon.isEmpty ? destination.icon : icon
             ))
         }
         return entries

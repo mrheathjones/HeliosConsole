@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the app logs it, nothing else reads it).",
-      "default": "2.5"
+      "default": "2.6"
     },
     "role": {
       "type": "string",
@@ -36,7 +36,7 @@
           "modules": {
             "type": "array",
             "title": "Modules (sidebar / route ids)",
-            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). `myDevice` is RESERVED for a per-user single-device view shipping in a FOLLOW-UP PR: it is accepted here today but INERT (unimplemented ids are ignored), so you may pre-stage it safely. Presentation of the sidebar — order, labels, icons — is configured separately in the ui domain's sidebarItems; this list controls whether the role may access an id at all.",
+            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. ARRAY ORDER IS THE SIDEBAR ORDER for this role: the first id is the TOPMOST row and the rest follow in listed order, so arranging this list arranges that role's sidebar — enabling a module and placing it are the same edit, and two roles may order the same modules differently. There is no `order` key anywhere: the ui domain's sidebarItems carries presence, label, and icon only, and the position of an entry in it means nothing. `settings` is PINNED below the sidebar divider no matter where you place it here — listing it grants it, its position is ignored. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). Ids that are unknown or NOT YET IMPLEMENTED are ACCEPTED but render nothing today and are skipped without error: `myDevice` is RESERVED for a per-user single-device view shipping in a FOLLOW-UP PR, so you may pre-stage it safely (a role of `myDevice` + `settings` shows Settings alone for now). MULTI-ROLE UNION ORDER: a user matching several roles gets ONE merged list, built by walking the `roles` array IN THE ORDER IT IS AUTHORED HERE — never the order the Entra token's roles claim happens to list them, which is Entra's to choose and may change between sign-ins — appending each matched role's modules in listed order, FIRST APPEARANCE WINS: a module already contributed by an earlier role keeps its earlier position, and a later role listing it again is ignored (never re-ordered, never duplicated).",
             "items": {
               "type": "string",
               "title": "Module ID",
