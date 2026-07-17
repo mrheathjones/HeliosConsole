@@ -176,6 +176,12 @@ struct AccessConfiguration: Codable {
         var name: String?
 
         var modules: [String]?
+        /// Devices-view tab ids this role may open (e.g. `abmLookup`,
+        /// `prestage`). ORDERED like `modules`: array position is tab
+        /// position after the app-defined base tab. The base device list is
+        /// gated by the `devices` module, not listed here. Unknown ids are
+        /// ignored so newer profiles deploy safely to older builds.
+        var deviceTabs: [String]?
         var computerActions: [String]?
         var mobileDeviceActions: [String]?
         var cleanupActions: [String]?
@@ -191,6 +197,7 @@ struct AccessConfiguration: Codable {
         /// Absent/malformed → [] (grants nothing); entries are trimmed and
         /// empties dropped so a stray space never becomes an unmatchable id.
         var effectiveModules: [String] { Self.normalizedList(modules) }
+        var effectiveDeviceTabs: [String] { Self.normalizedList(deviceTabs) }
         var effectiveComputerActions: [String] { Self.normalizedList(computerActions) }
         var effectiveMobileDeviceActions: [String] { Self.normalizedList(mobileDeviceActions) }
         var effectiveCleanupActions: [String] { Self.normalizedList(cleanupActions) }
@@ -199,12 +206,13 @@ struct AccessConfiguration: Codable {
         var effectiveAllowExport: Bool { allowExport ?? false }
 
         enum CodingKeys: String, CodingKey {
-            case name, modules, computerActions, mobileDeviceActions, cleanupActions, allowExport
+            case name, modules, deviceTabs, computerActions, mobileDeviceActions, cleanupActions, allowExport
         }
 
         init(
             name: String? = nil,
             modules: [String]? = nil,
+            deviceTabs: [String]? = nil,
             computerActions: [String]? = nil,
             mobileDeviceActions: [String]? = nil,
             cleanupActions: [String]? = nil,
@@ -212,6 +220,7 @@ struct AccessConfiguration: Codable {
         ) {
             self.name = name
             self.modules = modules
+            self.deviceTabs = deviceTabs
             self.computerActions = computerActions
             self.mobileDeviceActions = mobileDeviceActions
             self.cleanupActions = cleanupActions
@@ -231,6 +240,7 @@ struct AccessConfiguration: Codable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             name = try? container.decode(String.self, forKey: .name)
             modules = Self.decodeList(container, .modules)
+            deviceTabs = Self.decodeList(container, .deviceTabs)
             computerActions = Self.decodeList(container, .computerActions)
             mobileDeviceActions = Self.decodeList(container, .mobileDeviceActions)
             cleanupActions = Self.decodeList(container, .cleanupActions)
@@ -390,43 +400,113 @@ struct AccessConfiguration: Codable {
         }
     }
 
-    /// The optional `options` object on an allow-list entry. Only consulted
-    /// by the `returnToService` composite today — every other action ignores
-    /// it. Each toggle defaults to true so an absent options object
-    /// reproduces the original full-decommission behavior on
-    /// already-deployed profiles. The erase itself is not optional and
-    /// always waits for acknowledgment — only the post-ack cleanup steps are
-    /// configurable here.
+    /// The optional `options` object on an allow-list entry. Consulted by
+    /// the `returnToService` composite (cleanup toggles) and the
+    /// `abmAssign` / `abmUnassign` actions (MDM-server / PreStage scoping)
+    /// — every other action ignores it. The RTS toggles default to true so
+    /// an absent options object reproduces the original full-decommission
+    /// behavior on already-deployed profiles; the ABM lists default to
+    /// EMPTY (nothing assignable) because there is no safe default target.
+    /// The erase itself is not optional and always waits for acknowledgment
+    /// — only the post-ack cleanup steps are configurable here.
     struct DeviceActionOptions: Codable {
         /// Remove the Jamf computer record after the erase is acknowledged.
         var deleteJamfRecord: Bool?
         /// Delete the Entra device object after the erase is acknowledged
         /// (auto-skipped when Entra isn't configured).
         var deleteEntraObject: Bool?
+        /// ABM MDM server names this grant may assign devices to (and, for
+        /// `abmUnassign`, unassign from). Names match ABM's serverName
+        /// EXACTLY (case-sensitive) — except the RESERVED literal `all`
+        /// (any letter case), which grants every server. A server actually
+        /// named "all" in ABM can therefore never be individually granted.
+        /// Absent/empty → no server may be targeted (the grant is inert).
+        var allowedMdmServers: [String]?
+        /// Whether `abmAssign` may also offer the optional PreStage
+        /// registration step after a successful ABM assignment.
+        var allowPrestageOnAssign: Bool?
+        /// Jamf PreStage displayNames offerable when
+        /// `allowPrestageOnAssign` is true. Same matching rules as
+        /// `allowedMdmServers`, including the reserved `all` literal.
+        var allowedPrestages: [String]?
 
         var effectiveDeleteJamfRecord: Bool { deleteJamfRecord ?? true }
         var effectiveDeleteEntraObject: Bool { deleteEntraObject ?? true }
 
-        /// No keys delivered — every toggle resolves to its default (true).
+        /// Absent/malformed → [] (nothing may be targeted, fail-closed).
+        var effectiveAllowedMdmServers: [String] { Self.normalizedList(allowedMdmServers) }
+        /// Absent/malformed → false (fail-closed).
+        var effectiveAllowPrestageOnAssign: Bool { allowPrestageOnAssign ?? false }
+        var effectiveAllowedPrestages: [String] { Self.normalizedList(allowedPrestages) }
+
+        /// The reserved allow-list literal meaning "every server/PreStage".
+        /// Compared case-insensitively; real names are compared exactly.
+        static let allSentinel = "all"
+
+        var allowsAllMdmServers: Bool {
+            Self.containsAllSentinel(effectiveAllowedMdmServers)
+        }
+
+        var allowsAllPrestages: Bool {
+            Self.containsAllSentinel(effectiveAllowedPrestages)
+        }
+
+        /// Whether this grant permits targeting the named MDM server. The
+        /// sentinel is interpreted BEFORE any name comparison, so a server
+        /// literally named "all" can never be matched by name. The candidate
+        /// is trimmed to match normalizedList's treatment of the allow-list
+        /// entries — otherwise a whitespace-padded real name would be
+        /// permanently inexpressible.
+        func permitsMdmServer(named name: String) -> Bool {
+            let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return allowsAllMdmServers || effectiveAllowedMdmServers.contains(candidate)
+        }
+
+        /// Whether this grant permits offering the named PreStage. Enforces
+        /// its own gate: false whenever `allowPrestageOnAssign` is off, so a
+        /// caller can never resurface a disabled offer by checking only the
+        /// name list.
+        func permitsPrestage(named name: String) -> Bool {
+            guard effectiveAllowPrestageOnAssign else { return false }
+            let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return allowsAllPrestages || effectiveAllowedPrestages.contains(candidate)
+        }
+
+        /// No keys delivered — every toggle resolves to its default.
         static let empty = DeviceActionOptions()
 
         enum CodingKeys: String, CodingKey {
             case deleteJamfRecord, deleteEntraObject
+            case allowedMdmServers, allowPrestageOnAssign, allowedPrestages
         }
 
-        init(deleteJamfRecord: Bool? = nil, deleteEntraObject: Bool? = nil) {
+        init(
+            deleteJamfRecord: Bool? = nil,
+            deleteEntraObject: Bool? = nil,
+            allowedMdmServers: [String]? = nil,
+            allowPrestageOnAssign: Bool? = nil,
+            allowedPrestages: [String]? = nil
+        ) {
             self.deleteJamfRecord = deleteJamfRecord
             self.deleteEntraObject = deleteEntraObject
+            self.allowedMdmServers = allowedMdmServers
+            self.allowPrestageOnAssign = allowPrestageOnAssign
+            self.allowedPrestages = allowedPrestages
         }
 
-        /// Per-field fail-closed decode: an absent toggle keeps its default
-        /// (true), but a present-but-undecodable toggle resolves to FALSE —
-        /// the non-destructive direction (skip the cleanup step) — and one
-        /// typo'd key never discards its correctly-typed sibling.
+        /// Per-field fail-closed decode: an absent toggle keeps its default,
+        /// but a present-but-undecodable value resolves in the denying
+        /// direction — FALSE for toggles (skip the step / withhold the
+        /// PreStage offer), EMPTY for the ABM lists (nothing may be
+        /// targeted) — and one typo'd key never discards its
+        /// correctly-typed siblings.
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             deleteJamfRecord = Self.decodeToggle(container, .deleteJamfRecord)
             deleteEntraObject = Self.decodeToggle(container, .deleteEntraObject)
+            allowedMdmServers = Self.decodeList(container, .allowedMdmServers)
+            allowPrestageOnAssign = Self.decodeToggle(container, .allowPrestageOnAssign)
+            allowedPrestages = Self.decodeList(container, .allowedPrestages)
         }
 
         private static func decodeToggle(
@@ -435,8 +515,28 @@ struct AccessConfiguration: Codable {
         ) -> Bool? {
             guard container.contains(key) else { return nil }
             if let value = try? container.decode(Bool.self, forKey: key) { return value }
-            NSLog("⚠️ deviceActions.options: malformed '%@' — treated as FALSE (skip step, fail-closed)", key.rawValue)
+            NSLog("⚠️ deviceActions.options: malformed '%@' — treated as FALSE (fail-closed)", key.rawValue)
             return false
+        }
+
+        private static func decodeList(
+            _ container: KeyedDecodingContainer<CodingKeys>,
+            _ key: CodingKeys
+        ) -> [String]? {
+            guard container.contains(key) else { return nil }
+            if let values = try? container.decode([String].self, forKey: key) { return values }
+            NSLog("⚠️ deviceActions.options: malformed '%@' — treated as EMPTY (nothing granted, fail-closed)", key.rawValue)
+            return []
+        }
+
+        private static func normalizedList(_ values: [String]?) -> [String] {
+            (values ?? [])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+
+        private static func containsAllSentinel(_ values: [String]) -> Bool {
+            values.contains { $0.caseInsensitiveCompare(allSentinel) == .orderedSame }
         }
     }
 
