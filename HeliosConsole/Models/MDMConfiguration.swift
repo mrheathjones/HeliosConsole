@@ -130,7 +130,6 @@ struct MDMConfiguration: Codable {
     // the delivering domain/profile is absent.
 
     /// Per-action device-command allow-list (access domain).
-    let deviceActions: AccessConfiguration.DeviceActionsSettings?
 
     /// Feature modules & tuning (features domain, whole model).
     let features: FeaturesConfiguration?
@@ -142,6 +141,15 @@ struct MDMConfiguration: Codable {
     /// accentColor, defaultColorScheme, show* switches beyond the flattened
     /// appTitle/appSubtitle/supportURL.
     let userInterfaceExtras: UserInterfaceSettings?
+
+    /// Cosmetic Devices-tab rename overrides (ui domain `deviceTabs`).
+    /// Read via `deviceTabLabelOverride(id:)`. Empty when none delivered.
+    let uiDeviceTabs: [DeviceTabLabelSetting]
+
+    /// Cosmetic device-action label/icon overrides (ui domain
+    /// `deviceActionLabels`). Read via `deviceActionLabelOverride(id:)`.
+    /// Empty when none delivered.
+    let uiDeviceActionLabels: [DeviceActionLabelSetting]
 
     /// Interactive sign-in configuration (core domain `signIn` block) —
     /// how users sign into the app itself: built-in email flow (default)
@@ -367,41 +375,41 @@ struct MDMConfiguration: Codable {
     /// Pass the CURRENT capabilities (UserSession.shared.capabilities) —
     /// the policy is a value, so it must be rebuilt when they change.
     func computerActionPolicy(capabilities: UserCapabilities) -> DeviceActionPolicy {
-        deviceActionPolicy(
-            grants: deviceActions?.computer?.grantsByID,
-            apiActionsEnabled: features?.effectiveComputers.effectiveEnableAPIActions ?? true,
-            capabilities: capabilities,
-            platform: .computer
-        )
+        DeviceActionPolicy(capabilities: capabilities, platform: .computer)
     }
 
     /// Policy for mobile-device actions. No mobile actions menu exists yet
     /// (MobileDeviceView's "More" button is a stub); any future menu must be
     /// built from this policy from day one.
     func mobileDeviceActionPolicy(capabilities: UserCapabilities) -> DeviceActionPolicy {
-        deviceActionPolicy(
-            grants: deviceActions?.mobileDevice?.grantsByID,
-            apiActionsEnabled: features?.effectiveMobileDevices.effectiveEnableAPIActions ?? true,
-            capabilities: capabilities,
-            platform: .mobileDevice
-        )
+        DeviceActionPolicy(capabilities: capabilities, platform: .mobileDevice)
     }
 
-    /// Shared per-platform policy builder: machine layer (access-domain
-    /// grants + features-domain kill switch) intersected with the user layer
-    /// (role capabilities for that platform).
-    private func deviceActionPolicy(
-        grants: [String: AccessConfiguration.DeviceActionSetting]?,
-        apiActionsEnabled: Bool,
-        capabilities: UserCapabilities,
-        platform: DeviceActionPolicy.Platform
-    ) -> DeviceActionPolicy {
-        DeviceActionPolicy(
-            grants: grants,
-            apiActionsEnabled: apiActionsEnabled,
-            capabilities: capabilities,
-            platform: platform
-        )
+    // MARK: - UI cosmetic overrides (ui domain; label/icon only)
+
+    /// The Devices-tab rename for `id`, or nil to use the tab's built-in
+    /// title. Last non-empty entry for a duplicate id wins.
+    func deviceTabLabelOverride(id: String) -> String? {
+        var result: String?
+        for item in uiDeviceTabs where item.effectiveID == id {
+            if !item.effectiveDisplayName.isEmpty { result = item.effectiveDisplayName }
+        }
+        return result
+    }
+
+    /// The label/icon override for device-action `id`, or nil when none was
+    /// delivered. Either field may still be nil (blank → app default). Last
+    /// entry carrying a non-empty field for a duplicate id wins per field.
+    func deviceActionLabelOverride(id: String) -> (displayName: String?, icon: String?)? {
+        var displayName: String?
+        var icon: String?
+        var matched = false
+        for item in uiDeviceActionLabels where item.effectiveID == id {
+            matched = true
+            if !item.effectiveDisplayName.isEmpty { displayName = item.effectiveDisplayName }
+            if !item.effectiveIcon.isEmpty { icon = item.effectiveIcon }
+        }
+        return matched ? (displayName: displayName, icon: icon) : nil
     }
 
     init(
@@ -442,10 +450,11 @@ struct MDMConfiguration: Codable {
         entraClientId: String? = nil,
         entraClientSecret: String? = nil,
         entraCertPEM: String? = nil,
-        deviceActions: AccessConfiguration.DeviceActionsSettings? = nil,
         features: FeaturesConfiguration? = nil,
         authentication: AuthenticationSettings? = nil,
         userInterfaceExtras: UserInterfaceSettings? = nil,
+        uiDeviceTabs: [DeviceTabLabelSetting] = [],
+        uiDeviceActionLabels: [DeviceActionLabelSetting] = [],
         signIn: CoreConfiguration.SignInSettings? = nil
     ) {
         self.jamfURL = jamfURL
@@ -488,10 +497,11 @@ struct MDMConfiguration: Codable {
         self.entraClientId = entraClientId
         self.entraClientSecret = entraClientSecret
         self.entraCertPEM = entraCertPEM
-        self.deviceActions = deviceActions
         self.features = features
         self.authentication = authentication
         self.userInterfaceExtras = userInterfaceExtras
+        self.uiDeviceTabs = uiDeviceTabs
+        self.uiDeviceActionLabels = uiDeviceActionLabels
         self.signIn = signIn
     }
 
@@ -552,8 +562,7 @@ struct MDMConfiguration: Codable {
                 SidebarItemConfig(
                     id: $0.effectiveID,
                     icon: $0.effectiveIcon,
-                    title: $0.effectiveTitle,
-                    isEnabled: $0.effectiveIsEnabled
+                    title: $0.effectiveDisplayName
                 )
             }
         // A profile still carrying the removed `order` key decodes fine (extra
@@ -566,7 +575,7 @@ struct MDMConfiguration: Codable {
         // label/icon — say so, or an admin sees built-in rows with no clue why.
         if !deliveredSidebar.isEmpty && managedSidebar.isEmpty {
             print("⚠️ ui.sidebarItems: \(deliveredSidebar.count) item(s) delivered but none usable "
-                  + "(each needs a non-empty id and isEnabled != false) — using the built-in sidebar, "
+                  + "(each needs a non-empty id) — using the built-in sidebar, "
                   + "so any delivered label/icon is IGNORED")
         } else if deliveredSidebar.count != managedSidebar.count {
             let dropped = deliveredSidebar.filter { !$0.isUsable }.map { $0.effectiveID.isEmpty ? "(no id)" : $0.effectiveID }
@@ -618,10 +627,11 @@ struct MDMConfiguration: Codable {
             entraClientId: resolvedEntra.clientId,
             entraClientSecret: resolvedEntra.clientSecret,
             entraCertPEM: resolvedEntra.certPEM,
-            deviceActions: access?.deviceActions,
             features: features,
             authentication: ui?.authentication,
             userInterfaceExtras: uiSettings,
+            uiDeviceTabs: ui?.deviceTabs ?? [],
+            uiDeviceActionLabels: ui?.deviceActionLabels ?? [],
             // Interactive sign-in passthrough. Absent core domain (or an
             // absent signIn block) → nil → signInMethod resolves to .email,
             // so undelivered profiles keep the email flow unchanged.
@@ -629,22 +639,20 @@ struct MDMConfiguration: Codable {
         )
     }
     
-    /// One resolved sidebar item: PRESENCE (id + isEnabled) and PRESENTATION
-    /// (title/icon overrides — empty means "use the destination's built-in").
-    /// Deliberately carries NO order: a row's position comes from where its id
-    /// sits in the signed-in user's role `modules` array (access domain), so
-    /// the ui domain has no say in it and this type nothing to sort by.
+    /// One resolved sidebar item: a COSMETIC PRESENTATION override only —
+    /// `title`/`icon` empty means "use the destination's built-in". Carries
+    /// neither presence (that is the role's `modules` grant, access domain)
+    /// nor order (a row's position is where its id sits in that `modules`
+    /// array), so the ui domain has no say in either.
     struct SidebarItemConfig: Codable, Identifiable {
         let id: String
         let icon: String
         let title: String
-        let isEnabled: Bool
 
-        init(id: String, icon: String, title: String, isEnabled: Bool = true) {
+        init(id: String, icon: String, title: String) {
             self.id = id
             self.icon = icon
             self.title = title
-            self.isEnabled = isEnabled
         }
     }
     

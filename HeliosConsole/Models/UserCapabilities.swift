@@ -69,10 +69,22 @@ struct UserCapabilities: Equatable {
     /// CleanupAction configIDs the user may run.
     let cleanupActions: Set<String>
 
-    /// Jamf Computer PreStage displayNames selectable in the Pre-Stage tab.
-    /// Exact names, plus the reserved literal `all` (case-insensitive)
-    /// meaning every PreStage — interpreted by `canUsePrestage(named:)`.
+    /// ABM MDM server names the user may assign to / unassign from. Exact
+    /// names, plus the reserved literal `all` — interpreted by
+    /// `canAssignToMdmServer(named:)`. ROLE-ONLY gating.
+    let allowedMdmServers: Set<String>
+
+    /// Jamf Computer PreStage displayNames the user may select (Pre-Stage
+    /// tab AND prestage-on-assign). Exact names plus the reserved `all` —
+    /// interpreted by `canUsePrestage(named:)`.
     let allowedPrestages: Set<String>
+
+    /// Whether the prestage-on-assign step is offered after abmAssign. OR'd
+    /// across roles.
+    let allowPrestageOnAssign: Bool
+
+    /// Post-erase cleanup for returnToService, OR'd across roles.
+    let returnToServiceOptions: AccessConfiguration.ReturnToServiceOptions
 
     /// Whether the user may export data out of the app.
     let allowExport: Bool
@@ -86,7 +98,10 @@ struct UserCapabilities: Equatable {
         computerActions: Set<String>,
         mobileDeviceActions: Set<String>,
         cleanupActions: Set<String>,
+        allowedMdmServers: Set<String> = [],
         allowedPrestages: Set<String> = [],
+        allowPrestageOnAssign: Bool = false,
+        returnToServiceOptions: AccessConfiguration.ReturnToServiceOptions = .empty,
         allowExport: Bool
     ) {
         var seen: Set<String> = []
@@ -110,7 +125,10 @@ struct UserCapabilities: Equatable {
         self.computerActions = computerActions
         self.mobileDeviceActions = mobileDeviceActions
         self.cleanupActions = cleanupActions
+        self.allowedMdmServers = allowedMdmServers
         self.allowedPrestages = allowedPrestages
+        self.allowPrestageOnAssign = allowPrestageOnAssign
+        self.returnToServiceOptions = returnToServiceOptions
         self.allowExport = allowExport
     }
 
@@ -137,7 +155,10 @@ struct UserCapabilities: Equatable {
             && lhs.computerActions == rhs.computerActions
             && lhs.mobileDeviceActions == rhs.mobileDeviceActions
             && lhs.cleanupActions == rhs.cleanupActions
+            && lhs.allowedMdmServers == rhs.allowedMdmServers
             && lhs.allowedPrestages == rhs.allowedPrestages
+            && lhs.allowPrestageOnAssign == rhs.allowPrestageOnAssign
+            && lhs.returnToServiceOptions == rhs.returnToServiceOptions
             && lhs.allowExport == rhs.allowExport
     }
 
@@ -167,17 +188,43 @@ struct UserCapabilities: Equatable {
         var computerActions: Set<String> = []
         var mobileDeviceActions: Set<String> = []
         var cleanupActions: Set<String> = []
+        var allowedMdmServers: Set<String> = []
+        var allowedPrestages: Set<String> = []
+        var allowPrestageOnAssign = false
         var allowExport = false
 
-        var allowedPrestages: Set<String> = []
+        // RTS cleanup options are folded ONLY from roles that actually grant
+        // the returnToService action, and combined with AND (most-restrictive
+        // wins) across those roles. Rationale: these toggles drive an
+        // IRREVERSIBLE deletion of the Jamf record + Entra object, so an
+        // explicit opt-out (deleteJamfRecord/deleteEntraObject = false) on any
+        // granting role must be honored — never silently re-enabled by a
+        // sibling role. A single granting role with no options object still
+        // resolves to true/true (legacy full-decommission), so single-role
+        // behavior is unchanged. A role that does NOT grant RTS contributes
+        // nothing (its absent-options default-true must not leak in).
+        let rtsActionID = DeviceAction.returnToService.rawValue
+        var rtsGrantingRoleSeen = false
+        var rtsDeleteJamf = true
+        var rtsDeleteEntra = true
+
         for definition in definitions {
             modules.append(contentsOf: definition.effectiveModules)
             deviceTabs.append(contentsOf: definition.effectiveDeviceTabs)
             computerActions.formUnion(definition.effectiveComputerActions)
             mobileDeviceActions.formUnion(definition.effectiveMobileDeviceActions)
             cleanupActions.formUnion(definition.effectiveCleanupActions)
+            allowedMdmServers.formUnion(definition.effectiveAllowedMdmServers)
             allowedPrestages.formUnion(definition.effectiveAllowedPrestages)
+            allowPrestageOnAssign = allowPrestageOnAssign || definition.effectiveAllowPrestageOnAssign
             allowExport = allowExport || definition.effectiveAllowExport
+
+            if definition.effectiveComputerActions.contains(rtsActionID) {
+                let rts = definition.returnToServiceOptions ?? .empty
+                rtsDeleteJamf = rtsDeleteJamf && rts.effectiveDeleteJamfRecord
+                rtsDeleteEntra = rtsDeleteEntra && rts.effectiveDeleteEntraObject
+                rtsGrantingRoleSeen = true
+            }
         }
 
         return UserCapabilities(
@@ -186,7 +233,13 @@ struct UserCapabilities: Equatable {
             computerActions: computerActions,
             mobileDeviceActions: mobileDeviceActions,
             cleanupActions: cleanupActions,
+            allowedMdmServers: allowedMdmServers,
             allowedPrestages: allowedPrestages,
+            allowPrestageOnAssign: allowPrestageOnAssign,
+            returnToServiceOptions: rtsGrantingRoleSeen
+                ? AccessConfiguration.ReturnToServiceOptions(
+                    deleteJamfRecord: rtsDeleteJamf, deleteEntraObject: rtsDeleteEntra)
+                : .empty,
             allowExport: allowExport
         )
     }
@@ -218,17 +271,28 @@ struct UserCapabilities: Equatable {
         mobileDeviceActions.contains(action.rawValue)
     }
 
-    /// Whether any held role's `allowedPrestages` carries the reserved
-    /// `all` literal (case-insensitive).
-    var allowsAllPrestages: Bool {
-        allowedPrestages.contains { $0.caseInsensitiveCompare("all") == .orderedSame }
+    // MARK: - ABM allow-list gates (role-only, `all` sentinel)
+
+    var allowsAllMdmServers: Bool {
+        AccessConfiguration.ABMAllowList.containsSentinel(allowedMdmServers)
     }
 
-    /// Whether the user may select the named PreStage in the Pre-Stage
-    /// tab. The sentinel is interpreted BEFORE name matching, so a
-    /// PreStage literally named "all" can never be matched by name; real
-    /// names compare exactly after trimming (entries were trimmed at
-    /// decode).
+    var allowsAllPrestages: Bool {
+        AccessConfiguration.ABMAllowList.containsSentinel(allowedPrestages)
+    }
+
+    /// Whether the user may assign to / unassign from the named MDM server.
+    /// Sentinel interpreted BEFORE name matching, so a server literally
+    /// named "all" is never matched by name; real names compare exactly
+    /// after trimming.
+    func canAssignToMdmServer(named name: String) -> Bool {
+        if allowsAllMdmServers { return true }
+        let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allowedMdmServers.contains(candidate)
+    }
+
+    /// Whether the user may select the named PreStage (tab or on-assign).
+    /// Same sentinel-before-name rule.
     func canUsePrestage(named name: String) -> Bool {
         if allowsAllPrestages { return true }
         let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)

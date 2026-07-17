@@ -450,11 +450,11 @@ struct ABMAssignmentSheet: View {
     @MainActor
     private func loadPrestageOffer() async {
         prestagePhase = .loadingList
-        let options = policyProvider().options(for: .abmAssign)
+        let policy = policyProvider()
 
         // Live toggle check FIRST, distinctly — the offer flag was set at
         // assign-success and the grant may have been revoked since.
-        guard options.effectiveAllowPrestageOnAssign else {
+        guard policy.allowsPrestageOnAssign else {
             prestagePhase = .unavailable("The PreStage step is no longer enabled by your grant.")
             logPrestageStep(success: false, error: "Offer revoked by live policy at load (allowPrestageOnAssign off)")
             return
@@ -465,7 +465,7 @@ struct ABMAssignmentSheet: View {
             // permitsPrestage folds BOTH the toggle and the `all` sentinel —
             // never branch around it (an allowsAllPrestages shortcut would
             // bypass the toggle fold).
-            let permitted = all.filter { options.permitsPrestage(named: $0.displayName) }
+            let permitted = all.filter { policy.canUsePrestage(named: $0.displayName) }
             guard !permitted.isEmpty else {
                 prestagePhase = .unavailable("Your grant permits no PreStages that exist in Jamf Pro — the step is unavailable.")
                 return
@@ -492,9 +492,9 @@ struct ABMAssignmentSheet: View {
     private func runPrestageRegistration(_ prestage: JamfPreStage) async {
         // Re-derive the LIVE options — the offer may have been revoked
         // while the sheet sat open.
-        let options = policyProvider().options(for: .abmAssign)
-        guard options.effectiveAllowPrestageOnAssign,
-              options.permitsPrestage(named: prestage.displayName) else {
+        let policy = policyProvider()
+        guard policy.allowsPrestageOnAssign,
+              policy.canUsePrestage(named: prestage.displayName) else {
             prestagePhase = .done(success: false,
                                   message: "Your grant no longer permits PreStage \"\(prestage.displayName)\".")
             logPrestageStep(success: false, error: "Denied by live options for PreStage \"\(prestage.displayName)\"")
@@ -523,9 +523,9 @@ struct ABMAssignmentSheet: View {
                 serial: serial,
                 toPreStage: prestage.id,
                 stillAuthorized: {
-                    let live = self.policyProvider().options(for: .abmAssign)
-                    return live.effectiveAllowPrestageOnAssign
-                        && live.permitsPrestage(named: prestage.displayName)
+                    let live = self.policyProvider()
+                    return live.allowsPrestageOnAssign
+                        && live.canUsePrestage(named: prestage.displayName)
                 },
                 progress: { status in self.prestagePhase = .running(status) }
             )
@@ -586,16 +586,14 @@ struct ABMAssignmentSheet: View {
             onFinished(false, nil, "Denied by policy at sheet open")
             return
         }
-        let options = policy.options(for: .abmAssign)
-
         do {
             let resolved = try await ABMAssignmentExecutor.resolveDevice(serial: serialNumber)
             let servers = try await ABMAssignmentExecutor.loadServers()
             let current = try await ABMAssignmentExecutor.currentServer(for: resolved, servers: servers)
 
-            let permitted = options.allowsAllMdmServers
+            let permitted = policy.allowsAllMdmServers
                 ? servers
-                : servers.filter { options.permitsMdmServer(named: $0.serverName) }
+                : servers.filter { policy.canAssignToMdmServer(named: $0.serverName) }
 
             guard !permitted.isEmpty else {
                 phase = .unavailable("Your role's abmAssign grant lists no MDM servers that exist in this ABM tenant — there is nothing to assign to. Ask an administrator to update the profile's allowedMdmServers.")
@@ -634,7 +632,7 @@ struct ABMAssignmentSheet: View {
             onFinished(false, server, "Denied by policy at execution")
             return
         }
-        guard policy.options(for: .abmAssign).permitsMdmServer(named: server.serverName) else {
+        guard policy.canAssignToMdmServer(named: server.serverName) else {
             phase = .finished(success: false, title: "Not Permitted",
                               message: "Your role's grant does not permit assigning to \(server.serverName).")
             onFinished(false, server, "Denied by allowedMdmServers for server \(server.serverName)")
@@ -651,7 +649,7 @@ struct ABMAssignmentSheet: View {
                 ABMDeviceCache.shared.applyAssignment(deviceId: device.id, serverId: server.id)
                 // The optional PreStage step is offered only on success and
                 // only when the LIVE grant enables it.
-                prestageOfferAvailable = policy.options(for: .abmAssign).effectiveAllowPrestageOnAssign
+                prestageOfferAvailable = policy.allowsPrestageOnAssign
                 phase = .finished(success: true, title: "Assigned to \(server.serverName)",
                                   message: "The assignment takes effect at the device's next Automated Device Enrollment.")
                 onFinished(true, server, nil)

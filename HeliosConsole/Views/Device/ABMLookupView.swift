@@ -178,7 +178,7 @@ struct ABMLookupView: View {
             ABMAssignmentSheet(
                 serialNumber: device.serialNumber,
                 deviceName: device.deviceModel ?? device.serialNumber,
-                title: policy(for: device).menuLabel(for: .abmAssign),
+                title: ActionBranding.label(for: .abmAssign),
                 policyProvider: { policy(for: device) },
                 onFinished: { success, _, error in
                     logAction(.abmAssign, device: device, success: success, error: error)
@@ -544,14 +544,14 @@ struct ABMLookupView: View {
             Button {
                 assignSheetDevice = device
             } label: {
-                Label(devicePolicy.menuLabel(for: .abmAssign), systemImage: DeviceAction.abmAssign.icon)
+                Label(ActionBranding.label(for: .abmAssign), systemImage: ActionBranding.icon(for: .abmAssign))
             }
         }
         if devicePolicy.isAllowed(.abmUnassign), cache.assignmentMap[device.id] != nil {
             Button(role: .destructive) {
                 unassignConfirmDevice = device
             } label: {
-                Label(devicePolicy.menuLabel(for: .abmUnassign), systemImage: DeviceAction.abmUnassign.icon)
+                Label(ActionBranding.label(for: .abmUnassign), systemImage: ActionBranding.icon(for: .abmUnassign))
             }
         }
     }
@@ -564,13 +564,14 @@ struct ABMLookupView: View {
     private func executeUnassign(_ device: ABMOrgDevice) async {
         guard !isUnassigning else { return }
         let devicePolicy = policy(for: device)
-        if let denial = devicePolicy.denialReason(for: .abmUnassign) {
-            // Defense-in-depth denial: surface AND audit-log it, mirroring
-            // DeviceView.reportActionDenial — never a silent drop.
-            let layer = denial == .machinePolicy ? "machine policy" : "role capability"
+        if devicePolicy.denialReason(for: .abmUnassign) != nil {
+            // Defense-in-depth denial: surface AND audit-log it — never a
+            // silent drop. Gating is role-only now, so the reason is always
+            // the role capability.
             showResult(false, "Action Not Permitted",
-                       "Unassigning from an MDM server is blocked by \(layer) on this Mac.")
-            logAction(.abmUnassign, device: device, success: false, error: "Blocked by \(layer)")
+                       "Unassigning from an MDM server is not available for your role.")
+            logAction(.abmUnassign, device: device, success: false,
+                      error: "Blocked by role capability (no held role grants 'abmUnassign' on computers)")
             return
         }
 
@@ -585,8 +586,7 @@ struct ABMLookupView: View {
                 return
             }
 
-            let options = devicePolicy.options(for: .abmUnassign)
-            guard options.permitsMdmServer(named: current.serverName) else {
+            guard devicePolicy.canAssignToMdmServer(named: current.serverName) else {
                 showResult(false, "Not Permitted",
                            "Your role's grant does not permit unassigning devices from \(current.serverName).")
                 logAction(.abmUnassign, device: device, success: false,

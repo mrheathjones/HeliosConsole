@@ -100,14 +100,11 @@ class MDMConfigurationManager: ObservableObject {
         _ configuration: MDMConfiguration,
         core: CoreConfiguration?
     ) {
-        if let grants = configuration.deviceActions?.computer?.grantsByID {
-            let enabled = grants.values.filter { $0.effectiveEnabled }.count
-            print("✅ access: deviceActions.computer delivers \(grants.count) action(s), \(enabled) enabled")
-            if core?.jamfPro?.screenShareEnabled != nil {
-                print("⚠️ core: jamfPro.screenShareEnabled is DEPRECATED and ignored — the access deviceActions allow-list is authoritative for screenShare")
-            }
-        } else {
-            print("⚠️ access: no deviceActions.computer allow-list delivered — Actions menu hidden (fail-closed); see docs/ConfigProfileMigration.md")
+        // Device actions are gated ENTIRELY at the role level now (each
+        // role's computerActions/mobileDeviceActions). There is no machine
+        // allow-list to log.
+        if core?.jamfPro?.screenShareEnabled != nil {
+            print("⚠️ core: jamfPro.screenShareEnabled is DEPRECATED and ignored — role computerActions is authoritative for screenShare")
         }
     }
 
@@ -224,11 +221,13 @@ class MDMConfigurationManager: ObservableObject {
 
     // MARK: - Helper Methods
 
-    /// The sidebar items this Mac enables. UNORDERED with respect to display:
-    /// row order comes from the signed-in user's role `modules` (access
-    /// domain) and is resolved by SidebarView, not here.
+    /// The sidebar label/icon overrides this Mac delivers. UNORDERED with
+    /// respect to display: row order comes from the signed-in user's role
+    /// `modules` (access domain) and is resolved by SidebarView, not here.
+    /// Presence is a role grant now — these entries are cosmetic overrides,
+    /// so every delivered entry is returned.
     func getEnabledSidebarItems() -> [MDMConfiguration.SidebarItemConfig] {
-        return configuration.sidebarItems.filter { $0.isEnabled }
+        return configuration.sidebarItems
     }
 
     // MARK: - Debug

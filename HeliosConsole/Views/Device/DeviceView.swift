@@ -80,7 +80,7 @@ struct DeviceView: View {
     /// Snapshot of the Return to Service plan taken when the confirmation
     /// dialog opens: the executed steps must be exactly the steps the
     /// operator confirmed, even if a profile re-push lands mid-dialog.
-    @State private var pendingRTSOptions: AccessConfiguration.DeviceActionOptions? = nil
+    @State private var pendingRTSOptions: AccessConfiguration.ReturnToServiceOptions? = nil
     @State private var pendingRTSEntraConfigured: Bool = false
     @State private var showingUnlockAccountSheet: Bool = false
     @State private var showingABMAssignSheet: Bool = false
@@ -215,7 +215,7 @@ struct DeviceView: View {
             ABMAssignmentSheet(
                 serialNumber: displayComputer.serialNumber ?? "",
                 deviceName: displayComputer.displayName,
-                title: actionPolicy.menuLabel(for: .abmAssign),
+                title: ActionBranding.label(for: .abmAssign),
                 policyProvider: { actionPolicy },
                 onFinished: { success, _, error in
                     logABMAction(.abmAssign, serial: displayComputer.serialNumber ?? "Unknown",
@@ -663,7 +663,7 @@ struct DeviceView: View {
 
         // Use the plan snapshotted when the dialog opened (trigger(_:)) so
         // the copy and the execution can never diverge mid-dialog.
-        let options = pendingRTSOptions ?? actionPolicy.options(for: .returnToService)
+        let options = pendingRTSOptions ?? actionPolicy.returnToServiceOptions()
         let entraConfigured = pendingRTSOptions != nil
             ? pendingRTSEntraConfigured
             : configManager.configuration.isEntraConfigured
@@ -717,7 +717,7 @@ struct DeviceView: View {
         }
         if action == .returnToService {
             // Freeze the plan the confirmation dialog will describe.
-            pendingRTSOptions = actionPolicy.options(for: .returnToService)
+            pendingRTSOptions = actionPolicy.returnToServiceOptions()
             pendingRTSEntraConfigured = configManager.configuration.isEntraConfigured
         }
         pendingAction = action
@@ -726,9 +726,9 @@ struct DeviceView: View {
 
     private func executeAction(_ action: DeviceAction) async {
         // Defense in depth: the menu already filters by policy, but never
-        // rely on UI alone — re-check BOTH layers (machine allow-list AND
-        // the signed-in user's role capabilities) before any command fires,
-        // and audit-log which layer denied.
+        // rely on UI alone — re-check the signed-in user's role capability
+        // (the single gating layer) before any command fires, and audit-log
+        // the denial.
         if let denial = actionPolicy.denialReason(for: action) {
             await reportActionDenial(denial, for: action)
             return
@@ -812,8 +812,7 @@ struct DeviceView: View {
                 return
             }
 
-            let options = actionPolicy.options(for: .abmUnassign)
-            guard options.permitsMdmServer(named: current.serverName) else {
+            guard actionPolicy.canAssignToMdmServer(named: current.serverName) else {
                 await showABMResult(success: false, title: "Not Permitted",
                                     message: "Your role's grant does not permit unassigning devices from \(current.serverName).")
                 logABMAction(.abmUnassign, serial: serial, success: false,
@@ -877,14 +876,12 @@ struct DeviceView: View {
     /// (executeAction and the Unlock Account sheet): surfaces the
     /// "Action Not Permitted" alert and audit-logs which layer denied.
     private func reportActionDenial(_ denial: DeviceActionPolicy.DenialReason, for action: DeviceAction) async {
-        let deniedByRole = denial == .roleCapability
+        // Gating is role-only now: the sole denial reason is role capability.
         await MainActor.run {
             commandResult = CommandResult(
                 success: false,
                 title: "Action Not Permitted",
-                message: deniedByRole
-                    ? "\"\(action.logName)\" is not available for your role."
-                    : "\"\(action.logName)\" is not enabled by your administrator for this Mac."
+                message: "\"\(action.logName)\" is not available for your role."
             )
             showingCommandAlert = true
         }
@@ -895,9 +892,7 @@ struct DeviceView: View {
             deviceSerialNumber: displayComputer.serialNumber ?? "Unknown",
             deviceId: displayComputer.id,
             success: false,
-            errorMessage: deniedByRole
-                ? "Blocked by role capability (no role held by this user grants '\(action.rawValue)' on computers; roles: \(signedInRolesDescription))"
-                : "Blocked by deviceActions policy (access profile)"
+            errorMessage: "Blocked by role capability (no role held by this user grants '\(action.rawValue)' on computers; roles: \(signedInRolesDescription))"
         )
     }
 
@@ -1266,7 +1261,7 @@ struct DeviceView: View {
                             Button(role: action.isDestructive ? .destructive : nil) {
                                 trigger(action)
                             } label: {
-                                Label(policy.menuLabel(for: action), systemImage: action.menuIcon)
+                                Label(ActionBranding.label(for: action), systemImage: ActionBranding.icon(for: action))
                             }
                         }
                     }
@@ -1690,7 +1685,7 @@ struct DeviceView: View {
         let config = MDMConfigurationManager.shared.configuration
         // Execute exactly the plan the operator confirmed (snapshotted when
         // the dialog opened); fall back to the live policy defensively.
-        let options = pendingRTSOptions ?? actionPolicy.options(for: .returnToService)
+        let options = pendingRTSOptions ?? actionPolicy.returnToServiceOptions()
         let entraConfiguredAtConfirm = pendingRTSOptions != nil
             ? pendingRTSEntraConfigured
             : config.isEntraConfigured

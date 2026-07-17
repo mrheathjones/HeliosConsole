@@ -114,7 +114,6 @@ struct FeaturesConfiguration: Codable {
         let enabled: Bool?
         let fetchInventory: Bool?
         let showDashboardCard: Bool?
-        let enableAPIActions: Bool?
         let enableReports: Bool?
         let inventoryRefreshInterval: Int?
         let inventorySections: [String]?
@@ -122,7 +121,6 @@ struct FeaturesConfiguration: Codable {
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveFetchInventory: Bool { fetchInventory ?? true }
         var effectiveShowDashboardCard: Bool { showDashboardCard ?? true }
-        var effectiveEnableAPIActions: Bool { enableAPIActions ?? true }
         var effectiveEnableReports: Bool { enableReports ?? true }
         var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
         /// Configured sections, or the built-in list when the key is absent
@@ -170,7 +168,7 @@ struct FeaturesConfiguration: Codable {
 
         static let empty = ComputersSettings(
             enabled: nil, fetchInventory: nil, showDashboardCard: nil,
-            enableAPIActions: nil, enableReports: nil,
+            enableReports: nil,
             inventoryRefreshInterval: nil, inventorySections: nil
         )
     }
@@ -181,7 +179,6 @@ struct FeaturesConfiguration: Codable {
         let enabled: Bool?
         let fetchInventory: Bool?
         let showDashboardCards: ShowDashboardCards?
-        let enableAPIActions: Bool?
         let enableReports: Bool?
         let inventoryRefreshInterval: Int?
         let inventorySections: [String]?
@@ -189,7 +186,6 @@ struct FeaturesConfiguration: Codable {
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveFetchInventory: Bool { fetchInventory ?? true }
         var effectiveShowDashboardCards: ShowDashboardCards { showDashboardCards ?? .empty }
-        var effectiveEnableAPIActions: Bool { enableAPIActions ?? true }
         var effectiveEnableReports: Bool { enableReports ?? true }
         var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
         /// Configured sections, or the built-in list when the key is absent
@@ -236,7 +232,7 @@ struct FeaturesConfiguration: Codable {
 
         static let empty = MobileDevicesSettings(
             enabled: nil, fetchInventory: nil, showDashboardCards: nil,
-            enableAPIActions: nil, enableReports: nil,
+            enableReports: nil,
             inventoryRefreshInterval: nil, inventorySections: nil
         )
 

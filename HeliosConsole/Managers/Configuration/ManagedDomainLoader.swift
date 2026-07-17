@@ -53,7 +53,7 @@ enum ManagedDomainLoader {
         "jamfProtectPassword"
     ]
     static let accessKeys = [
-        "configurationVersion", "role", "roles", "cleanup", "deviceActions"
+        "configurationVersion", "role", "roles", "cleanup"
     ]
     static let featuresKeys = [
         "configurationVersion", "computers", "mobileDevices",
@@ -61,7 +61,7 @@ enum ManagedDomainLoader {
     ]
     static let uiKeys = [
         "configurationVersion", "userInterface", "sidebarItems",
-        "authentication"
+        "deviceTabs", "deviceActionLabels", "authentication"
     ]
 
     /// Reads `domain` via UserDefaults(suiteName:), assembles the known

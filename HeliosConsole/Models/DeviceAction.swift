@@ -103,16 +103,6 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         }
     }
 
-    /// True for actions that call a management API — Jamf Pro, or Apple
-    /// Business Manager for the abmAssign/abmUnassign pair. Everything
-    /// except Screen Share, which opens Apple's local Screen Sharing app.
-    /// The features domain's `computers.enableAPIActions` kill switch
-    /// applies to all of these: switching API actions off means no remote
-    /// mutations from this Mac, regardless of which API they ride.
-    var isJamfAPICommand: Bool {
-        self != .screenShare
-    }
-
     // MARK: - Confirmation dialog copy
     // Deliberately NOT profile-overridable: a menu-label rename must never
     // be able to soften the safety copy on a destructive action.

@@ -129,6 +129,12 @@ struct DevicesHomeView: View {
         .background(Color.black.opacity(0.3))
     }
 
+    /// The tab's strip label: the ui domain's `deviceTabs` rename override for
+    /// this id when delivered, otherwise the built-in `tab.title`.
+    private func title(for tab: DevicesTab) -> String {
+        MDMConfigurationManager.shared.configuration.deviceTabLabelOverride(id: tab.id) ?? tab.title
+    }
+
     private func tabChip(for tab: DevicesTab) -> some View {
         Button {
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -138,7 +144,7 @@ struct DevicesHomeView: View {
             HStack(spacing: 6) {
                 Image(systemName: tab.icon)
                     .font(.system(size: 11, weight: .medium))
-                Text(tab.title)
+                Text(title(for: tab))
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(selectedTab == tab ? .white : .gray)

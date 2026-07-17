@@ -30,11 +30,6 @@
           "title": "Show Dashboard Card",
           "default": true
         },
-        "enableAPIActions": {
-          "type": "boolean",
-          "title": "Enable API Actions",
-          "default": true
-        },
         "enableReports": {
           "type": "boolean",
           "title": "Enable Reports",
@@ -98,11 +93,6 @@
               "default": true
             }
           }
-        },
-        "enableAPIActions": {
-          "type": "boolean",
-          "title": "Enable API Actions",
-          "default": true
         },
         "enableReports": {
           "type": "boolean",
