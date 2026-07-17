@@ -75,6 +75,12 @@
 		F060 /* DeviceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = S060 /* DeviceListItem.swift */; };
 		F061 /* PlatformType.swift in Sources */ = {isa = PBXBuildFile; fileRef = S061 /* PlatformType.swift */; };
 		F062 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = S062 /* DeepLinkRouter.swift */; };
+		F070 /* AccessConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S070 /* AccessConfiguration.swift */; };
+		F071 /* CoreConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S071 /* CoreConfiguration.swift */; };
+		F072 /* CredentialsConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S072 /* CredentialsConfiguration.swift */; };
+		F073 /* FeaturesConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S073 /* FeaturesConfiguration.swift */; };
+		F074 /* ManagedDomainLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = S074 /* ManagedDomainLoader.swift */; };
+		F075 /* UserInterfaceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S075 /* UserInterfaceConfiguration.swift */; };
 		MB_F001 /* HeliosMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MB_S001 /* HeliosMenuBarApp.swift */; };
 		MB_F002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A001 /* Assets.xcassets */; };
 		MB_F003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = S003 /* AppSettings.swift */; };
@@ -98,6 +104,12 @@
 		MB_F056 /* ThemeColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = S056 /* ThemeColors.swift */; };
 		MB_F060 /* DeviceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = S060 /* DeviceListItem.swift */; };
 		MB_F061 /* PlatformType.swift in Sources */ = {isa = PBXBuildFile; fileRef = S061 /* PlatformType.swift */; };
+		MB_F070 /* AccessConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S070 /* AccessConfiguration.swift */; };
+		MB_F071 /* CoreConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S071 /* CoreConfiguration.swift */; };
+		MB_F072 /* CredentialsConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S072 /* CredentialsConfiguration.swift */; };
+		MB_F073 /* FeaturesConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S073 /* FeaturesConfiguration.swift */; };
+		MB_F074 /* ManagedDomainLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = S074 /* ManagedDomainLoader.swift */; };
+		MB_F075 /* UserInterfaceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S075 /* UserInterfaceConfiguration.swift */; };
 		CLF1 /* CleanupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR1 /* CleanupModels.swift */; };
 		CLF2 /* JamfCleanupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR2 /* JamfCleanupClient.swift */; };
 		CLF3 /* JamfProtectClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR3 /* JamfProtectClient.swift */; };
@@ -185,6 +197,12 @@
 		S060 /* DeviceListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListItem.swift; sourceTree = "<group>"; };
 		S061 /* PlatformType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformType.swift; sourceTree = "<group>"; };
 		S062 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
+		S070 /* AccessConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessConfiguration.swift; sourceTree = "<group>"; };
+		S071 /* CoreConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreConfiguration.swift; sourceTree = "<group>"; };
+		S072 /* CredentialsConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialsConfiguration.swift; sourceTree = "<group>"; };
+		S073 /* FeaturesConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesConfiguration.swift; sourceTree = "<group>"; };
+		S074 /* ManagedDomainLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedDomainLoader.swift; sourceTree = "<group>"; };
+		S075 /* UserInterfaceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInterfaceConfiguration.swift; sourceTree = "<group>"; };
 		CLR1 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupModels.swift; sourceTree = "<group>"; };
 		CLR2 /* JamfCleanupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfCleanupClient.swift; sourceTree = "<group>"; };
 		CLR3 /* JamfProtectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfProtectClient.swift; sourceTree = "<group>"; };
@@ -283,8 +301,22 @@
 				S009 /* BiometricAuthManager.swift */,
 				S010 /* KeychainManager.swift */,
 				S011 /* MDMConfigurationManager.swift */,
+				GRP019 /* Configuration */,
 			);
 			path = Managers;
+			sourceTree = "<group>";
+		};
+		GRP019 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				S070 /* AccessConfiguration.swift */,
+				S071 /* CoreConfiguration.swift */,
+				S072 /* CredentialsConfiguration.swift */,
+				S073 /* FeaturesConfiguration.swift */,
+				S074 /* ManagedDomainLoader.swift */,
+				S075 /* UserInterfaceConfiguration.swift */,
+			);
+			path = Configuration;
 			sourceTree = "<group>";
 		};
 		GRP006 /* Services */ = {
@@ -616,6 +648,12 @@
 				MB_F007 /* User.swift in Sources */,
 				MB_F010 /* KeychainManager.swift in Sources */,
 				MB_F011 /* MDMConfigurationManager.swift in Sources */,
+				MB_F070 /* AccessConfiguration.swift in Sources */,
+				MB_F071 /* CoreConfiguration.swift in Sources */,
+				MB_F072 /* CredentialsConfiguration.swift in Sources */,
+				MB_F073 /* FeaturesConfiguration.swift in Sources */,
+				MB_F074 /* ManagedDomainLoader.swift in Sources */,
+				MB_F075 /* UserInterfaceConfiguration.swift in Sources */,
 				MB_F014 /* ComputerInventoryCache.swift in Sources */,
 				MB_F015 /* ComputerInventoryService.swift in Sources */,
 				MB_F016 /* ComputerSearchModels.swift in Sources */,
@@ -663,6 +701,12 @@
 				F009 /* BiometricAuthManager.swift in Sources */,
 				F010 /* KeychainManager.swift in Sources */,
 				F011 /* MDMConfigurationManager.swift in Sources */,
+				F070 /* AccessConfiguration.swift in Sources */,
+				F071 /* CoreConfiguration.swift in Sources */,
+				F072 /* CredentialsConfiguration.swift in Sources */,
+				F073 /* FeaturesConfiguration.swift in Sources */,
+				F074 /* ManagedDomainLoader.swift in Sources */,
+				F075 /* UserInterfaceConfiguration.swift in Sources */,
 				F012 /* AbmAPIService.swift in Sources */,
 				F013 /* AnnouncementService.swift in Sources */,
 				F014 /* ComputerInventoryCache.swift in Sources */,
@@ -850,7 +894,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -862,7 +906,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console;
+				PRODUCT_BUNDLE_IDENTIFIER = com.herojoneslabs.helios.console;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -878,7 +922,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -890,7 +934,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console;
+				PRODUCT_BUNDLE_IDENTIFIER = com.herojoneslabs.helios.console;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -906,7 +950,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -920,7 +964,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console.menubar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.herojoneslabs.helios.console.menubar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -936,7 +980,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -950,7 +994,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.helios.console.menubar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.herojoneslabs.helios.console.menubar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

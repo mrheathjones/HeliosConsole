@@ -217,7 +217,7 @@ class AnnouncementService: ObservableObject {
     
     /// The managed preference domain for MDM-pushed announcements.
     /// Matches the announcements schema ($id) and ConfigurationManager.
-    private let managedPreferenceDomain = "com.helios.console.announcements"
+    private let managedPreferenceDomain = "com.herojoneslabs.helios.console.announcements"
     
     /// Local file path for announcements JSON
     /// /Library/Application Support/Helios/Announcements/announcements.json

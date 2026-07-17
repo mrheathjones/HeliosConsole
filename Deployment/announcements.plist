@@ -6,7 +6,7 @@
   (External Applications / Custom Schema or Upload plist).
 
   Preference Domain MUST match the domain Helios reads:
-      com.helios.console.announcements
+      com.herojoneslabs.helios.console.announcements
   (Matches AnnouncementService.swift `managedPreferenceDomain`, the announcements
    schema $id, and ConfigurationManager.announcementPreferenceDomain.)
 -->

@@ -1,10 +1,14 @@
 //
 //  MDMConfiguration.swift
-//  test
+//  HeliosConsole
 //
-//  Created by heath on 1/19/26.
+//  Aggregated app-facing configuration, composed from the five managed
+//  preference domains (com.herojoneslabs.helios.console.core / .credentials / .access /
+//  .features / .ui — see docs/ConfigProfileMigration.md). The flat fields
+//  below are the stable consumer surface; the optional domain-model
+//  properties expose the newer, not-yet-flattened surface (device actions,
+//  feature modules, authentication, UI extras).
 //
-
 
 import Foundation
 
@@ -63,6 +67,25 @@ struct MDMConfiguration: Codable {
     /// (preferred). Sensitive — the source managed-pref plist is world-readable.
     let entraCertPEM: String?
 
+    // MARK: - New (not-yet-flattened) domain surface
+    // Parsed and exposed by the config layer; per-view enforcement status is
+    // tracked in docs/ConfigProfileMigration.md. All optional — absent when
+    // the delivering domain/profile is absent.
+
+    /// Per-action device-command allow-list (access domain).
+    let deviceActions: AccessConfiguration.DeviceActionsSettings?
+
+    /// Feature modules & tuning (features domain, whole model).
+    let features: FeaturesConfiguration?
+
+    /// Sign-in behavior preferences (ui domain).
+    let authentication: AuthenticationSettings?
+
+    /// Full branding/UX section (ui domain) — companyName, logoURL,
+    /// accentColor, defaultColorScheme, show* switches beyond the flattened
+    /// appTitle/appSubtitle/supportURL.
+    let userInterfaceExtras: UserInterfaceSettings?
+
     /// Whether Entra device cleanup can run: tenant + client id must be present
     /// along with at least one credential (certificate PEM or client secret).
     var isEntraConfigured: Bool {
@@ -73,6 +96,16 @@ struct MDMConfiguration: Codable {
         let hasCert = (entraCertPEM?.isEmpty == false)
         let hasSecret = (entraClientSecret?.isEmpty == false)
         return hasCert || hasSecret
+    }
+
+    /// Whether the required connection settings were delivered: core-domain
+    /// serverURL + masterClientID non-empty AND credentials-domain
+    /// jamfProClientSecret non-empty. The manager logs exactly which
+    /// domain/keys are missing when this is false.
+    var isConfigured: Bool {
+        !jamfURL.trimmingCharacters(in: .whitespaces).isEmpty
+            && !masterClientID.trimmingCharacters(in: .whitespaces).isEmpty
+            && !masterClientSecret.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var isABMConfigured: Bool {
@@ -128,7 +161,11 @@ struct MDMConfiguration: Codable {
         entraTenantId: String? = nil,
         entraClientId: String? = nil,
         entraClientSecret: String? = nil,
-        entraCertPEM: String? = nil
+        entraCertPEM: String? = nil,
+        deviceActions: AccessConfiguration.DeviceActionsSettings? = nil,
+        features: FeaturesConfiguration? = nil,
+        authentication: AuthenticationSettings? = nil,
+        userInterfaceExtras: UserInterfaceSettings? = nil
     ) {
         self.jamfURL = jamfURL
         self.masterClientID = masterClientID
@@ -156,6 +193,102 @@ struct MDMConfiguration: Codable {
         self.entraClientId = entraClientId
         self.entraClientSecret = entraClientSecret
         self.entraCertPEM = entraCertPEM
+        self.deviceActions = deviceActions
+        self.features = features
+        self.authentication = authentication
+        self.userInterfaceExtras = userInterfaceExtras
+    }
+
+    // MARK: - Composition from the five managed domains
+
+    /// Resolved Entra Graph credentials (pointer domain → values), produced
+    /// by the aggregation layer's resolver from `CoreConfiguration.entra`.
+    struct ResolvedEntraCredentials {
+        var domain: String?
+        var tenantId: String?
+        var clientId: String?
+        var clientSecret: String?
+        var certPEM: String?
+
+        static let none = ResolvedEntraCredentials()
+    }
+
+    /// Composes the flat consumer surface from the five domain models.
+    /// Any absent domain contributes its documented defaults; validity
+    /// (isConfigured) is judged by the aggregation layer, never here.
+    init(
+        core: CoreConfiguration?,
+        credentials: CredentialsConfiguration?,
+        access: AccessConfiguration?,
+        features: FeaturesConfiguration?,
+        ui: UserInterfaceConfiguration?,
+        resolvedEntra: ResolvedEntraCredentials = .none
+    ) {
+        let jamfPro = core?.jamfPro
+        let uiSettings = ui?.userInterface
+
+        // ABM identity is only surfaced when the block is delivered AND
+        // enabled (parity with the pre-split loader); the private key rides
+        // along from the credentials domain.
+        var abmClientId: String? = nil
+        var abmKeyId: String? = nil
+        var abmPrivateKey: String? = nil
+        if let abm = core?.appleBusinessManager, abm.effectiveEnabled {
+            abmClientId = abm.clientID
+            abmKeyId = abm.keyID
+            abmPrivateKey = credentials?.abmPrivateKey
+        }
+
+        // Managed sidebar override: usable ui-domain items win; otherwise
+        // keep the built-in default sidebar.
+        let managedSidebar = (ui?.effectiveSidebarItems ?? [])
+            .filter { $0.isUsable }
+            .map {
+                SidebarItemConfig(
+                    id: $0.effectiveID,
+                    icon: $0.effectiveIcon,
+                    title: $0.effectiveTitle,
+                    isEnabled: $0.effectiveIsEnabled,
+                    order: $0.effectiveOrder
+                )
+            }
+        let sidebarItems = managedSidebar.isEmpty
+            ? MDMConfiguration.defaultSidebarItems
+            : managedSidebar
+
+        self.init(
+            jamfURL: jamfPro?.serverURL ?? "",
+            masterClientID: jamfPro?.masterClientID ?? "",
+            masterClientSecret: credentials?.jamfProClientSecret ?? "",
+            appTitle: uiSettings?.effectiveAppTitle ?? "Helios",
+            appSubtitle: uiSettings?.effectiveAppSubtitle ?? "Console",
+            sidebarItems: sidebarItems,
+            requiredRoleName: jamfPro?.effectiveRequiredRoleName ?? "SVC_WATCHER_USER",
+            supportURL: uiSettings?.effectiveSupportURL,
+            localAdminUsername: core?.localAdministration?.effectiveUsername ?? "macadmin",
+            screenShareEnabled: jamfPro?.effectiveScreenShareEnabled ?? false,
+            abmClientId: abmClientId,
+            abmKeyId: abmKeyId,
+            abmPrivateKey: abmPrivateKey,
+            // Fail-closed: absent access domain → nil role → .user.
+            role: access?.role,
+            cleanupStaleDays: access?.effectiveCleanup.effectiveStaleDays ?? 90,
+            cleanupDefaultStaticGroupID: access?.cleanup?.defaultStaticGroupID,
+            cleanupDefaultSiteID: access?.cleanup?.defaultSiteID,
+            protectEnabled: core?.jamfProtect?.effectiveEnabled ?? false,
+            protectURL: core?.jamfProtect?.url,
+            protectClientID: core?.jamfProtect?.clientID,
+            protectPassword: credentials?.jamfProtectPassword,
+            entraCredentialDomain: resolvedEntra.domain,
+            entraTenantId: resolvedEntra.tenantId,
+            entraClientId: resolvedEntra.clientId,
+            entraClientSecret: resolvedEntra.clientSecret,
+            entraCertPEM: resolvedEntra.certPEM,
+            deviceActions: access?.deviceActions,
+            features: features,
+            authentication: ui?.authentication,
+            userInterfaceExtras: uiSettings
+        )
     }
     
     struct SidebarItemConfig: Codable, Identifiable {
@@ -174,30 +307,44 @@ struct MDMConfiguration: Codable {
         }
     }
     
-    // Default configuration (fallback if no MDM profile)
+    /// The app's built-in sidebar, used when no usable managed override is
+    /// delivered by the ui domain.
+    static let defaultSidebarItems: [SidebarItemConfig] = [
+        SidebarItemConfig(id: "dashboard", icon: "chart.bar.fill", title: "Dashboard", order: 1),
+        SidebarItemConfig(id: "enterprise", icon: "building.2.fill", title: "Enterprise", order: 2),
+        SidebarItemConfig(id: "groundcontrol", icon: "apps.iphone", title: "GroundControl", order: 3),
+        SidebarItemConfig(id: "depsearch", icon: "magnifyingglass", title: "DEP Search", order: 4),
+        SidebarItemConfig(id: "announcements", icon: "bolt.fill", title: "Announcements", order: 5),
+        SidebarItemConfig(id: "settings", icon: "gearshape.fill", title: "Settings", order: 6)
+    ]
+
+    // Default configuration (fallback when no managed domain is delivered).
+    // Deliberately EMPTY connection strings — no placeholder values that a
+    // consumer could mistake for real configuration; validity checks are
+    // plain non-empty tests.
     static let `default` = MDMConfiguration(
-        jamfURL: "https://myorg.jamfcloud.com",
-        masterClientID: "your-master-client-id",
-        masterClientSecret: "your-master-client-secret",
+        jamfURL: "",
+        masterClientID: "",
+        masterClientSecret: "",
         appTitle: "Helios",
         appSubtitle: "Console",
-        sidebarItems: [
-            SidebarItemConfig(id: "dashboard", icon: "chart.bar.fill", title: "Dashboard", order: 1),
-            SidebarItemConfig(id: "enterprise", icon: "building.2.fill", title: "Enterprise", order: 2),
-            SidebarItemConfig(id: "groundcontrol", icon: "apps.iphone", title: "GroundControl", order: 3),
-            SidebarItemConfig(id: "depsearch", icon: "magnifyingglass", title: "DEP Search", order: 4),
-            SidebarItemConfig(id: "announcements", icon: "bolt.fill", title: "Announcements", order: 5),
-            SidebarItemConfig(id: "settings", icon: "gearshape.fill", title: "Settings", order: 6)
-        ],
+        sidebarItems: defaultSidebarItems,
         requiredRoleName: "SVC_WATCHER_USER",
-        supportURL: "https://support.yourcompany.com",
+        supportURL: nil,
         localAdminUsername: "macadmin",
         screenShareEnabled: false,
         abmClientId: nil,
         abmKeyId: nil,
         abmPrivateKey: nil,
-        // No-config (local dev) fallback shows Cleanup. Real deployments must
-        // set role=Admin in the profile; an absent key fails closed (hidden).
-        role: "Admin"
+        // DEBUG keeps Cleanup visible for local dev without profiles; a
+        // RELEASE build with no access profile fails closed (role nil →
+        // .user, Cleanup hidden).
+        role: { () -> String? in
+            #if DEBUG
+            return "Admin"
+            #else
+            return nil
+            #endif
+        }()
     )
 }

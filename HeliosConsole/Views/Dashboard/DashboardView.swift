@@ -52,7 +52,7 @@ struct DashboardView: View {
                 handleDeepLinkNavigation()
             }
         }
-        .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name("com.helios.console.deeplink"))) { _ in
+        .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name("com.herojoneslabs.helios.console.deeplink"))) { _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 deepLinkRouter.checkForPendingDeepLink()
                 if deepLinkRouter.pendingRequest != nil {

@@ -6,14 +6,18 @@ This folder is self-contained:
 ```
 Deployment/
   build-pkg.sh                       channel-based sign + package workflow
-  JamfAppCustomSettingsSchema.json   Application & Custom Settings schema (managed config)
-  sample.mobileconfig                ready-to-edit example configuration profile
+  sample.mobileconfig                ready-to-edit example profile (all 5 domains, testing only)
   OnDevice/
     ExtensionAttributes/
       EA_Helios_Console_Version.sh   reports installed version into inventory
     Scripts/
       uninstall_helios_console.sh    removes the app(s), receipts, and local prefs
 ```
+
+The Jamf **Application & Custom Settings schemas** (managed config) live in the repo's
+[`schemas/`](../schemas/) folder — one per preference domain (see section 3). The full
+old-key → new-domain migration story is in
+[`docs/ConfigProfileMigration.md`](../docs/ConfigProfileMigration.md).
 
 The built `.pkg`s land in the repo's `dist/` folder (gitignored).
 
@@ -77,56 +81,104 @@ target — package/scope it separately only if you ship it.
 
 ---
 
-## 3. Configure the app (managed configuration)
+## 3. Configure the app (managed configuration — 5 domains)
 
-Helios reads managed settings from a Configuration Profile whose **preference domain = the app's
-bundle id, `com.helios.console`**. Managed values are **forced** and lock the matching in-app fields.
+Helios reads managed settings from **five preference domains**, each deployed as its
+**own** Configuration Profile. The app's bundle id (`com.herojoneslabs.helios.console`) is **no longer a
+managed-config domain** — a profile targeting it does nothing. Managed values take effect
+at **app relaunch**. How they interact with the in-app Settings screen varies by key:
 
-- **Jamf Pro → Configuration Profiles → Application & Custom Settings → External Applications →
-  Custom Schema.**
-- Preference domain: **`com.helios.console`**.
-- Paste **`Deployment/JamfAppCustomSettingsSchema.json`** and fill in the values, or import
-  **`Deployment/sample.mobileconfig`** as a starting point.
+- **Profile-only** — the connection/credential values (`jamfPro.*`, `jamfProClientSecret`,
+  `entra.*`) have **no editable in-app fields**; the profile is their only source.
+- **MDM defaults, locally overridable** — the Cleanup tunables (`cleanup.staleDays`,
+  `jamfProtect.enabled` / `url` / `clientID`) are profile-supplied **defaults**: an in-app
+  Settings edit stores a local override that silently **wins over the profile** until
+  cleared (`defaults delete com.herojoneslabs.helios.console Cleanup.StaleDays`, etc.).
+- **Locks when delivered** — only the Jamf Protect **password** (`jamfProtectPassword`)
+  locks its in-app field when profile-delivered.
 
-The schema is **nested** — keep the object groupings (`jamfPro`, `userInterface`,
-`appleBusinessManager`, `cleanup`, `jamfProtect`) and the top-level `role`. Required:
-`jamfPro.serverURL`, `jamfPro.masterClientID`, `jamfPro.masterClientSecret`.
+Create five profiles, each via **Jamf Pro → Configuration Profiles → Application & Custom
+Settings → External Applications → Custom Schema**, pasting the matching schema:
 
-### Role-based access (Cleanup gate)
+| # | Preference domain | Schema (in `schemas/`) | Contents | Scope |
+|---|---|---|---|---|
+| 1 | `com.herojoneslabs.helios.console.core` | `Helios_Core_SCHEMA.json` | Jamf Pro connection, ABM / Jamf Protect / Entra-pointer, local admin | All managed Macs |
+| 2 | `com.herojoneslabs.helios.console.credentials` | `Helios_Credentials_SCHEMA.json` | **Secrets only** (`jamfProClientSecret`, `abmPrivateKey`, `jamfProtectPassword`) | All managed Macs (per variant) |
+| 3 | `com.herojoneslabs.helios.console.access` | `Helios_Access_SCHEMA.json` | `role`, `cleanup`, `deviceActions` | **Admin Macs ONLY** |
+| 4 | `com.herojoneslabs.helios.console.features` | `Helios_Features_SCHEMA.json` | computers / mobileDevices / healthScorecard / deviceHealth / reports | All managed Macs |
+| 5 | `com.herojoneslabs.helios.console.ui` | `Helios_UI_SCHEMA.json` | branding, sidebarItems, authentication | All managed Macs |
+
+Required for the app to be configured: **core** `jamfPro.serverURL` + `jamfPro.masterClientID`
+AND **credentials** `jamfProClientSecret`. Partial delivery → the app reports itself
+unconfigured and logs which domain is missing. `Deployment/sample.mobileconfig` bundles all
+five payloads into one profile **for local/manual testing only** — in Jamf they must be five
+separate profiles so they can be scoped (and rotated) independently.
+
+> **Bundle-ID rebrand (2026-07):** all domains above use the rebranded
+> `com.herojoneslabs.helios.console.*` prefix. Any profile created earlier under a
+> `com.helios.console.*` domain silently delivers nothing — edit or re-create it with the
+> new domain string. The **separate announcements profile** is affected too: it must be
+> **re-created** under `com.herojoneslabs.helios.console.announcements`
+> (`schemas/Helios_Announcements_SCHEMA.json`, same keys) — a profile still targeting the
+> old announcements domain is ignored. Deployed **Entra pointer domains**
+> (`entra.credentialDomain`, admin-chosen) can be reused as-is. Full rebrand fallout
+> (local prefs reset, Protect password re-entry, PPPC / Smart Groups, notarization):
+> [`docs/ConfigProfileMigration.md`](../docs/ConfigProfileMigration.md) §9.
+>
+> **Upgrading over the old app:** use a pkg built at **1.0-d.23 or later**. Older pkgs
+> installed next to the pre-rebrand app land in `/Applications/HeliosConsole.localized/`
+> (Finder shows it as "HeliosConsole") because the installer won't replace a bundle with a
+> different bundle id; d.23+ pkgs remove the old app via a preinstall script and install
+> cleanly to `/Applications`. See §9 of the migration guide for manual cleanup.
+
+### Role-based access (Cleanup gate — access domain)
 
 The destructive **Cleanup** feature (bulk unmanage / move / add-to-group / delete of stale device
 records, plus Jamf Protect deletion) is **fail-closed**:
 
-- It appears **only** when `role` is exactly **`Admin`**.
-- `Support`, `User`, blank, a missing key, or any typo → Cleanup is **hidden**.
+- It appears **only** when the access profile's `role` is exactly **`Admin`**.
+- `Support`, `User`, blank, a missing key, a missing access profile, or any typo → Cleanup
+  is **hidden**. The schema deliberately has **no default** for `role`.
 
 **Because a config profile is delivered to the device, the role string alone is a UI gate, not a
-security boundary.** Make it a real boundary by:
+security boundary.** Make it a real boundary with the paired-scoping rule in section 4.
 
-1. Giving the master API client **write/delete scopes only** where Cleanup is intended, and
-2. **Scoping the `role=Admin` profile (and the write-scoped master client it carries) in Jamf to
-   admin Macs only.** Non-admin Macs should receive a profile with `role` = `Support`/`User` and a
-   read-only master client.
+### Jamf Protect (optional — core + credentials)
 
-### Jamf Protect (optional)
+Set `jamfProtect.enabled`, `url`, and `clientID` **in the core profile** to surface Protect
+counts and enable Protect-record deletion (these three act as **defaults** — in-app Settings
+edits override them locally; see section 3). The Protect **password** is two-tier:
 
-Set `jamfProtect.enabled`, `url`, and `clientID` to surface Protect counts and enable Protect-record
-deletion. The Protect **password is entered in the app and stored in the Keychain** — it is never
-delivered in the profile.
+- Deliver it as `jamfProtectPassword` in the **credentials** profile → that value is used
+  and the in-app password field **locks**; or
+- Omit it → it is entered **in-app** and stored in the Keychain
+  (`com.herojoneslabs.helios.console.protect.password`).
 
 ---
 
-## 4. Create the Jamf API client
+## 4. Create the Jamf API client (and pair it with the access profile)
 
 **Jamf Pro → Settings → API Roles and Clients.**
 
 - **Read-only operators (Support/User machines):** an API Role with **Read Computers / Read Computer
   Inventory Collection** (and Read Mobile Devices if used). Assign to an API Client; deliver its
-  id/secret as the master client.
+  client_id in the **core** profile (`jamfPro.masterClientID`) and its client_secret in a
+  **read-only credentials** profile variant (`jamfProClientSecret`).
 - **Admin operators (Cleanup):** a role that additionally grants **Update Computers, Delete
   Computers, Read/Update Static Computer Groups, Read Sites,** and **Send Computer Unmanage
-  Command** — the scopes the Cleanup actions require. Deliver this client **only** to the
-  `role=Admin`, admin-scoped profile.
+  Command** — the scopes the Cleanup actions require. Deliver this client's secret in a
+  **write-capable credentials** profile variant.
+
+**Paired-scoping rule:** the **write-capable credentials variant** and the **access profile
+granting `role=Admin`** must be scoped to the **same Macs**. Never deliver write-capable
+credentials to a Mac without the matching Admin access profile, and never grant `role=Admin`
+to Macs carrying only read-only credentials. Non-admin Macs get the read-only credentials
+variant and **no access profile at all** (fail-closed → `role=User`).
+
+Splitting secrets into their own tiny profile is what makes **rotation** cheap: rotating a
+leaked or expiring secret means editing and re-pushing only the credentials profile — core,
+access, features, and ui are untouched. (Managed-pref plists are **world-readable** on disk;
+scope tightly, use least-privilege roles, rotate on any suspected exposure.)
 
 ---
 
@@ -146,18 +198,35 @@ targeting (e.g. "Helios Console < 1.0").
 ## 6. Uninstall
 
 Add `OnDevice/Scripts/uninstall_helios_console.sh` as a **Jamf script** and run it via a policy to
-remove the app(s), forget pkg receipts, and clear the console user's local prefs + Cleanup Keychain
-item. Separately **unscope/remove the Configuration Profile** in Jamf (the script does not touch the
-managed profile).
+remove the app(s), forget pkg receipts, and clear the console user's local prefs + Helios Keychain
+items (the Cleanup/Protect password plus the five auth/Jamf sign-in accounts, current and legacy
+spellings). Separately **unscope/remove ALL FIVE Configuration Profiles** in Jamf — core, credentials,
+access, features, ui — (the script does not touch managed profiles). If a Mac was ever configured
+with the developer `defaults write` story (see `docs/ConfigProfileMigration.md` §6), user-level
+`~/Library/Preferences/com.herojoneslabs.helios.console.{core,credentials,access,features,ui}.plist` files may
+remain — remove them with `defaults delete <domain>`, especially the credentials domain.
 
 ---
 
 ## 7. End-to-end verification
 
 1. Build a `dev` pkg → install on a test Mac → `/Applications/HeliosConsole.app` launches.
-2. Push the Configuration Profile (`role=Admin`) → the **Cleanup** sidebar item appears; the matching
-   Settings fields lock. Push with `role=Support` → Cleanup is **hidden**.
-3. `sudo jamf recon` → the **Helios Console Version** EA populates on the inventory record.
-4. (Admin) Against a **test** Jamf instance, exercise a safe Cleanup action (move-to-site) on a
+2. Push all five profiles → confirm the plists landed:
+   `ls /Library/Managed\ Preferences/com.herojoneslabs.helios.console.{core,credentials,access,features,ui}.plist`
+   (the access plist appears only on admin-scoped Macs — correct).
+3. Relaunch Helios → it reports configured (core + credentials both present); if
+   `jamfProtectPassword` was delivered, the in-app Protect password field locks (the only
+   field that locks — connection/credential values have no in-app fields, and the Cleanup
+   tunables show the profile values only as defaults; see section 3). Unscope only the
+   credentials profile and relaunch → the app reports
+   unconfigured and logs the missing domain; re-scope it afterwards.
+4. Access profile with `role=Admin` → the **Cleanup** sidebar item appears. No access profile
+   (or `role=Support`) → Cleanup is **hidden** (fail-closed).
+5. `sudo jamf recon` → the **Helios Console Version** EA populates on the inventory record.
+6. (Admin) Against a **test** Jamf instance, exercise a safe Cleanup action (move-to-site) on a
    throwaway record before trusting the delete path.
-5. Run the uninstall policy → app removed; re-scope the profile away → fields unlock / Cleanup hides.
+7. Run the uninstall policy → app removed; unscope the five profiles → the Protect password
+   field unlocks / Cleanup hides at next launch.
+
+The full multi-profile checklist (including relaunch-required behavior and partial-delivery
+checks) lives in [`docs/ConfigProfileMigration.md`](../docs/ConfigProfileMigration.md) §4.

@@ -7,7 +7,8 @@ Native macOS MDM console for Jamf Pro environments. Provides fleet health dashbo
 - Open `HeliosConsole.xcodeproj` in Xcode
 - Two schemes: `HeliosConsole` (main app) and `HeliosMenuBar` (companion)
 - Requires macOS deployment target (native Mac app, not Catalyst)
-- MDM configuration needed for API connectivity (or use mock auth for development)
+- Managed configuration needed for API connectivity — for development, `defaults write` the
+  suite domains (e.g. `com.herojoneslabs.helios.console.core`, `com.herojoneslabs.helios.console.credentials`) or use mock auth
 
 ## Architecture
 - **UI Framework:** SwiftUI with selective AppKit bridging (NSImage, NSApp appearance)
@@ -28,7 +29,13 @@ Native macOS MDM console for Jamf Pro environments. Provides fleet health dashbo
 - Jamf sometimes reports iPads as iOS — detection uses model identifier fallback
 - Computer model (Computer.swift) has ~30 nested types — read carefully before modifying
 - Master credentials = inventory access; User credentials = search access (separate auth flows)
-- MDMConfiguration loads from 4 sources in priority order (MDM > UserDefaults > app defaults > hardcoded)
+- MDMConfiguration is composed from 5 managed preference domains (com.herojoneslabs.helios.console.core /
+  .credentials / .access / .features / .ui), each read via `UserDefaults(suiteName:)` — NEVER
+  `persistentDomain(forName:)` — by ManagedDomainLoader (Managers/Configuration/). No legacy
+  flat-key fallback; profile changes take effect at relaunch; missing access profile fails
+  closed to role=User (see docs/ConfigProfileMigration.md)
+- The dead legacy config layer (ConfigurationManager, AppConfiguration,
+  AnnouncementConfiguration) was removed — MDMConfigurationManager is the only config manager
 - HealthMetricsCalculator uses Combine debouncing — changes to cache structure require updating observers
 
 ## File Organization

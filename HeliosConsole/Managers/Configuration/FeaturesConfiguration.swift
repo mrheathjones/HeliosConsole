@@ -1,0 +1,338 @@
+//
+//  FeaturesConfiguration.swift
+//  HeliosConsole
+//
+//  Helios Console — Features tier (managed-preferences domain model).
+//
+//  Preference Domain MUST match the domain Helios reads:
+//      com.herojoneslabs.helios.console.features
+//  (Matches `FeaturesConfiguration.domain` below, the schema $id in
+//   schemas/Helios_Features_SCHEMA.json, and the domain table in
+//   docs/ConfigProfileMigration.md — keep all three in sync.)
+//
+//  Loaded by ManagedDomainLoader: the domain's top-level keys are read out of
+//  UserDefaults(suiteName: FeaturesConfiguration.domain) into a [String: Any],
+//  serialized with PropertyListSerialization, and decoded here via
+//  PropertyListDecoder. ALL stored properties are optional so a missing (or
+//  partially delivered) key never fails the whole domain decode; defaults live
+//  in the computed `effective*` accessors.
+//
+//  These keys are parsed and exposed by the app config layer; per-view
+//  enforcement status is tracked in docs/ConfigProfileMigration.md.
+//
+
+import Foundation
+
+/// Feature modules & tuning for Helios Console — delivered via the
+/// `com.herojoneslabs.helios.console.features` managed-preferences domain (all managed Macs).
+struct FeaturesConfiguration: Codable {
+
+    /// Managed-preferences domain this model is decoded from.
+    static let domain = "com.herojoneslabs.helios.console.features"
+
+    // MARK: - Stored properties (all optional — missing keys never fail decode)
+
+    /// Informational version stamp; the loader logs it, nothing else reads it.
+    let configurationVersion: String?
+    let computers: ComputersSettings?
+    let mobileDevices: MobileDevicesSettings?
+    let healthScorecard: HealthScorecardSettings?
+    let deviceHealth: DeviceHealthSettings?
+    let reports: ReportsSettings?
+
+    // MARK: - Effective accessors (defaults per schemas/Helios_Features_SCHEMA.json)
+
+    var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
+    var effectiveComputers: ComputersSettings { computers ?? .empty }
+    var effectiveMobileDevices: MobileDevicesSettings { mobileDevices ?? .empty }
+    var effectiveHealthScorecard: HealthScorecardSettings { healthScorecard ?? .empty }
+    var effectiveDeviceHealth: DeviceHealthSettings { deviceHealth ?? .empty }
+    var effectiveReports: ReportsSettings { reports ?? .empty }
+
+    /// A fully-absent payload; every `effective*` accessor then yields the
+    /// schema defaults.
+    static let empty = FeaturesConfiguration(
+        configurationVersion: nil,
+        computers: nil,
+        mobileDevices: nil,
+        healthScorecard: nil,
+        deviceHealth: nil,
+        reports: nil
+    )
+
+    // MARK: - Computers
+
+    struct ComputersSettings: Codable {
+        let enabled: Bool?
+        let fetchInventory: Bool?
+        let showDashboardCard: Bool?
+        let enableAPIActions: Bool?
+        let enableReports: Bool?
+        let inventoryRefreshInterval: Int?
+        let inventorySections: [String]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveFetchInventory: Bool { fetchInventory ?? true }
+        var effectiveShowDashboardCard: Bool { showDashboardCard ?? true }
+        var effectiveEnableAPIActions: Bool { enableAPIActions ?? true }
+        var effectiveEnableReports: Bool { enableReports ?? true }
+        var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
+        var effectiveInventorySections: [String] {
+            inventorySections ?? Self.defaultInventorySections
+        }
+
+        static let defaultInventorySections = [
+            "GENERAL", "HARDWARE", "OPERATING_SYSTEM", "USER_AND_LOCATION",
+            "STORAGE", "SECURITY", "DISK_ENCRYPTION", "CONFIGURATION_PROFILES",
+            "GROUP_MEMBERSHIPS", "SOFTWARE_UPDATES"
+        ]
+
+        static let empty = ComputersSettings(
+            enabled: nil, fetchInventory: nil, showDashboardCard: nil,
+            enableAPIActions: nil, enableReports: nil,
+            inventoryRefreshInterval: nil, inventorySections: nil
+        )
+    }
+
+    // MARK: - Mobile Devices
+
+    struct MobileDevicesSettings: Codable {
+        let enabled: Bool?
+        let fetchInventory: Bool?
+        let showDashboardCards: ShowDashboardCards?
+        let enableAPIActions: Bool?
+        let enableReports: Bool?
+        let inventoryRefreshInterval: Int?
+        let inventorySections: [String]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveFetchInventory: Bool { fetchInventory ?? true }
+        var effectiveShowDashboardCards: ShowDashboardCards { showDashboardCards ?? .empty }
+        var effectiveEnableAPIActions: Bool { enableAPIActions ?? true }
+        var effectiveEnableReports: Bool { enableReports ?? true }
+        var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
+        var effectiveInventorySections: [String] {
+            inventorySections ?? Self.defaultInventorySections
+        }
+
+        static let defaultInventorySections = [
+            "GENERAL", "HARDWARE", "USER_AND_LOCATION", "SECURITY",
+            "CONFIGURATION_PROFILES", "GROUP_MEMBERSHIPS"
+        ]
+
+        static let empty = MobileDevicesSettings(
+            enabled: nil, fetchInventory: nil, showDashboardCards: nil,
+            enableAPIActions: nil, enableReports: nil,
+            inventoryRefreshInterval: nil, inventorySections: nil
+        )
+
+        /// Per-platform dashboard-card visibility. Keys are the exact platform
+        /// spellings from the schema (`iOS`, `iPadOS`, `visionOS`).
+        struct ShowDashboardCards: Codable {
+            let iOS: Bool?
+            let iPadOS: Bool?
+            let visionOS: Bool?
+
+            var effectiveIOS: Bool { iOS ?? true }
+            var effectiveIPadOS: Bool { iPadOS ?? true }
+            var effectiveVisionOS: Bool { visionOS ?? true }
+
+            static let empty = ShowDashboardCards(iOS: nil, iPadOS: nil, visionOS: nil)
+        }
+    }
+
+    // MARK: - Health Scorecard
+
+    struct HealthScorecardSettings: Codable {
+        let enabled: Bool?
+        let metrics: [HealthMetricSetting]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveMetrics: [HealthMetricSetting] { metrics ?? Self.defaultMetrics }
+
+        static let empty = HealthScorecardSettings(enabled: nil, metrics: nil)
+
+        /// The 8 default scorecard metrics (mirrors the schema's `metrics` default).
+        static let defaultMetrics: [HealthMetricSetting] = [
+            HealthMetricSetting(id: "checkedIn", enabled: true, displayName: "Recent Check-Ins",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            HealthMetricSetting(id: "managed", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            HealthMetricSetting(id: "supervised", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            HealthMetricSetting(id: "fileVaultEnabled", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS"]),
+            HealthMetricSetting(id: "firewallEnabled", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS"]),
+            HealthMetricSetting(id: "gatekeeperEnabled", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS"]),
+            HealthMetricSetting(id: "sipEnabled", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS"]),
+            HealthMetricSetting(id: "softwareUpdateCompliance", enabled: true, displayName: "",
+                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
+                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"])
+        ]
+    }
+
+    /// One health-scorecard metric row.
+    struct HealthMetricSetting: Codable {
+        let id: String?
+        let enabled: Bool?
+        let displayName: String?
+        let thresholds: Thresholds?
+        let checkedInDays: Int?
+        let platforms: [String]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveDisplayName: String { displayName ?? "" }
+        var effectiveThresholds: Thresholds { thresholds ?? .empty }
+        var effectiveCheckedInDays: Int { checkedInDays ?? 7 }
+        var effectivePlatforms: [String] { platforms ?? [] }
+
+        struct Thresholds: Codable {
+            let critical: Int?
+            let warning: Int?
+
+            var effectiveCritical: Int { critical ?? 50 }
+            var effectiveWarning: Int { warning ?? 80 }
+
+            static let empty = Thresholds(critical: nil, warning: nil)
+        }
+    }
+
+    // MARK: - Device Health
+
+    struct DeviceHealthSettings: Codable {
+        let metrics: [DeviceHealthMetricSetting]?
+
+        var effectiveMetrics: [DeviceHealthMetricSetting] { metrics ?? Self.defaultMetrics }
+
+        static let empty = DeviceHealthSettings(metrics: nil)
+
+        /// The 16 default device-health metrics (mirrors the schema's `metrics` default).
+        static let defaultMetrics: [DeviceHealthMetricSetting] = [
+            DeviceHealthMetricSetting(id: "managementStatus", enabled: true, displayName: "",
+                                      category: "management",
+                                      platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            DeviceHealthMetricSetting(id: "supervisionStatus", enabled: true, displayName: "",
+                                      category: "management",
+                                      platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            DeviceHealthMetricSetting(id: "mdmCapability", enabled: true, displayName: "",
+                                      category: "management", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "userApprovedMDM", enabled: true, displayName: "",
+                                      category: "management", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "bootstrapToken", enabled: true, displayName: "",
+                                      category: "management", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "fileVault", enabled: true, displayName: "",
+                                      category: "security", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "firewall", enabled: true, displayName: "",
+                                      category: "security", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "gatekeeper", enabled: true, displayName: "",
+                                      category: "security", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "sip", enabled: true, displayName: "",
+                                      category: "security", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "secureToken", enabled: true, displayName: "",
+                                      category: "security", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "recoveryLock", enabled: true, displayName: "",
+                                      category: "security", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "activationLock", enabled: true, displayName: "",
+                                      category: "security",
+                                      platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            DeviceHealthMetricSetting(id: "remoteDesktop", enabled: true, displayName: "",
+                                      category: "status", platforms: ["macOS"]),
+            DeviceHealthMetricSetting(id: "softwareUpdate", enabled: true, displayName: "",
+                                      category: "compliance",
+                                      platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            DeviceHealthMetricSetting(id: "lastCheckIn", enabled: true, displayName: "",
+                                      category: "status",
+                                      platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
+            DeviceHealthMetricSetting(id: "appleCare", enabled: true, displayName: "",
+                                      category: "status",
+                                      platforms: ["macOS", "iOS", "iPadOS", "visionOS"])
+        ]
+    }
+
+    /// One device-health metric row. `category` is one of
+    /// management / security / status / compliance (schema enum); kept as a
+    /// raw string so an unrecognized value degrades gracefully instead of
+    /// failing the domain decode.
+    struct DeviceHealthMetricSetting: Codable {
+        let id: String?
+        let enabled: Bool?
+        let displayName: String?
+        let category: String?
+        let platforms: [String]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveDisplayName: String { displayName ?? "" }
+        var effectivePlatforms: [String] { platforms ?? [] }
+    }
+
+    // MARK: - Reports
+
+    struct ReportsSettings: Codable {
+        let enabled: Bool?
+        let availableReports: [ReportSetting]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveAvailableReports: [ReportSetting] {
+            availableReports ?? Self.defaultAvailableReports
+        }
+
+        static let empty = ReportsSettings(enabled: nil, availableReports: nil)
+
+        /// The 8 default reports (mirrors the schema's `availableReports` default).
+        static let defaultAvailableReports: [ReportSetting] = [
+            ReportSetting(id: "deviceInventory", enabled: true, displayName: "",
+                          category: "inventory",
+                          platforms: ["macOS", "iOS", "iPadOS", "visionOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "securityCompliance", enabled: true, displayName: "",
+                          category: "security", platforms: ["macOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "softwareUpdates", enabled: true, displayName: "",
+                          category: "compliance",
+                          platforms: ["macOS", "iOS", "iPadOS", "visionOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "applicationInventory", enabled: true, displayName: "",
+                          category: "inventory", platforms: ["macOS", "iOS", "iPadOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "appleCareStatus", enabled: true, displayName: "",
+                          category: "management",
+                          platforms: ["macOS", "iOS", "iPadOS", "visionOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "certificateExpiration", enabled: true, displayName: "",
+                          category: "security", platforms: ["macOS", "iOS", "iPadOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "fileVaultStatus", enabled: true, displayName: "",
+                          category: "security", platforms: ["macOS"],
+                          exportFormats: ["csv", "json"]),
+            ReportSetting(id: "configurationProfiles", enabled: true, displayName: "",
+                          category: "management",
+                          platforms: ["macOS", "iOS", "iPadOS", "visionOS"],
+                          exportFormats: ["csv", "json"])
+        ]
+    }
+
+    /// One report definition row.
+    struct ReportSetting: Codable {
+        let id: String?
+        let enabled: Bool?
+        let displayName: String?
+        let category: String?
+        let platforms: [String]?
+        let exportFormats: [String]?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveDisplayName: String { displayName ?? "" }
+        var effectivePlatforms: [String] { platforms ?? [] }
+        var effectiveExportFormats: [String] { exportFormats ?? [] }
+    }
+}
