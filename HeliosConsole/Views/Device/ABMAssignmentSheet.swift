@@ -131,7 +131,30 @@ struct ABMAssignmentSheet: View {
     @State private var permittedServers: [ABMMdmServer] = []
     @State private var selectedServerId: String?
 
+    // Optional post-assign PreStage step (gated by the grant's
+    // allowPrestageOnAssign + allowedPrestages options).
+    private enum PrestagePhase {
+        case idle
+        case loadingList
+        case ready
+        case running(String)
+        case done(success: Bool, message: String)
+        case unavailable(String)
+    }
+
+    @State private var prestageOfferAvailable = false
+    @State private var prestagePhase: PrestagePhase = .idle
+    @State private var offeredPrestages: [JamfPreStage] = []
+    @State private var selectedPrestageId: String?
+    @State private var prestageAssetTag = ""
+    @State private var prestageTask: Task<Void, Never>?
+
     private var isDark: Bool { colorScheme == .dark }
+
+    private var isPrestageRunning: Bool {
+        if case .running = prestagePhase { return true }
+        return false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -153,10 +176,24 @@ struct ABMAssignmentSheet: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 480, height: 430)
+        .frame(width: 480, height: prestageOfferExpanded ? 620 : 430)
+        .animation(.easeInOut(duration: 0.2), value: prestageOfferExpanded)
         .background(isDark ? Color(red: 0.08, green: 0.08, blue: 0.1) : Color(white: 0.97))
-        .interactiveDismissDisabled(isExecuting)
+        .interactiveDismissDisabled(isExecuting || isPrestageRunning)
         .task { await prepare() }
+        .onDisappear {
+            // Fail-safe: a dismissed sheet must never leave the eligibility
+            // retry loop mutating Jamf with no UI attached.
+            prestageTask?.cancel()
+        }
+    }
+
+    /// Whether the finished view is currently showing the expanded
+    /// PreStage step (drives the taller sheet frame).
+    private var prestageOfferExpanded: Bool {
+        guard case .finished(true, _, _) = phase, prestageOfferAvailable else { return false }
+        if case .idle = prestagePhase { return false }
+        return true
     }
 
     // MARK: Header
@@ -195,7 +232,7 @@ struct ABMAssignmentSheet: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .disabled(isExecuting)
+            .disabled(isExecuting || isPrestageRunning)
         }
         .padding(16)
     }
@@ -313,11 +350,218 @@ struct ABMAssignmentSheet: View {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
-            .frame(maxHeight: 130)
+            .frame(maxHeight: prestageOfferExpanded ? 60 : 130)
+
+            if success && prestageOfferAvailable {
+                prestageOfferSection
+            }
+
             Button("Done") { dismiss() }
                 .buttonStyle(.borderedProminent)
+                .disabled(isPrestageRunning)
         }
         .padding(24)
+    }
+
+    // MARK: - Optional PreStage step (post-assign)
+
+    /// Offered only after a SUCCESSFUL assign when the grant's options
+    /// enable it. Always operator-optional — Done skips it. The eligibility
+    /// retry exists because Jamf can't scope a serial its ~2-minute ABM
+    /// sync hasn't delivered yet.
+    @ViewBuilder
+    private var prestageOfferSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider().overlay(Color.primary.opacity(0.1))
+
+            switch prestagePhase {
+            case .idle:
+                Button {
+                    Task { await loadPrestageOffer() }
+                } label: {
+                    Label("Register PreStage (optional)", systemImage: "shippingbox")
+                }
+                .buttonStyle(.bordered)
+
+            case .loadingList:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading PreStages…")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+
+            case .unavailable(let message):
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundColor(.orange)
+
+            case .ready:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("REGISTER PRESTAGE (OPTIONAL)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Picker("", selection: $selectedPrestageId) {
+                        Text("Select a PreStage…").tag(String?.none)
+                        ForEach(offeredPrestages) { prestage in
+                            Text(prestage.displayName).tag(String?.some(prestage.id))
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    TextField("Asset tag (optional — saves an Inventory Preload record)", text: $prestageAssetTag)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12))
+                    HStack {
+                        Button("Register") {
+                            startPrestageRegistration()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selectedPrestageId == nil)
+                        Text("Jamf may need a couple of minutes to sync the new assignment first — registration waits for it.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+            case .running(let status):
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(status)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    Button("Cancel PreStage Registration") {
+                        prestageTask?.cancel()
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+            case .done(let stepSuccess, let stepMessage):
+                Label(stepMessage, systemImage: stepSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(stepSuccess ? .green : .orange)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @MainActor
+    private func loadPrestageOffer() async {
+        prestagePhase = .loadingList
+        let options = policyProvider().options(for: .abmAssign)
+
+        // Live toggle check FIRST, distinctly — the offer flag was set at
+        // assign-success and the grant may have been revoked since.
+        guard options.effectiveAllowPrestageOnAssign else {
+            prestagePhase = .unavailable("The PreStage step is no longer enabled by your grant.")
+            logPrestageStep(success: false, error: "Offer revoked by live policy at load (allowPrestageOnAssign off)")
+            return
+        }
+
+        do {
+            let all = try await JamfPreStageService.shared.fetchPreStages()
+            // permitsPrestage folds BOTH the toggle and the `all` sentinel —
+            // never branch around it (an allowsAllPrestages shortcut would
+            // bypass the toggle fold).
+            let permitted = all.filter { options.permitsPrestage(named: $0.displayName) }
+            guard !permitted.isEmpty else {
+                prestagePhase = .unavailable("Your grant permits no PreStages that exist in Jamf Pro — the step is unavailable.")
+                return
+            }
+            offeredPrestages = permitted
+            if permitted.count == 1 { selectedPrestageId = permitted[0].id }
+            prestagePhase = .ready
+        } catch {
+            prestagePhase = .unavailable("Could not load PreStages: \(error.localizedDescription)")
+        }
+    }
+
+    private func startPrestageRegistration() {
+        // Synchronous re-entrancy guard: flip out of .ready BEFORE spawning
+        // the task so a double-click can't start two registrations.
+        guard case .ready = prestagePhase,
+              let prestageId = selectedPrestageId,
+              let prestage = offeredPrestages.first(where: { $0.id == prestageId }) else { return }
+        prestagePhase = .running("Starting…")
+        prestageTask = Task { await runPrestageRegistration(prestage) }
+    }
+
+    @MainActor
+    private func runPrestageRegistration(_ prestage: JamfPreStage) async {
+        // Re-derive the LIVE options — the offer may have been revoked
+        // while the sheet sat open.
+        let options = policyProvider().options(for: .abmAssign)
+        guard options.effectiveAllowPrestageOnAssign,
+              options.permitsPrestage(named: prestage.displayName) else {
+            prestagePhase = .done(success: false,
+                                  message: "Your grant no longer permits PreStage \"\(prestage.displayName)\".")
+            logPrestageStep(success: false, error: "Denied by live options for PreStage \"\(prestage.displayName)\"")
+            return
+        }
+
+        let serial = serialNumber.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let tag = prestageAssetTag.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // A cancel/failure AFTER the preload upsert must disclose the write
+        // that already happened — a durable record misreported as a no-op
+        // is an audit violation.
+        var preloadSaved = false
+        func preloadNote() -> String {
+            preloadSaved ? " Note: the Inventory Preload record (asset tag \(tag)) WAS saved." : ""
+        }
+
+        do {
+            if !tag.isEmpty {
+                prestagePhase = .running("Saving Inventory Preload record…")
+                try await JamfPreStageService.shared.upsertInventoryPreload(serial: serial, assetTag: tag)
+                preloadSaved = true
+            }
+            prestagePhase = .running("Assigning PreStage \(prestage.displayName)…")
+            try await JamfPreStageService.shared.assignWhenEligible(
+                serial: serial,
+                toPreStage: prestage.id,
+                stillAuthorized: {
+                    let live = self.policyProvider().options(for: .abmAssign)
+                    return live.effectiveAllowPrestageOnAssign
+                        && live.permitsPrestage(named: prestage.displayName)
+                },
+                progress: { status in self.prestagePhase = .running(status) }
+            )
+            prestagePhase = .done(success: true,
+                                  message: "PreStage \"\(prestage.displayName)\" registered\(tag.isEmpty ? "" : " with asset tag \(tag)").")
+            logPrestageStep(success: true,
+                            error: "Assigned PreStage \"\(prestage.displayName)\"\(tag.isEmpty ? "" : " • asset tag \(tag)")")
+        } catch {
+            // Cancellation can surface two ways: CancellationError from the
+            // retry loop's sleep/checkpoint, or URLError(.cancelled) when
+            // the click lands mid-HTTP-request. Both are operator cancels.
+            let isCancel = error is CancellationError
+                || (error as? URLError)?.code == .cancelled
+                || Task.isCancelled
+            if isCancel {
+                prestagePhase = .done(success: false,
+                                      message: "PreStage registration cancelled. Use the Pre-Stage tab to register the device later.\(preloadNote())")
+                logPrestageStep(success: false, error: "Cancelled by operator.\(preloadNote())")
+            } else {
+                prestagePhase = .done(success: false,
+                                      message: "\(error.localizedDescription) You can register the device from the Pre-Stage tab later.\(preloadNote())")
+                logPrestageStep(success: false, error: "\(error.localizedDescription)\(preloadNote())")
+            }
+        }
+    }
+
+    private func logPrestageStep(success: Bool, error: String?) {
+        ActionLogService.shared.logAction(
+            actionName: "PreStage Registration (on assign)",
+            actionCategory: "Apple Business Manager",
+            deviceName: deviceName,
+            deviceSerialNumber: serialNumber.uppercased(),
+            deviceId: device?.id ?? serialNumber.uppercased(),
+            success: success,
+            errorMessage: error
+        )
     }
 
     private var isExecuting: Bool {
@@ -405,6 +649,9 @@ struct ABMAssignmentSheet: View {
             switch outcome {
             case .succeeded:
                 ABMDeviceCache.shared.applyAssignment(deviceId: device.id, serverId: server.id)
+                // The optional PreStage step is offered only on success and
+                // only when the LIVE grant enables it.
+                prestageOfferAvailable = policy.options(for: .abmAssign).effectiveAllowPrestageOnAssign
                 phase = .finished(success: true, title: "Assigned to \(server.serverName)",
                                   message: "The assignment takes effect at the device's next Automated Device Enrollment.")
                 onFinished(true, server, nil)

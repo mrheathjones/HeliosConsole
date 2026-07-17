@@ -50,6 +50,9 @@ enum PreStageError: LocalizedError {
     /// A move failed after the remove leg AND the rollback failed — the
     /// serial currently belongs to NO PreStage and must be re-registered.
     case leftUnscoped(previous: String, underlying: String)
+    /// The caller's stillAuthorized closure reported the grant revoked
+    /// mid-flow (eligibility retries can span minutes).
+    case authorizationRevoked
 
     var errorDescription: String? {
         switch self {
@@ -69,6 +72,8 @@ enum PreStageError: LocalizedError {
             return "Assigning the new PreStage failed (\(underlying)). The device was restored to its previous PreStage (id \(previous)) — nothing has changed. Try again."
         case .leftUnscoped(let previous, let underlying):
             return "IMPORTANT: the device was removed from its previous PreStage (id \(previous)) but could not be added to the new one (\(underlying)), and restoring it also failed. The device currently belongs to NO PreStage — register it again before its next enrollment."
+        case .authorizationRevoked:
+            return "Your grant no longer permits this PreStage registration — it was revoked while the operation was waiting."
         }
     }
 }
@@ -367,6 +372,47 @@ final class JamfPreStageService: ObservableObject {
             }
         } else {
             try await mutateScope(prestageId: prestageId, serial: normalized, mutation: .add)
+        }
+    }
+
+    /// assign(serial:toPreStage:) with bounded retries over the ABM→Jamf
+    /// sync lag: a serial just assigned to the MDM server in ABM is not a
+    /// valid ADE device to Jamf until its ADE sync (roughly every two
+    /// minutes) runs, and the scope POST 400s until then. Retries ONLY
+    /// serialNotEligible; every other error propagates immediately.
+    /// Cancellation-aware — the caller may cancel between attempts.
+    ///
+    /// Defaults: 8 attempts × 25 s ≈ 3 minutes of patience, comfortably
+    /// past the documented ~2-minute sync interval.
+    func assignWhenEligible(
+        serial: String,
+        toPreStage prestageId: String,
+        maxAttempts: Int = 8,
+        interval: TimeInterval = 25,
+        stillAuthorized: @escaping () -> Bool = { true },
+        progress: @MainActor @escaping (String) -> Void
+    ) async throws {
+        let safeInterval = max(interval, 1)
+        var attempt = 0
+
+        while true {
+            // The window is minutes long — a grant revoked mid-wait must
+            // stop the NEXT attempt, not just the next invocation.
+            guard stillAuthorized() else {
+                throw PreStageError.authorizationRevoked
+            }
+            attempt += 1
+            do {
+                try await assign(serial: serial, toPreStage: prestageId)
+                return
+            } catch PreStageError.serialNotEligible {
+                guard attempt < maxAttempts else {
+                    throw PreStageError.serialNotEligible(serial)
+                }
+                await progress("Waiting for Jamf's ADE sync — attempt \(attempt)/\(maxAttempts), retrying in \(Int(safeInterval))s…")
+                try await Task.sleep(nanoseconds: UInt64(safeInterval * 1_000_000_000))
+                try Task.checkCancellation()
+            }
         }
     }
 
