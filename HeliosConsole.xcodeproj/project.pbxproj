@@ -94,6 +94,7 @@
 		A1C0DE0000000000000CAP02 /* UserCapabilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000CAP01 /* UserCapabilities.swift */; };
 		F078 /* NetworkTuning.swift in Sources */ = {isa = PBXBuildFile; fileRef = S078 /* NetworkTuning.swift */; };
 		F079 /* Branding.swift in Sources */ = {isa = PBXBuildFile; fileRef = S079 /* Branding.swift */; };
+		F090 /* ProfileAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S090 /* ProfileAvatarView.swift */; };
 		MB_F001 /* HeliosMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MB_S001 /* HeliosMenuBarApp.swift */; };
 		MB_F002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A001 /* Assets.xcassets */; };
 		MB_F003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = S003 /* AppSettings.swift */; };
@@ -235,6 +236,7 @@
 		A1C0DE0000000000000CAP01 /* UserCapabilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCapabilities.swift; sourceTree = "<group>"; };
 		S078 /* NetworkTuning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTuning.swift; sourceTree = "<group>"; };
 		S079 /* Branding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Branding.swift; sourceTree = "<group>"; };
+		S090 /* ProfileAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarView.swift; sourceTree = "<group>"; };
 		CLR1 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupModels.swift; sourceTree = "<group>"; };
 		CLR2 /* JamfCleanupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfCleanupClient.swift; sourceTree = "<group>"; };
 		CLR3 /* JamfProtectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfProtectClient.swift; sourceTree = "<group>"; };
@@ -512,6 +514,7 @@
 				S055 /* InventoryLoadingView.swift */,
 				S056 /* ThemeColors.swift */,
 				S079 /* Branding.swift */,
+				S090 /* ProfileAvatarView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -764,6 +767,7 @@
 				A1C0DE0000000000000CAP02 /* UserCapabilities.swift in Sources */,
 				F078 /* NetworkTuning.swift in Sources */,
 				F079 /* Branding.swift in Sources */,
+				F090 /* ProfileAvatarView.swift in Sources */,
 				F012 /* AbmAPIService.swift in Sources */,
 				F013 /* AnnouncementService.swift in Sources */,
 				F014 /* ComputerInventoryCache.swift in Sources */,
@@ -958,7 +962,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -986,7 +990,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1014,7 +1018,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1044,7 +1048,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;

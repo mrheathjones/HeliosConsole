@@ -89,7 +89,7 @@ struct SettingsView: View {
     private var headerSection: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Settings")
+                Text("Preferences")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(isDark ? .white : .primary)
                 
@@ -258,17 +258,16 @@ struct SettingsView: View {
         MDMConfigurationManager.shared.configuration.signInMethod
     }
 
-    /// Custom photo wins, then the Entra directory photo, then initials.
-    private var resolvedProfilePicture: NSImage? {
-        settings.customProfilePicture ?? session.profilePhoto
-    }
-
     private var profileSection: some View {
         settingsCard(title: "Profile", icon: "person.crop.circle.fill", iconColor: .blue) {
             VStack(alignment: .leading, spacing: 20) {
                 // Identity
                 HStack(spacing: 16) {
-                    profileAvatar
+                    ProfileAvatarView(size: 72)
+                        .overlay(
+                            Circle()
+                                .stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.1), lineWidth: 1)
+                        )
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(session.displayName.isEmpty ? "Signed-in user" : session.displayName)
@@ -298,46 +297,8 @@ struct SettingsView: View {
                     Spacer()
                 }
 
-                // Photo selector
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        Button {
-                            chooseProfilePicture()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "photo")
-                                    .font(.system(size: 12))
-                                Text("Choose Photo…")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.plain)
-
-                        if settings.customProfilePicture != nil {
-                            Button {
-                                withAnimation { settings.customProfilePicture = nil }
-                            } label: {
-                                Text(session.profilePhoto != nil ? "Use Microsoft Photo" : "Remove Photo")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.orange)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 7)
-                                    .background(Color.orange.opacity(0.1))
-                                    .cornerRadius(8)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    Text(profilePictureCaption)
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
-                }
+                // Avatar picker
+                avatarPicker
 
                 Divider()
                     .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
@@ -382,59 +343,179 @@ struct SettingsView: View {
         }
     }
 
-    private var profilePictureCaption: String {
-        if settings.customProfilePicture != nil {
-            return "Using a custom photo stored on this Mac."
-        }
-        if session.profilePhoto != nil {
-            return "Using your Microsoft directory photo. Choose a photo to override it on this Mac."
-        }
-        return "Using your initials. Choose a photo to personalize your profile."
+    // MARK: - Avatar picker
+
+    /// Tile edge for the avatar option cells.
+    private let avatarTile: CGFloat = 46
+
+    private var liveInitials: String {
+        ProfileAvatarView.initials(displayName: session.displayName, email: session.email)
     }
 
-    private var profileAvatar: some View {
-        ZStack {
-            if let image = resolvedProfilePicture {
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 72, height: 72)
-                    .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 72, height: 72)
+    private var avatarPicker: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            groupHeader("Avatar")
 
-                Text(profileInitials)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundColor(.white)
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: avatarTile + 8), spacing: 12)],
+                alignment: .leading,
+                spacing: 12
+            ) {
+                // Custom photo — tapping (re)opens the file picker
+                avatarOptionTile(selected: settings.avatarStyle == .photo) {
+                    chooseProfilePicture()
+                } content: {
+                    if let photo = settings.customProfilePicture {
+                        AvatarBadge(size: avatarTile, image: photo, symbol: nil, initials: "", colorIndex: 0)
+                    } else {
+                        photoPlaceholderTile
+                    }
+                }
+
+                // Microsoft directory photo (only when one was fetched)
+                if let entra = session.profilePhoto {
+                    avatarOptionTile(selected: settings.avatarStyle == .auto) {
+                        settings.avatarStyle = .auto
+                    } content: {
+                        AvatarBadge(size: avatarTile, image: entra, symbol: nil, initials: "", colorIndex: 0)
+                    }
+                }
+
+                // Initials avatar (in the chosen color)
+                avatarOptionTile(selected: settings.avatarStyle == .initials) {
+                    settings.avatarStyle = .initials
+                } content: {
+                    AvatarBadge(size: avatarTile, image: nil, symbol: nil, initials: liveInitials, colorIndex: settings.avatarColorIndex)
+                }
+
+                // Symbol avatars (in the chosen color)
+                ForEach(AvatarPalette.symbols, id: \.self) { symbol in
+                    avatarOptionTile(
+                        selected: settings.avatarStyle == .symbol && settings.avatarSymbol == symbol
+                    ) {
+                        settings.avatarSymbol = symbol
+                        settings.avatarStyle = .symbol
+                    } content: {
+                        AvatarBadge(size: avatarTile, image: nil, symbol: symbol, initials: "", colorIndex: settings.avatarColorIndex)
+                    }
+                }
             }
+
+            // Color swatches — apply to the initials and symbol avatars
+            VStack(alignment: .leading, spacing: 8) {
+                groupHeader("Color")
+                HStack(spacing: 10) {
+                    ForEach(Array(AvatarPalette.gradients.indices), id: \.self) { index in
+                        Button {
+                            settings.avatarColorIndex = index
+                            // Picking a color implies a generated avatar; if the
+                            // user is currently on a photo, switch to initials so
+                            // the color choice is actually visible.
+                            if settings.avatarStyle == .auto || settings.avatarStyle == .photo {
+                                settings.avatarStyle = .initials
+                            }
+                        } label: {
+                            Circle()
+                                .fill(AvatarPalette.gradient(index))
+                                .frame(width: 26, height: 26)
+                                .overlay(
+                                    Circle().stroke(Color.white, lineWidth: settings.avatarColorIndex == index ? 2 : 0)
+                                )
+                                .overlay(
+                                    Circle().stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.12), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    chooseProfilePicture()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 12))
+                        Text("Choose Photo…")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                if settings.customProfilePicture != nil {
+                    Button {
+                        withAnimation {
+                            settings.customProfilePicture = nil
+                            if settings.avatarStyle == .photo { settings.avatarStyle = .auto }
+                        }
+                    } label: {
+                        Text("Remove Photo")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text(profilePictureCaption)
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
         }
-        .overlay(
-            Circle()
-                .stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.1), lineWidth: 1)
-        )
     }
 
-    private var profileInitials: String {
-        let initials = session.displayName
-            .split(separator: " ")
-            .prefix(2)
-            .compactMap { $0.first }
-        if !initials.isEmpty {
-            return String(initials).uppercased()
+    /// One selectable avatar cell: the badge, a selection ring, and hit target.
+    private func avatarOptionTile<Content: View>(
+        selected: Bool,
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Button(action: action) {
+            content()
+                .padding(3)
+                .overlay(
+                    Circle().stroke(selected ? Color.blue : Color.clear, lineWidth: 2.5)
+                )
         }
-        if let first = session.email.first {
-            return String(first).uppercased()
+        .buttonStyle(.plain)
+    }
+
+    private var photoPlaceholderTile: some View {
+        ZStack {
+            Circle()
+                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                .frame(width: avatarTile, height: avatarTile)
+            Image(systemName: "photo.badge.plus")
+                .font(.system(size: avatarTile * 0.4))
+                .foregroundColor(.gray)
         }
-        return "?"
+        .frame(width: avatarTile, height: avatarTile)
+    }
+
+    private var profilePictureCaption: String {
+        switch settings.avatarStyle {
+        case .photo:
+            return settings.customProfilePicture != nil
+                ? "Using a custom photo stored on this Mac."
+                : "No custom photo chosen yet — pick one with Choose Photo…"
+        case .auto:
+            return session.profilePhoto != nil
+                ? "Using your Microsoft directory photo."
+                : "Using your initials."
+        case .initials:
+            return "Using an initials avatar."
+        case .symbol:
+            return "Using a symbol avatar."
+        }
     }
 
     private func chooseProfilePicture() {
@@ -448,6 +529,7 @@ struct SettingsView: View {
               let url = panel.url,
               let image = NSImage(contentsOf: url) else { return }
         settings.customProfilePicture = image
+        settings.avatarStyle = .photo
     }
 
     // MARK: - Security (inside Profile)

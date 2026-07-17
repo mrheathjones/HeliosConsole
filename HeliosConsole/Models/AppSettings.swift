@@ -43,6 +43,18 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Avatar Style
+
+/// How the operator's avatar is rendered. Purely cosmetic and local to this
+/// Mac. `.auto` preserves the original behavior (directory photo if present,
+/// else initials); the others are explicit picks from Settings → Profile.
+enum AvatarStyle: String, CaseIterable {
+    case auto       // Entra directory photo if present, else initials
+    case initials   // initials on the chosen palette color
+    case symbol     // an SF Symbol on the chosen palette color
+    case photo      // the locally chosen custom photo
+}
+
 // MARK: - App Settings Manager
 
 class AppSettings: ObservableObject {
@@ -57,6 +69,9 @@ class AppSettings: ObservableObject {
         static let showDeviceIcons = "helios.showDeviceIcons"
         static let defaultItemsPerPage = "helios.defaultItemsPerPage"
         static let autoRefreshInterval = "helios.autoRefreshInterval"
+        static let avatarStyle = "helios.avatarStyle"
+        static let avatarColorIndex = "helios.avatarColorIndex"
+        static let avatarSymbol = "helios.avatarSymbol"
     }
     
     // MARK: - Published Properties
@@ -105,6 +120,21 @@ class AppSettings: ObservableObject {
         didSet {
             persistCustomProfilePicture()
         }
+    }
+
+    /// Which avatar style renders. Cosmetic, local to this Mac.
+    @Published var avatarStyle: AvatarStyle {
+        didSet { defaults.set(avatarStyle.rawValue, forKey: Keys.avatarStyle) }
+    }
+
+    /// Palette index for the generated (initials / symbol) avatar.
+    @Published var avatarColorIndex: Int {
+        didSet { defaults.set(avatarColorIndex, forKey: Keys.avatarColorIndex) }
+    }
+
+    /// SF Symbol name for the `.symbol` avatar style.
+    @Published var avatarSymbol: String {
+        didSet { defaults.set(avatarSymbol, forKey: Keys.avatarSymbol) }
     }
     
     // MARK: - Computed Properties
@@ -190,7 +220,21 @@ class AppSettings: ObservableObject {
         self.showDeviceIcons = defaults.object(forKey: Keys.showDeviceIcons) as? Bool ?? true
         self.defaultItemsPerPage = defaults.object(forKey: Keys.defaultItemsPerPage) as? Int ?? 25
         self.autoRefreshInterval = defaults.object(forKey: Keys.autoRefreshInterval) as? Int ?? 0
-        self.customProfilePicture = Self.loadCustomProfilePicture()
+
+        // Avatar. A prior build stored only a custom photo (no style key yet);
+        // preserve that choice by defaulting an absent style to .photo when a
+        // photo exists, else .auto (directory-photo-or-initials, the original
+        // behavior).
+        let loadedPicture = Self.loadCustomProfilePicture()
+        self.customProfilePicture = loadedPicture
+        if let raw = defaults.string(forKey: Keys.avatarStyle),
+           let style = AvatarStyle(rawValue: raw) {
+            self.avatarStyle = style
+        } else {
+            self.avatarStyle = loadedPicture != nil ? .photo : .auto
+        }
+        self.avatarColorIndex = defaults.object(forKey: Keys.avatarColorIndex) as? Int ?? 0
+        self.avatarSymbol = defaults.string(forKey: Keys.avatarSymbol) ?? "person.fill"
         
         // Apply initial appearance
         Task { @MainActor in
@@ -253,6 +297,9 @@ class AppSettings: ObservableObject {
         defaultItemsPerPage = 25
         autoRefreshInterval = 0
         customProfilePicture = nil
+        avatarStyle = .auto
+        avatarColorIndex = 0
+        avatarSymbol = "person.fill"
     }
 
     // MARK: - Custom profile picture persistence

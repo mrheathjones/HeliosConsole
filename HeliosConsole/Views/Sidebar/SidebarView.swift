@@ -155,11 +155,12 @@ struct SidebarView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
 
-            // Settings (ui domain showSettings switch)
+            // Preferences (ui domain showSettings switch) — the user's avatar
+            // stands in for the gear icon.
             if showSettingsItem {
-                SidebarNavigationItem(
-                    destination: .settings,
+                PreferencesSidebarItem(
                     isSelected: selectedDestination == .settings && !isInNestedView,
+                    label: settingsRowLabel,
                     action: {
                         onNavigate(.settings)
                     }
@@ -309,6 +310,14 @@ struct SidebarView: View {
         )
     }
 
+    /// Label for the pinned Preferences row: an admin's ui-domain `settings`
+    /// label override still wins if delivered; otherwise "Preferences".
+    private var settingsRowLabel: String {
+        let override = MDMConfigurationManager.shared.configuration
+            .sidebarItems.first { $0.id == NavigationDestination.settings.rawValue }?.title ?? ""
+        return override.isEmpty ? "Preferences" : override
+    }
+
     private static func showsSettings(
         config: MDMConfiguration,
         capabilities: UserCapabilities
@@ -389,6 +398,70 @@ struct SidebarNavigationItem: View {
         }
     }
     
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color.blue.opacity(isDark ? 0.15 : 0.12)
+        } else if isHovered {
+            return isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.04)
+        }
+        return Color.clear
+    }
+}
+
+// MARK: - Preferences Sidebar Item
+
+/// The pinned Preferences row. Same interaction/visuals as
+/// `SidebarNavigationItem`, but the operator's avatar replaces the SF Symbol
+/// (it reads AppSettings/UserSession, so it tracks the chosen avatar live).
+struct PreferencesSidebarItem: View {
+    let isSelected: Bool
+    let label: String
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered: Bool = false
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ProfileAvatarView(size: 24)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Circle().stroke(isSelected ? Color.blue : Color.clear, lineWidth: 1.5)
+                    )
+
+                Text(label)
+                    .foregroundColor(isSelected ? (isDark ? .white : .primary) : .gray)
+                    .font(.system(size: 14, weight: isSelected ? .medium : .regular))
+
+                Spacer()
+
+                if isSelected {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(backgroundColor)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 12)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+
     private var backgroundColor: Color {
         if isSelected {
             return Color.blue.opacity(isDark ? 0.15 : 0.12)
