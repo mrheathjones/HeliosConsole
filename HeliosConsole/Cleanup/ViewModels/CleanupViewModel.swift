@@ -388,7 +388,7 @@ final class CleanupViewModel {
     /// rate limits punish bursts — cap at 4 in flight).
     private func forEachDevice(
         _ devices: [StaleDevice],
-        action: DeviceAction,
+        action: CleanupAction,
         work: @escaping @Sendable (StaleDevice) async throws -> Void,
         onResult: @MainActor (ActionResult) -> Void
     ) async {

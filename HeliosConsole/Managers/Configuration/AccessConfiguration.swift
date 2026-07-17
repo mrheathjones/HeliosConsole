@@ -127,87 +127,101 @@ struct AccessConfiguration: Codable {
 
     // MARK: - Device action allow-list
 
-    /// The managed `deviceActions` dictionary. Parsed and exposed by the
-    /// configuration layer; view-level enforcement status is documented in
-    /// docs/ConfigProfileMigration.md. Defaults (destructive actions off)
-    /// match schemas/Helios_Access_SCHEMA.json.
-    struct DeviceActionsSettings: Codable {
-        var computer: ComputerActions?
-        var mobileDevice: MobileDeviceActions?
+    /// One entry in the per-action allow-list. Mirrors the features domain's
+    /// per-item idiom ({id, enabled, displayName} — see HealthMetricSetting).
+    /// Listing an id IS the grant: `enabled` omitted → true. `displayName`
+    /// overrides the Actions-menu label only — confirmation-dialog safety
+    /// copy is never profile-controlled.
+    struct DeviceActionSetting: Codable {
+        var id: String?
+        var enabled: Bool?
+        var displayName: String?
 
-        var effectiveComputer: ComputerActions { computer ?? ComputerActions() }
-        var effectiveMobileDevice: MobileDeviceActions { mobileDevice ?? MobileDeviceActions() }
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveDisplayName: String { displayName ?? "" }
 
-        /// Allow-list for computer (macOS) actions.
-        struct ComputerActions: Codable {
-            var sendBlankPush: Bool?
-            var restart: Bool?
-            var shutdown: Bool?
-            var lock: Bool?
-            var wipe: Bool?
-            var enableRemoteDesktop: Bool?
-            var disableRemoteDesktop: Bool?
-            var enableBluetooth: Bool?
-            var disableBluetooth: Bool?
-            var viewRecoveryLockPassword: Bool?
-            var viewFileVaultKey: Bool?
-            var viewLocalAdminPassword: Bool?
-            var unlockUserAccount: Bool?
-            var renewMDMProfile: Bool?
-            var sendCustomCommand: Bool?
-            var updateInventory: Bool?
-            var installPackage: Bool?
-            var runPolicy: Bool?
-
-            var effectiveSendBlankPush: Bool { sendBlankPush ?? true }
-            var effectiveRestart: Bool { restart ?? true }
-            var effectiveShutdown: Bool { shutdown ?? true }
-            var effectiveLock: Bool { lock ?? false }
-            var effectiveWipe: Bool { wipe ?? false }
-            var effectiveEnableRemoteDesktop: Bool { enableRemoteDesktop ?? true }
-            var effectiveDisableRemoteDesktop: Bool { disableRemoteDesktop ?? true }
-            var effectiveEnableBluetooth: Bool { enableBluetooth ?? true }
-            var effectiveDisableBluetooth: Bool { disableBluetooth ?? true }
-            var effectiveViewRecoveryLockPassword: Bool { viewRecoveryLockPassword ?? false }
-            var effectiveViewFileVaultKey: Bool { viewFileVaultKey ?? true }
-            var effectiveViewLocalAdminPassword: Bool { viewLocalAdminPassword ?? true }
-            var effectiveUnlockUserAccount: Bool { unlockUserAccount ?? true }
-            var effectiveRenewMDMProfile: Bool { renewMDMProfile ?? false }
-            var effectiveSendCustomCommand: Bool { sendCustomCommand ?? false }
-            var effectiveUpdateInventory: Bool { updateInventory ?? false }
-            var effectiveInstallPackage: Bool { installPackage ?? false }
-            var effectiveRunPolicy: Bool { runPolicy ?? false }
+        init(id: String? = nil, enabled: Bool? = nil, displayName: String? = nil) {
+            self.id = id
+            self.enabled = enabled
+            self.displayName = displayName
         }
+    }
 
-        /// Allow-list for mobile device (iOS / iPadOS / visionOS) actions.
-        struct MobileDeviceActions: Codable {
-            var sendBlankPush: Bool?
-            var restart: Bool?
-            var shutdown: Bool?
-            var lock: Bool?
-            var wipe: Bool?
-            var clearPasscode: Bool?
-            var enableLostMode: Bool?
-            var disableLostMode: Bool?
-            var playLostModeSound: Bool?
-            var updateInventory: Bool?
-            var renewMDMProfile: Bool?
-            var enableActivationLock: Bool?
-            var clearActivationLock: Bool?
+    /// The managed `deviceActions` dictionary — a STRICT FAIL-CLOSED
+    /// allow-list enforced by DeviceActionPolicy (DeviceView actionsMenu +
+    /// executeAction). No `actions` array delivered for a platform → no
+    /// action is available and the Actions menu is hidden. An id not listed
+    /// (or listed with enabled=false) is hidden and blocked. Unknown ids are
+    /// ignored so newer profiles deploy safely to older app builds.
+    /// Matches schemas/Helios_Access_SCHEMA.json.
+    struct DeviceActionsSettings: Codable {
+        var computer: PlatformActions?
+        var mobileDevice: PlatformActions?
 
-            var effectiveSendBlankPush: Bool { sendBlankPush ?? true }
-            var effectiveRestart: Bool { restart ?? true }
-            var effectiveShutdown: Bool { shutdown ?? true }
-            var effectiveLock: Bool { lock ?? true }
-            var effectiveWipe: Bool { wipe ?? false }
-            var effectiveClearPasscode: Bool { clearPasscode ?? true }
-            var effectiveEnableLostMode: Bool { enableLostMode ?? true }
-            var effectiveDisableLostMode: Bool { disableLostMode ?? true }
-            var effectivePlayLostModeSound: Bool { playLostModeSound ?? true }
-            var effectiveUpdateInventory: Bool { updateInventory ?? true }
-            var effectiveRenewMDMProfile: Bool { renewMDMProfile ?? true }
-            var effectiveEnableActivationLock: Bool { enableActivationLock ?? false }
-            var effectiveClearActivationLock: Bool { clearActivationLock ?? false }
+        /// Per-platform allow-list. `actions == nil` means the platform's
+        /// allow-list was never delivered (fail-closed: nothing granted) —
+        /// deliberately distinct from an explicit empty array, though the
+        /// outcome is the same.
+        struct PlatformActions: Codable {
+            var actions: [DeviceActionSetting]?
+
+            /// Grants keyed by action id (later duplicates win); nil when no
+            /// allow-list was delivered. Consumed by DeviceActionPolicy.
+            var grantsByID: [String: DeviceActionSetting]? {
+                guard let actions else { return nil }
+                var grants: [String: DeviceActionSetting] = [:]
+                for setting in actions {
+                    guard let id = setting.id, !id.isEmpty else { continue }
+                    grants[id] = setting
+                }
+                return grants
+            }
+
+            init(actions: [DeviceActionSetting]? = nil) {
+                self.actions = actions
+            }
+
+            /// Custom decode with a legacy shim: the v2.0 access schema
+            /// shipped this block as a flat boolean map
+            /// (e.g. `computer.restart = true`). If no `actions` array is
+            /// present, synthesize one from any boolean keys that WERE
+            /// delivered. Strict-cutover semantics apply to the legacy shape
+            /// too: only explicitly delivered keys become grants — the old
+            /// per-key defaults are not resurrected (they were never
+            /// enforced by any released build). Never fails the domain
+            /// decode.
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: DynamicKey.self)
+
+                if let actionsKey = DynamicKey(stringValue: "actions"),
+                   container.contains(actionsKey),
+                   let decoded = try? container.decode([DeviceActionSetting].self, forKey: actionsKey) {
+                    actions = decoded
+                    return
+                }
+
+                var legacy: [DeviceActionSetting] = []
+                for key in container.allKeys where key.stringValue != "actions" {
+                    if let enabled = try? container.decode(Bool.self, forKey: key) {
+                        legacy.append(DeviceActionSetting(id: key.stringValue, enabled: enabled))
+                    }
+                }
+                actions = legacy.isEmpty ? nil : legacy
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: DynamicKey.self)
+                if let actions, let key = DynamicKey(stringValue: "actions") {
+                    try container.encode(actions, forKey: key)
+                }
+            }
+
+            private struct DynamicKey: CodingKey {
+                var stringValue: String
+                var intValue: Int? { nil }
+                init?(stringValue: String) { self.stringValue = stringValue }
+                init?(intValue: Int) { return nil }
+            }
         }
     }
 }

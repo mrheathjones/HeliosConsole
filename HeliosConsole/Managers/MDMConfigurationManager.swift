@@ -88,8 +88,27 @@ class MDMConfigurationManager: ObservableObject {
 
         print("✅ Loaded configuration from \(source)")
         logValidity(configuration, core: core, credentials: credentials)
+        logDeviceActionsPolicy(configuration, core: core)
 
         return (configuration, loaded, source)
+    }
+
+    /// One clear line about the device-actions posture at load — the
+    /// allow-list is strict fail-closed, so an absent block (hidden Actions
+    /// menu) must be diagnosable from the log, not a mystery.
+    private static func logDeviceActionsPolicy(
+        _ configuration: MDMConfiguration,
+        core: CoreConfiguration?
+    ) {
+        if let grants = configuration.deviceActions?.computer?.grantsByID {
+            let enabled = grants.values.filter { $0.effectiveEnabled }.count
+            print("✅ access: deviceActions.computer delivers \(grants.count) action(s), \(enabled) enabled")
+            if core?.jamfPro?.screenShareEnabled != nil {
+                print("⚠️ core: jamfPro.screenShareEnabled is DEPRECATED and ignored — the access deviceActions allow-list is authoritative for screenShare")
+            }
+        } else {
+            print("⚠️ access: no deviceActions.computer allow-list delivered — Actions menu hidden (fail-closed); see docs/ConfigProfileMigration.md")
+        }
     }
 
     /// Logs exactly which required domain/keys are missing when the composed

@@ -176,9 +176,91 @@
 				<!-- <key>defaultSiteID</key><string>1</string> -->
 			</dict>
 
-			<!-- Optional per-action allow-list (deviceActions.computer /
-			     deviceActions.mobileDevice) — omitted keys use the schema
-			     defaults; see schemas/Helios_Access_SCHEMA.json. -->
+			<!-- Device Actions allow-list — STRICT FAIL-CLOSED. If this
+			     block (specifically computer.actions) is not delivered,
+			     the device Actions menu is HIDDEN ENTIRELY. Only actions
+			     listed with enabled=true appear; unlisted or disabled ids
+			     are hidden AND blocked at execution. displayName overrides
+			     the menu label only. See schemas/Helios_Access_SCHEMA.json. -->
+			<key>deviceActions</key>
+			<dict>
+				<key>computer</key>
+				<dict>
+					<key>actions</key>
+					<array>
+						<dict>
+							<key>id</key><string>sendBlankPush</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>restart</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>restartSilent</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>shutdown</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>enableRemoteDesktop</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>disableRemoteDesktop</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>enableBluetooth</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>disableBluetooth</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>viewFileVaultKey</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>viewLocalAdminPassword</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>unlockUserAccount</string>
+							<key>enabled</key><true/>
+						</dict>
+						<!-- Destructive / sensitive actions ship disabled;
+						     flip to <true/> deliberately. -->
+						<dict>
+							<key>id</key><string>returnToService</string>
+							<key>enabled</key><false/>
+						</dict>
+						<dict>
+							<key>id</key><string>screenShare</string>
+							<key>enabled</key><false/>
+						</dict>
+					</array>
+				</dict>
+				<!-- Mobile-device allow-list is forward-looking: no mobile
+				     actions menu exists yet. -->
+				<key>mobileDevice</key>
+				<dict>
+					<key>actions</key>
+					<array>
+						<dict>
+							<key>id</key><string>sendBlankPush</string>
+							<key>enabled</key><true/>
+						</dict>
+						<dict>
+							<key>id</key><string>updateInventory</string>
+							<key>enabled</key><true/>
+						</dict>
+					</array>
+				</dict>
+			</dict>
 		</dict>
 
 		<!-- ============================================================
