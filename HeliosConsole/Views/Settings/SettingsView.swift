@@ -16,6 +16,7 @@
 import SwiftUI
 import AppKit
 import LocalAuthentication
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -69,8 +70,8 @@ struct SettingsView: View {
                 // Content
                 ScrollView {
                     VStack(spacing: 24) {
+                        profileSection
                         appearanceSection
-                        securitySection
                         displaySection
                         if session.capabilities.canAccess(module: NavigationDestination.cleanup.rawValue) {
                             cleanupSection
@@ -251,11 +252,208 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity)
     }
     
-    // MARK: - Security Section
-    
-    private var securitySection: some View {
-        settingsCard(title: "Security", icon: "lock.shield.fill", iconColor: .green) {
+    // MARK: - Profile Section
+
+    private var signInMethod: MDMConfiguration.SignInMethod {
+        MDMConfigurationManager.shared.configuration.signInMethod
+    }
+
+    /// Custom photo wins, then the Entra directory photo, then initials.
+    private var resolvedProfilePicture: NSImage? {
+        settings.customProfilePicture ?? session.profilePhoto
+    }
+
+    private var profileSection: some View {
+        settingsCard(title: "Profile", icon: "person.crop.circle.fill", iconColor: .blue) {
             VStack(alignment: .leading, spacing: 20) {
+                // Identity
+                HStack(spacing: 16) {
+                    profileAvatar
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(session.displayName.isEmpty ? "Signed-in user" : session.displayName)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(isDark ? .white : .primary)
+
+                        if !session.email.isEmpty {
+                            Text(session.email)
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                                .textSelection(.enabled)
+                        }
+
+                        HStack(spacing: 5) {
+                            Image(systemName: signInMethod == .entra ? "person.badge.key.fill" : "envelope.fill")
+                                .font(.system(size: 10))
+                            Text(signInMethod == .entra ? "Microsoft Entra ID" : "Email sign-in")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+
+                    Spacer()
+                }
+
+                // Photo selector
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Button {
+                            chooseProfilePicture()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "photo")
+                                    .font(.system(size: 12))
+                                Text("Choose Photo…")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        if settings.customProfilePicture != nil {
+                            Button {
+                                withAnimation { settings.customProfilePicture = nil }
+                            } label: {
+                                Text(session.profilePhoto != nil ? "Use Microsoft Photo" : "Remove Photo")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(Color.orange.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Text(profilePictureCaption)
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                }
+
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
+
+                // Role(s) — resolved from the profile's role definitions
+                VStack(alignment: .leading, spacing: 10) {
+                    groupHeader(session.roles.count == 1 ? "Role" : "Roles")
+
+                    if session.roles.isEmpty {
+                        Text("No role assigned — contact your admin about Helios role assignment.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                    } else {
+                        HStack(spacing: 8) {
+                            ForEach(session.roles, id: \.self) { role in
+                                HStack(spacing: 5) {
+                                    Image(systemName: "person.badge.shield.checkmark.fill")
+                                        .font(.system(size: 10))
+                                    Text(role)
+                                        .font(.system(size: 12, weight: .medium))
+                                }
+                                .foregroundColor(.green)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.green.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
+
+                // Security — lives inside Profile since it's about how THIS
+                // operator unlocks the app.
+                VStack(alignment: .leading, spacing: 16) {
+                    groupHeader("Security")
+                    securityContent
+                }
+            }
+        }
+    }
+
+    private var profilePictureCaption: String {
+        if settings.customProfilePicture != nil {
+            return "Using a custom photo stored on this Mac."
+        }
+        if session.profilePhoto != nil {
+            return "Using your Microsoft directory photo. Choose a photo to override it on this Mac."
+        }
+        return "Using your initials. Choose a photo to personalize your profile."
+    }
+
+    private var profileAvatar: some View {
+        ZStack {
+            if let image = resolvedProfilePicture {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 72, height: 72)
+                    .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 72, height: 72)
+
+                Text(profileInitials)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .overlay(
+            Circle()
+                .stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.1), lineWidth: 1)
+        )
+    }
+
+    private var profileInitials: String {
+        let initials = session.displayName
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first }
+        if !initials.isEmpty {
+            return String(initials).uppercased()
+        }
+        if let first = session.email.first {
+            return String(first).uppercased()
+        }
+        return "?"
+    }
+
+    private func chooseProfilePicture() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose a profile picture"
+        panel.prompt = "Use Photo"
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let image = NSImage(contentsOf: url) else { return }
+        settings.customProfilePicture = image
+    }
+
+    // MARK: - Security (inside Profile)
+
+    private var securityContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
                 // Biometrics toggle
                 HStack(spacing: 16) {
                     ZStack {
@@ -339,16 +537,15 @@ struct SettingsView: View {
                     Image(systemName: "info.circle.fill")
                         .font(.system(size: 12))
                         .foregroundColor(.blue)
-                    
+
                     Text("Biometric data is stored securely on your device and never leaves it.")
                         .font(.system(size: 11))
                         .foregroundColor(.gray)
                 }
                 .padding(.top, 4)
-            }
         }
     }
-    
+
     private func testBiometrics() {
         settings.authenticateWithBiometrics(reason: "Test biometric authentication") { success, error in
             withAnimation {
@@ -590,7 +787,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Jamf Pro (MDM-supplied, read-only)
                 VStack(alignment: .leading, spacing: 10) {
-                    cleanupGroupHeader("Jamf Pro")
+                    groupHeader("Jamf Pro")
                     cleanupInfoRow(label: "Server URL", value: cleanupSettings.normalizedJamfURL?.absoluteString ?? "Not configured")
                     cleanupInfoRow(label: "API Client", value: cleanupClientIDDisplay)
                     HStack(spacing: 10) {
@@ -607,7 +804,7 @@ struct SettingsView: View {
 
                 // Stale threshold
                 VStack(alignment: .leading, spacing: 8) {
-                    cleanupGroupHeader("Stale Threshold")
+                    groupHeader("Stale Threshold")
                     Stepper(value: Binding(get: { cleanupEffectiveStaleDays }, set: { cleanupStaleDaysStored = $0 }), in: 1...730) {
                         HStack {
                             Text("Stale after").font(.system(size: 14, weight: .medium)).foregroundColor(isDark ? .white : .primary)
@@ -654,7 +851,7 @@ struct SettingsView: View {
         .onDisappear { saveCleanupProtectPassword() }
     }
 
-    private func cleanupGroupHeader(_ text: String) -> some View {
+    private func groupHeader(_ text: String) -> some View {
         Text(text.uppercased()).font(.system(size: 11, weight: .semibold)).foregroundColor(.gray)
     }
 

@@ -12,8 +12,9 @@
 //  This type holds the answer and nothing else — no policy lives here.
 //
 
-import Foundation
+import AppKit
 import Combine
+import Foundation
 
 @MainActor
 final class UserSession: ObservableObject {
@@ -32,6 +33,12 @@ final class UserSession: ObservableObject {
     @Published private(set) var email: String = ""
     @Published private(set) var displayName: String = ""
 
+    /// The operator's directory photo (Microsoft Graph, Entra sign-in only),
+    /// fetched fail-soft AFTER the session is established. Display-only —
+    /// nothing gates on it. Nil in email mode, when the account has no
+    /// photo, or when the tenant never consented to User.Read.
+    @Published private(set) var profilePhoto: NSImage?
+
     private init() {}
 
     func establish(
@@ -46,11 +53,16 @@ final class UserSession: ObservableObject {
         self.capabilities = capabilities
     }
 
+    func setProfilePhoto(_ image: NSImage?) {
+        profilePhoto = image
+    }
+
     /// Fail-closed reset to defaults (no capabilities, no identity, no roles).
     func clear() {
         roles = []
         capabilities = .none
         email = ""
         displayName = ""
+        profilePhoto = nil
     }
 }
