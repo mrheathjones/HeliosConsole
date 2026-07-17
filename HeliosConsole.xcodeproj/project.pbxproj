@@ -31,6 +31,7 @@
 		F017 /* ComputerSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S017 /* ComputerSearchService.swift */; };
 		F018 /* HealthMetricsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = S018 /* HealthMetricsCalculator.swift */; };
 		F019 /* JamfAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S019 /* JamfAPIService.swift */; };
+		F250 /* EntraGraphService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S250 /* EntraGraphService.swift */; };
 		F020 /* MobileDeviceInventoryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = S020 /* MobileDeviceInventoryCache.swift */; };
 		F021 /* MobileDeviceInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S021 /* MobileDeviceInventoryService.swift */; };
 		F022 /* MobileDeviceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S022 /* MobileDeviceModels.swift */; };
@@ -140,6 +141,7 @@
 		S017 /* ComputerSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerSearchService.swift; sourceTree = "<group>"; };
 		S018 /* HealthMetricsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricsCalculator.swift; sourceTree = "<group>"; };
 		S019 /* JamfAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfAPIService.swift; sourceTree = "<group>"; };
+		S250 /* EntraGraphService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntraGraphService.swift; sourceTree = "<group>"; };
 		S020 /* MobileDeviceInventoryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceInventoryCache.swift; sourceTree = "<group>"; };
 		S021 /* MobileDeviceInventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceInventoryService.swift; sourceTree = "<group>"; };
 		S022 /* MobileDeviceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceModels.swift; sourceTree = "<group>"; };
@@ -296,6 +298,7 @@
 				S017 /* ComputerSearchService.swift */,
 				S018 /* HealthMetricsCalculator.swift */,
 				S019 /* JamfAPIService.swift */,
+				S250 /* EntraGraphService.swift */,
 				S020 /* MobileDeviceInventoryCache.swift */,
 				S021 /* MobileDeviceInventoryService.swift */,
 				S022 /* MobileDeviceModels.swift */,
@@ -668,6 +671,7 @@
 				F017 /* ComputerSearchService.swift in Sources */,
 				F018 /* HealthMetricsCalculator.swift in Sources */,
 				F019 /* JamfAPIService.swift in Sources */,
+				F250 /* EntraGraphService.swift in Sources */,
 				F020 /* MobileDeviceInventoryCache.swift in Sources */,
 				F021 /* MobileDeviceInventoryService.swift in Sources */,
 				F022 /* MobileDeviceModels.swift in Sources */,
@@ -846,7 +850,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -874,7 +878,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -902,7 +906,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -932,7 +936,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;

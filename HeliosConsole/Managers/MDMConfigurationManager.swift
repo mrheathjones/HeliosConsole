@@ -55,6 +55,27 @@ class MDMConfigurationManager: ObservableObject {
 
         // Jamf Protect (nested)
         static let jamfProtect = "jamfProtect"
+
+        // Microsoft Entra (Graph) cleanup for Return to Service.
+        // The Helios profile carries only a pointer to the preference domain
+        // that holds the actual Entra credentials. Supported both as a
+        // top-level key and nested under an `entra` dictionary.
+        static let entra = "entra"
+        static let entraCredentialDomain = "entraCredentialDomain"
+        // Key names read from the *credential* domain the pointer resolves to.
+        // Each value accepts several spellings so an existing Entra credential
+        // plist (e.g. the erase-and-delete script's) can be reused as-is. The
+        // first non-empty match wins; canonical key is listed first.
+        static let entraTenantIdKeys = ["entra_tenant_id", "tenantID", "tenant_id", "TenantID", "entra_tenant"]
+        static let entraClientIdKeys = ["entra_client_id", "clientID", "client_id", "ClientID", "entra_client"]
+        static let entraClientSecretKeys = ["entra_client_secret", "clientSecret", "client_secret", "ClientSecret"]
+        static let entraCertPEMKeys = ["entra_cert_pem", "entra_certificate", "cert_pem", "certPEM", "entra_cert", "certificate_pem"]
+        // Optional flat top-level overrides for the credential-domain key names
+        // (nested equivalents live under the `entra` dict: tenantIdKey, etc.).
+        static let entraTenantIdKeyOverride = "entraTenantIdKey"
+        static let entraClientIdKeyOverride = "entraClientIdKey"
+        static let entraClientSecretKeyOverride = "entraClientSecretKey"
+        static let entraCertPEMKeyOverride = "entraCertPEMKey"
     }
     
     private init() {
@@ -213,6 +234,9 @@ class MDMConfigurationManager: ObservableObject {
             protectPassword = protectDict["password"] as? String
         }
 
+        // Microsoft Entra (Graph) cleanup — resolve via the domain pointer.
+        let entra = loadEntraCredentials(from: defaults)
+
         return MDMConfiguration(
             jamfURL: serverURL,
             masterClientID: clientID,
@@ -234,7 +258,12 @@ class MDMConfigurationManager: ObservableObject {
             protectEnabled: protectEnabled,
             protectURL: protectURL,
             protectClientID: protectClientID,
-            protectPassword: protectPassword
+            protectPassword: protectPassword,
+            entraCredentialDomain: entra.domain,
+            entraTenantId: entra.tenantId,
+            entraClientId: entra.clientId,
+            entraClientSecret: entra.clientSecret,
+            entraCertPEM: entra.certPEM
         )
     }
     
@@ -285,7 +314,9 @@ class MDMConfigurationManager: ObservableObject {
         } else {
             sidebarItems = MDMConfiguration.default.sidebarItems
         }
-        
+
+        let entra = loadEntraCredentials(from: defaults)
+
         return MDMConfiguration(
             jamfURL: jamfURL,
             masterClientID: clientID,
@@ -299,10 +330,15 @@ class MDMConfigurationManager: ObservableObject {
             screenShareEnabled: screenShareEnabled,
             abmClientId: abmClientId,
             abmKeyId: abmKeyId,
-            abmPrivateKey: abmPrivateKey
+            abmPrivateKey: abmPrivateKey,
+            entraCredentialDomain: entra.domain,
+            entraTenantId: entra.tenantId,
+            entraClientId: entra.clientId,
+            entraClientSecret: entra.clientSecret,
+            entraCertPEM: entra.certPEM
         )
     }
-    
+
     // MARK: - Load from Main App Defaults (Companion Apps)
     // When running as a companion app (e.g. HeliosMenuBar), the main app's
     // UserDefaults are stored under its bundle ID. We can access them via
@@ -353,7 +389,8 @@ class MDMConfigurationManager: ObservableObject {
             
             let screenShareEnabled = jamfProDict["screenShareEnabled"] as? Bool ?? defaults.bool(forKey: MDMKeys.screenShareEnabled)
             let sidebarItems = MDMConfiguration.default.sidebarItems
-            
+            let entra = loadEntraCredentials(from: defaults)
+
             return MDMConfiguration(
                 jamfURL: serverURL,
                 masterClientID: clientID,
@@ -367,10 +404,15 @@ class MDMConfigurationManager: ObservableObject {
                 screenShareEnabled: screenShareEnabled,
                 abmClientId: abmClientId,
                 abmKeyId: abmKeyId,
-                abmPrivateKey: abmPrivateKey
+                abmPrivateKey: abmPrivateKey,
+                entraCredentialDomain: entra.domain,
+                entraTenantId: entra.tenantId,
+                entraClientId: entra.clientId,
+                entraClientSecret: entra.clientSecret,
+                entraCertPEM: entra.certPEM
             )
         }
-        
+
         // Try flat keys
         if let jamfURL = defaults.string(forKey: MDMKeys.jamfURL),
            !jamfURL.isEmpty, !jamfURL.contains("yourinstance"), !jamfURL.contains("your-instance"),
@@ -391,7 +433,8 @@ class MDMConfigurationManager: ObservableObject {
             let abmPrivateKey = defaults.string(forKey: MDMKeys.abmPrivateKey)
             let screenShareEnabled = defaults.bool(forKey: MDMKeys.screenShareEnabled)
             let sidebarItems = MDMConfiguration.default.sidebarItems
-            
+            let entra = loadEntraCredentials(from: defaults)
+
             return MDMConfiguration(
                 jamfURL: jamfURL,
                 masterClientID: clientID,
@@ -405,14 +448,97 @@ class MDMConfigurationManager: ObservableObject {
                 screenShareEnabled: screenShareEnabled,
                 abmClientId: abmClientId,
                 abmKeyId: abmKeyId,
-                abmPrivateKey: abmPrivateKey
+                abmPrivateKey: abmPrivateKey,
+                entraCredentialDomain: entra.domain,
+                entraTenantId: entra.tenantId,
+                entraClientId: entra.clientId,
+                entraClientSecret: entra.clientSecret,
+                entraCertPEM: entra.certPEM
             )
         }
-        
+
         print("   ❌ No valid config in main app defaults")
         return nil
     }
     
+    // MARK: - Resolve Entra Credentials
+    // The Helios profile carries only a pointer (`entraCredentialDomain`, either
+    // top-level or nested under `entra`) to the preference domain that holds the
+    // real Entra Graph credentials, plus optional key-name overrides so an
+    // already-deployed credential plist can be read under whatever keys it
+    // already uses. Because Helios is not sandboxed, UserDefaults(suiteName:)
+    // transparently reads that domain's managed prefs from
+    // /Library/Managed Preferences/<domain>.plist. Never throws; a missing
+    // pointer or creds simply yields nils and Entra cleanup stays disabled.
+    private static func loadEntraCredentials(
+        from defaults: UserDefaults
+    ) -> (domain: String?, tenantId: String?, clientId: String?, clientSecret: String?, certPEM: String?) {
+        let entraDict = defaults.dictionary(forKey: MDMKeys.entra)
+
+        var domain = defaults.string(forKey: MDMKeys.entraCredentialDomain)
+        if domain == nil, let entraDict {
+            domain = (entraDict["credentialDomain"] as? String)
+                ?? (entraDict[MDMKeys.entraCredentialDomain] as? String)
+        }
+        guard let resolvedDomain = domain, !resolvedDomain.isEmpty else {
+            return (nil, nil, nil, nil, nil)
+        }
+        guard let credDefaults = UserDefaults(suiteName: resolvedDomain) else {
+            print("   ⚠️ Entra: could not open credential domain \(resolvedDomain)")
+            return (resolvedDomain, nil, nil, nil, nil)
+        }
+
+        // The Helios profile may explicitly dictate which key each value lives
+        // under in the credential domain (entra.tenantIdKey, entra.clientIdKey,
+        // entra.clientSecretKey, entra.certPEMKey — or the flat top-level
+        // equivalents). An override is tried first; the built-in alias list is
+        // kept as a fallback so a slightly-off override still resolves.
+        let tenant = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "tenantIdKey", flat: MDMKeys.entraTenantIdKeyOverride, fallback: MDMKeys.entraTenantIdKeys))
+        let client = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "clientIdKey", flat: MDMKeys.entraClientIdKeyOverride, fallback: MDMKeys.entraClientIdKeys))
+        let secret = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "clientSecretKey", flat: MDMKeys.entraClientSecretKeyOverride, fallback: MDMKeys.entraClientSecretKeys))
+        let pem = firstNonEmpty(credDefaults, keyList(entraDict, defaults,
+            nested: "certPEMKey", flat: MDMKeys.entraCertPEMKeyOverride, fallback: MDMKeys.entraCertPEMKeys))
+
+        if tenant != nil && client != nil {
+            print("   ✅ Entra: resolved credentials from domain \(resolvedDomain)")
+        } else {
+            print("   ⚠️ Entra: pointer set to \(resolvedDomain) but tenant/client missing")
+        }
+        return (resolvedDomain, tenant, client, secret, pem)
+    }
+
+    /// Build the ordered key list to probe in the credential domain: an explicit
+    /// override from the Helios profile (nested under `entra`, or a flat
+    /// top-level key) first, then the built-in alias fallbacks.
+    private static func keyList(
+        _ entraDict: [String: Any]?,
+        _ defaults: UserDefaults,
+        nested: String,
+        flat: String,
+        fallback: [String]
+    ) -> [String] {
+        var keys: [String] = []
+        if let override = (entraDict?[nested] as? String) ?? defaults.string(forKey: flat),
+           !override.isEmpty {
+            keys.append(override)
+        }
+        keys.append(contentsOf: fallback)
+        return keys
+    }
+
+    /// Returns the first non-empty string among the candidate keys in `defaults`.
+    private static func firstNonEmpty(_ defaults: UserDefaults, _ keys: [String]) -> String? {
+        for key in keys {
+            if let value = defaults.string(forKey: key), !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
     // MARK: - Parse Sidebar Items
     private static func parseSidebarItems(from data: [[String: Any]]) -> [MDMConfiguration.SidebarItemConfig] {
         var items: [MDMConfiguration.SidebarItemConfig] = []

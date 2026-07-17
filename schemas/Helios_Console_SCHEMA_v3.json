@@ -74,6 +74,63 @@
         }
       }
     },
+    "role": {
+      "title": "Operator Role",
+      "description": "Operator role delivered by MDM. Gates the destructive Cleanup feature (Admin-only). Fails closed: a missing, blank, or unrecognized value is treated as the least-privileged User, so Cleanup stays hidden unless the value is exactly 'Admin'. May also be supplied nested under jamfPro.role.",
+      "type": "string",
+      "enum": ["Admin", "Support", "User"]
+    },
+    "cleanup": {
+      "title": "Stale-Device Cleanup",
+      "description": "Settings for the Admin-only Jamf stale-device cleanup feature.",
+      "type": "object",
+      "properties": {
+        "staleDays": {
+          "title": "Stale Threshold (days)",
+          "description": "Days without check-in before a device is considered stale.",
+          "type": "integer",
+          "default": 90
+        },
+        "defaultStaticGroupID": {
+          "title": "Default Static Group ID",
+          "description": "Jamf static group ID pre-selected in the cleanup UI (optional).",
+          "type": "string"
+        },
+        "defaultSiteID": {
+          "title": "Default Site ID",
+          "description": "Jamf site ID pre-selected in the cleanup UI (optional).",
+          "type": "string"
+        }
+      }
+    },
+    "jamfProtect": {
+      "title": "Jamf Protect",
+      "description": "Optional Jamf Protect API integration (gated).",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "title": "Enable Jamf Protect",
+          "description": "Master toggle for Jamf Protect features.",
+          "type": "boolean",
+          "default": false
+        },
+        "url": {
+          "title": "Protect URL",
+          "description": "Jamf Protect API base URL.",
+          "type": "string"
+        },
+        "clientID": {
+          "title": "Protect Client ID",
+          "description": "Jamf Protect API client ID.",
+          "type": "string"
+        },
+        "password": {
+          "title": "Protect Password",
+          "description": "Jamf Protect API password. Sensitive — managed-pref plists are world-readable; prefer delivering via Keychain and scope this profile tightly.",
+          "type": "string"
+        }
+      }
+    },
     "appleBusinessManager": {
       "title": "Apple Business Manager",
       "description": "ABM API credentials for AppleCare coverage lookups",
@@ -101,6 +158,44 @@
           "type": "string"
         }
       }
+    },
+    "entra": {
+      "title": "Microsoft Entra Device Cleanup",
+      "description": "Entra (Graph) cleanup for the Return to Service action. When present, Return to Service also deletes the erased Mac's device object(s) from Entra by displayName so it can re-register cleanly with PSSO / Company Portal. This block only POINTS to the preference domain carrying the Graph credentials — the secrets live in that separate managed-pref domain, not here. Distinct from the 'entraID' user-login block. Omit to disable Entra cleanup.",
+      "type": "object",
+      "properties": {
+        "credentialDomain": {
+          "title": "Credential Domain",
+          "description": "Preference domain (bundle identifier) of a separate managed-preferences payload holding the Entra Graph app credentials. Helios (unsandboxed) reads it via UserDefaults(suiteName:). That domain must supply a tenant id, a client id, and at least one of a cert PEM (PEM cert+key, preferred PS256 client assertion) or a client secret (fallback). The app registration needs Device.ReadWrite.All AND the 'Cloud Device Administrator' Entra role.",
+          "type": "string",
+          "examples": ["com.helios.console.entra"]
+        },
+        "tenantIdKey": {
+          "title": "Tenant ID Key",
+          "description": "Optional. The exact key name to read the tenant id under in the credential domain. Use this to point Helios at a plist you already deploy. If omitted, Helios tries: entra_tenant_id, tenantID, tenant_id, TenantID, entra_tenant.",
+          "type": "string",
+          "examples": ["entra_tenant_id"]
+        },
+        "clientIdKey": {
+          "title": "Client ID Key",
+          "description": "Optional. The exact key name for the client id in the credential domain. If omitted, Helios tries: entra_client_id, clientID, client_id, ClientID, entra_client.",
+          "type": "string",
+          "examples": ["entra_client_id"]
+        },
+        "clientSecretKey": {
+          "title": "Client Secret Key",
+          "description": "Optional. The exact key name for the client secret in the credential domain. If omitted, Helios tries: entra_client_secret, clientSecret, client_secret, ClientSecret.",
+          "type": "string",
+          "examples": ["entra_client_secret"]
+        },
+        "certPEMKey": {
+          "title": "Certificate PEM Key",
+          "description": "Optional. The exact key name for the certificate PEM string in the credential domain. If omitted, Helios tries: entra_cert_pem, entra_certificate, cert_pem, certPEM, entra_cert, certificate_pem.",
+          "type": "string",
+          "examples": ["entra_cert_pem"]
+        }
+      },
+      "required": ["credentialDomain"]
     },
     "SidebarItems": {
       "title": "Sidebar Items",

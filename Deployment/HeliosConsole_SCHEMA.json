@@ -355,6 +355,39 @@
           "description": "The Jamf Protect API client's password/secret (the API authenticates with client_id + password). If set here it is used and the in-app field locks; if omitted, it is entered in the app and stored in the Keychain. Sensitive — managed-pref plists are world-readable; scope this profile tightly."
         }
       }
+    },
+    "entra": {
+      "type": "object",
+      "title": "Microsoft Entra Device Cleanup (optional)",
+      "description": "Entra (Graph) cleanup for the Return to Service action. When present, Return to Service also deletes the erased Mac's Entra device object(s) by displayName so it can re-register cleanly with PSSO / Company Portal. This block only POINTS to a SEPARATE preference domain holding the Graph credentials — the secrets are NOT stored here — so you can reuse an Entra credential plist you already deploy without duplicating it. The Entra app registration needs the Device.ReadWrite.All application permission AND the 'Cloud Device Administrator' Entra role (without the role, Graph returns 403 on delete and the app logs it, non-fatal). Omit this block to disable Entra cleanup.",
+      "properties": {
+        "credentialDomain": {
+          "type": "string",
+          "title": "Credential Domain (bundle identifier)",
+          "description": "Preference domain of the separate managed-preferences payload holding the Entra Graph credentials (e.g. com.helios.console.entra). Helios (unsandboxed) reads it via UserDefaults(suiteName:) from /Library/Managed Preferences/<domain>.plist. That domain must supply a tenant id, a client id, and at least one of a certificate PEM string (preferred — Helios signs a PS256 client assertion) or a client secret (fallback)."
+        },
+        "tenantIdKey": {
+          "type": "string",
+          "title": "Tenant ID Key (optional)",
+          "description": "Exact key name to read the tenant id under in the credential domain — lets Helios reuse an existing plist as-is. If omitted, Helios tries: entra_tenant_id, tenantID, tenant_id, TenantID, entra_tenant."
+        },
+        "clientIdKey": {
+          "type": "string",
+          "title": "Client ID Key (optional)",
+          "description": "Exact key name for the client id in the credential domain. If omitted, Helios tries: entra_client_id, clientID, client_id, ClientID, entra_client."
+        },
+        "clientSecretKey": {
+          "type": "string",
+          "title": "Client Secret Key (optional)",
+          "description": "Exact key name for the client secret in the credential domain. If omitted, Helios tries: entra_client_secret, clientSecret, client_secret, ClientSecret."
+        },
+        "certPEMKey": {
+          "type": "string",
+          "title": "Certificate PEM Key (optional)",
+          "description": "Exact key name for the certificate PEM string in the credential domain. Must be the PEM string itself, not a file path (Helios runs in user context and cannot read a root-owned PEM file). If omitted, Helios tries: entra_cert_pem, entra_certificate, cert_pem, certPEM, entra_cert, certificate_pem."
+        }
+      },
+      "required": ["credentialDomain"]
     }
   },
   "required": ["jamfPro"]

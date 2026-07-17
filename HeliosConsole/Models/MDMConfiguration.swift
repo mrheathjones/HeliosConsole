@@ -46,6 +46,35 @@ struct MDMConfiguration: Codable {
     /// Sensitive — managed-pref plists are world-readable; scope tightly.
     let protectPassword: String?
 
+    // MARK: - Microsoft Entra (Graph) cleanup for Return to Service
+    /// Preference domain (bundle identifier) that carries the Entra Graph
+    /// credentials. The Helios profile only stores this pointer; the actual
+    /// tenant/client/secret/PEM live in a separate managed-pref domain so the
+    /// Entra secrets are not duplicated into the Helios domain. Absent → Entra
+    /// cleanup is skipped.
+    let entraCredentialDomain: String?
+    /// Microsoft Entra tenant id (resolved from `entraCredentialDomain`).
+    let entraTenantId: String?
+    /// Entra app registration client id.
+    let entraClientId: String?
+    /// Entra app client secret — fallback auth when no certificate is present.
+    let entraClientSecret: String?
+    /// PEM (certificate + private key) for PS256 client-assertion auth
+    /// (preferred). Sensitive — the source managed-pref plist is world-readable.
+    let entraCertPEM: String?
+
+    /// Whether Entra device cleanup can run: tenant + client id must be present
+    /// along with at least one credential (certificate PEM or client secret).
+    var isEntraConfigured: Bool {
+        guard let tenant = entraTenantId, !tenant.isEmpty,
+              let client = entraClientId, !client.isEmpty else {
+            return false
+        }
+        let hasCert = (entraCertPEM?.isEmpty == false)
+        let hasSecret = (entraClientSecret?.isEmpty == false)
+        return hasCert || hasSecret
+    }
+
     var isABMConfigured: Bool {
         guard let clientId = abmClientId, !clientId.isEmpty,
               let keyId = abmKeyId, !keyId.isEmpty,
@@ -94,7 +123,12 @@ struct MDMConfiguration: Codable {
         protectEnabled: Bool = false,
         protectURL: String? = nil,
         protectClientID: String? = nil,
-        protectPassword: String? = nil
+        protectPassword: String? = nil,
+        entraCredentialDomain: String? = nil,
+        entraTenantId: String? = nil,
+        entraClientId: String? = nil,
+        entraClientSecret: String? = nil,
+        entraCertPEM: String? = nil
     ) {
         self.jamfURL = jamfURL
         self.masterClientID = masterClientID
@@ -117,6 +151,11 @@ struct MDMConfiguration: Codable {
         self.protectURL = protectURL
         self.protectClientID = protectClientID
         self.protectPassword = protectPassword
+        self.entraCredentialDomain = entraCredentialDomain
+        self.entraTenantId = entraTenantId
+        self.entraClientId = entraClientId
+        self.entraClientSecret = entraClientSecret
+        self.entraCertPEM = entraCertPEM
     }
     
     struct SidebarItemConfig: Codable, Identifiable {
