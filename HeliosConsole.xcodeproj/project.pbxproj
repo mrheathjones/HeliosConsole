@@ -61,6 +61,7 @@
 		F045 /* HealthFilteredDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S045 /* HealthFilteredDeviceListView.swift */; };
 		FABM1 /* DevicesHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM1 /* DevicesHomeView.swift */; };
 		FABM2 /* ABMLookupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM2 /* ABMLookupView.swift */; };
+		FABM3 /* ABMAssignmentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM3 /* ABMAssignmentSheet.swift */; };
 		F046 /* MobileDeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S046 /* MobileDeviceView.swift */; };
 		F047 /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S047 /* AnnouncementsView.swift */; };
 		F200 /* AnnouncementMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S200 /* AnnouncementMarkdownView.swift */; };
@@ -198,6 +199,7 @@
 		S045 /* HealthFilteredDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthFilteredDeviceListView.swift; sourceTree = "<group>"; };
 		SABM1 /* DevicesHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesHomeView.swift; sourceTree = "<group>"; };
 		SABM2 /* ABMLookupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMLookupView.swift; sourceTree = "<group>"; };
+		SABM3 /* ABMAssignmentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMAssignmentSheet.swift; sourceTree = "<group>"; };
 		S046 /* MobileDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDeviceView.swift; sourceTree = "<group>"; };
 		S047 /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
 		S200 /* AnnouncementMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementMarkdownView.swift; sourceTree = "<group>"; };
@@ -450,6 +452,7 @@
 				S045 /* HealthFilteredDeviceListView.swift */,
 				SABM1 /* DevicesHomeView.swift */,
 				SABM2 /* ABMLookupView.swift */,
+				SABM3 /* ABMAssignmentSheet.swift */,
 				S046 /* MobileDeviceView.swift */,
 			);
 			path = Device;
@@ -791,6 +794,7 @@
 				F045 /* HealthFilteredDeviceListView.swift in Sources */,
 				FABM1 /* DevicesHomeView.swift in Sources */,
 				FABM2 /* ABMLookupView.swift in Sources */,
+				FABM3 /* ABMAssignmentSheet.swift in Sources */,
 				F046 /* MobileDeviceView.swift in Sources */,
 				F047 /* AnnouncementsView.swift in Sources */,
 				F200 /* AnnouncementMarkdownView.swift in Sources */,

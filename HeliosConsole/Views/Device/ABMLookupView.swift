@@ -46,6 +46,8 @@ private enum ABMAssignmentFilter: String, CaseIterable, Identifiable {
 struct ABMLookupView: View {
     @ObservedObject private var abmService = ABMAPIService.shared
     @ObservedObject private var cache = ABMDeviceCache.shared
+    /// Observed so assign/unassign gates re-evaluate on role change.
+    @ObservedObject private var session = UserSession.shared
 
     @State private var searchText = ""
     @State private var assignmentFilter: ABMAssignmentFilter = .all
@@ -53,6 +55,14 @@ struct ABMLookupView: View {
     @State private var selectedDevice: ABMOrgDevice?
     @State private var isLoading = false
     @State private var loadError: String?
+
+    // Assign / unassign flow state (PR D)
+    @State private var assignSheetDevice: ABMOrgDevice?
+    @State private var unassignConfirmDevice: ABMOrgDevice?
+    @State private var isUnassigning = false
+    @State private var actionResultTitle: String?
+    @State private var actionResultMessage = ""
+    @State private var actionResultSuccess = false
 
     /// serial (uppercased) → asset tag, joined from the Jamf computer
     /// inventory cache. Rebuilt on load/refresh — never inside `body`,
@@ -163,6 +173,46 @@ struct ABMLookupView: View {
                 assignedServer: cache.assignedServer(forDeviceId: device.id),
                 assetTag: assetTagsBySerial[device.serialNumber.uppercased()]
             )
+        }
+        .sheet(item: $assignSheetDevice) { device in
+            ABMAssignmentSheet(
+                serialNumber: device.serialNumber,
+                deviceName: device.deviceModel ?? device.serialNumber,
+                title: policy(for: device).menuLabel(for: .abmAssign),
+                policyProvider: { policy(for: device) },
+                onFinished: { success, _, error in
+                    logAction(.abmAssign, device: device, success: success, error: error)
+                }
+            )
+        }
+        .confirmationDialog(
+            DeviceAction.abmUnassign.title,
+            isPresented: Binding(
+                get: { unassignConfirmDevice != nil },
+                set: { if !$0 { unassignConfirmDevice = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Unassign", role: .destructive) {
+                if let device = unassignConfirmDevice {
+                    unassignConfirmDevice = nil
+                    Task { await executeUnassign(device) }
+                }
+            }
+            Button("Cancel", role: .cancel) { unassignConfirmDevice = nil }
+        } message: {
+            Text(DeviceAction.abmUnassign.message)
+        }
+        .alert(
+            actionResultTitle ?? "",
+            isPresented: Binding(
+                get: { actionResultTitle != nil },
+                set: { if !$0 { actionResultTitle = nil } }
+            )
+        ) {
+            Button("OK") { actionResultTitle = nil }
+        } message: {
+            Text(actionResultMessage)
         }
     }
 
@@ -462,10 +512,132 @@ struct ABMLookupView: View {
                     ) {
                         selectedDevice = device
                     }
+                    .contextMenu { actionMenuItems(for: device) }
                 }
             }
             .padding(32)
         }
+    }
+
+    // MARK: - Assign / Unassign Actions
+
+    /// Policy for THIS device's platform: Macs consult the computer action
+    /// grants, known non-Mac families the mobile-device grants. A device
+    /// whose family is missing entirely gets .denyAll — when the platform
+    /// cannot be determined, no policy branch may be assumed (fail-closed).
+    private func policy(for device: ABMOrgDevice) -> DeviceActionPolicy {
+        guard let family = device.productFamily,
+              !family.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return .denyAll
+        }
+        let config = MDMConfigurationManager.shared.configuration
+        if family.caseInsensitiveCompare("Mac") == .orderedSame {
+            return config.computerActionPolicy(capabilities: session.capabilities)
+        }
+        return config.mobileDeviceActionPolicy(capabilities: session.capabilities)
+    }
+
+    @ViewBuilder
+    private func actionMenuItems(for device: ABMOrgDevice) -> some View {
+        let devicePolicy = policy(for: device)
+        if devicePolicy.isAllowed(.abmAssign) {
+            Button {
+                assignSheetDevice = device
+            } label: {
+                Label(devicePolicy.menuLabel(for: .abmAssign), systemImage: DeviceAction.abmAssign.icon)
+            }
+        }
+        if devicePolicy.isAllowed(.abmUnassign), cache.assignmentMap[device.id] != nil {
+            Button(role: .destructive) {
+                unassignConfirmDevice = device
+            } label: {
+                Label(devicePolicy.menuLabel(for: .abmUnassign), systemImage: DeviceAction.abmUnassign.icon)
+            }
+        }
+    }
+
+    /// Unassigns `device` from its current server — the same rules as the
+    /// Device Details flow: the grant's allowedMdmServers governs which
+    /// servers the operator may unassign FROM, and the policy is re-checked
+    /// here (defense in depth), never trusted from the menu.
+    @MainActor
+    private func executeUnassign(_ device: ABMOrgDevice) async {
+        guard !isUnassigning else { return }
+        let devicePolicy = policy(for: device)
+        if let denial = devicePolicy.denialReason(for: .abmUnassign) {
+            // Defense-in-depth denial: surface AND audit-log it, mirroring
+            // DeviceView.reportActionDenial — never a silent drop.
+            let layer = denial == .machinePolicy ? "machine policy" : "role capability"
+            showResult(false, "Action Not Permitted",
+                       "Unassigning from an MDM server is blocked by \(layer) on this Mac.")
+            logAction(.abmUnassign, device: device, success: false, error: "Blocked by \(layer)")
+            return
+        }
+
+        isUnassigning = true
+        defer { isUnassigning = false }
+
+        do {
+            let servers = try await ABMAssignmentExecutor.loadServers()
+            guard let current = try await ABMAssignmentExecutor.currentServer(for: device, servers: servers) else {
+                showResult(false, "Unassign from MDM Server",
+                           "The device is not assigned to any MDM server — there is nothing to unassign.")
+                return
+            }
+
+            let options = devicePolicy.options(for: .abmUnassign)
+            guard options.permitsMdmServer(named: current.serverName) else {
+                showResult(false, "Not Permitted",
+                           "Your role's grant does not permit unassigning devices from \(current.serverName).")
+                logAction(.abmUnassign, device: device, success: false,
+                          error: "Denied by allowedMdmServers for server \(current.serverName)")
+                return
+            }
+
+            let outcome = try await ABMAPIService.shared.performAssignment(
+                .unassignDevices, deviceId: device.id, mdmServerId: current.id
+            )
+            switch outcome {
+            case .succeeded:
+                cache.applyAssignment(deviceId: device.id, serverId: nil)
+                showResult(true, "Unassigned from \(current.serverName)",
+                           "Until the device is reassigned, it cannot enroll via Automated Device Enrollment.")
+                logAction(.abmUnassign, device: device, success: true, error: nil)
+            case .completedWithErrors(let detail):
+                showResult(false, "Completed With Errors", detail)
+                logAction(.abmUnassign, device: device, success: false, error: "COMPLETED_WITH_ERROR")
+            case .failed(let status):
+                showResult(false, "Unassign Failed", "Apple Business Manager reported the activity as \(status).")
+                logAction(.abmUnassign, device: device, success: false, error: status)
+            case .stillRunning(let activityId):
+                showResult(false, "Still Processing",
+                           "Apple accepted the request but it had not completed when polling stopped (activity \(activityId)). Refresh shortly to confirm.")
+                logAction(.abmUnassign, device: device, success: false, error: "Timed out polling \(activityId)")
+            }
+        } catch {
+            showResult(false, "Unassign Failed", error.localizedDescription)
+            logAction(.abmUnassign, device: device, success: false, error: error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func showResult(_ success: Bool, _ title: String, _ message: String) {
+        actionResultSuccess = success
+        actionResultTitle = title
+        actionResultMessage = message
+    }
+
+    private func logAction(_ action: DeviceAction, device: ABMOrgDevice, success: Bool, error: String?) {
+        ActionLogService.shared.logAction(
+            actionName: action.logName,
+            actionCategory: action.logCategory,
+            deviceName: device.deviceModel ?? device.serialNumber,
+            deviceSerialNumber: device.serialNumber,
+            deviceId: device.id,
+            devicePlatform: device.productFamily?.caseInsensitiveCompare("Mac") == .orderedSame ? "macOS" : (device.productFamily ?? "Unknown"),
+            success: success,
+            errorMessage: error
+        )
     }
 
     // MARK: - Not Configured
