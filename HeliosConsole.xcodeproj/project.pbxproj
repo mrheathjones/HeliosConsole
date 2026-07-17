@@ -83,6 +83,7 @@
 		F075 /* UserInterfaceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S075 /* UserInterfaceConfiguration.swift */; };
 		F076 /* DeviceAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = S076 /* DeviceAction.swift */; };
 		F077 /* DeviceActionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = S077 /* DeviceActionPolicy.swift */; };
+		F078 /* NetworkTuning.swift in Sources */ = {isa = PBXBuildFile; fileRef = S078 /* NetworkTuning.swift */; };
 		MB_F001 /* HeliosMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MB_S001 /* HeliosMenuBarApp.swift */; };
 		MB_F002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A001 /* Assets.xcassets */; };
 		MB_F003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = S003 /* AppSettings.swift */; };
@@ -114,6 +115,7 @@
 		MB_F075 /* UserInterfaceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = S075 /* UserInterfaceConfiguration.swift */; };
 		MB_F076 /* DeviceAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = S076 /* DeviceAction.swift */; };
 		MB_F077 /* DeviceActionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = S077 /* DeviceActionPolicy.swift */; };
+		MB_F078 /* NetworkTuning.swift in Sources */ = {isa = PBXBuildFile; fileRef = S078 /* NetworkTuning.swift */; };
 		CLF1 /* CleanupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR1 /* CleanupModels.swift */; };
 		CLF2 /* JamfCleanupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR2 /* JamfCleanupClient.swift */; };
 		CLF3 /* JamfProtectClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR3 /* JamfProtectClient.swift */; };
@@ -209,6 +211,7 @@
 		S075 /* UserInterfaceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInterfaceConfiguration.swift; sourceTree = "<group>"; };
 		S076 /* DeviceAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAction.swift; sourceTree = "<group>"; };
 		S077 /* DeviceActionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceActionPolicy.swift; sourceTree = "<group>"; };
+		S078 /* NetworkTuning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTuning.swift; sourceTree = "<group>"; };
 		CLR1 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupModels.swift; sourceTree = "<group>"; };
 		CLR2 /* JamfCleanupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfCleanupClient.swift; sourceTree = "<group>"; };
 		CLR3 /* JamfProtectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfProtectClient.swift; sourceTree = "<group>"; };
@@ -331,6 +334,7 @@
 			isa = PBXGroup;
 			children = (
 				S012 /* AbmAPIService.swift */,
+				S078 /* NetworkTuning.swift */,
 				S013 /* AnnouncementService.swift */,
 				S014 /* ComputerInventoryCache.swift */,
 				S015 /* ComputerInventoryService.swift */,
@@ -664,6 +668,7 @@
 				MB_F075 /* UserInterfaceConfiguration.swift in Sources */,
 				MB_F076 /* DeviceAction.swift in Sources */,
 				MB_F077 /* DeviceActionPolicy.swift in Sources */,
+				MB_F078 /* NetworkTuning.swift in Sources */,
 				MB_F014 /* ComputerInventoryCache.swift in Sources */,
 				MB_F015 /* ComputerInventoryService.swift in Sources */,
 				MB_F016 /* ComputerSearchModels.swift in Sources */,
@@ -719,6 +724,7 @@
 				F075 /* UserInterfaceConfiguration.swift in Sources */,
 				F076 /* DeviceAction.swift in Sources */,
 				F077 /* DeviceActionPolicy.swift in Sources */,
+				F078 /* NetworkTuning.swift in Sources */,
 				F012 /* AbmAPIService.swift in Sources */,
 				F013 /* AnnouncementService.swift in Sources */,
 				F014 /* ComputerInventoryCache.swift in Sources */,

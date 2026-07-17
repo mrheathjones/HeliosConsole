@@ -27,7 +27,7 @@ actor JamfCleanupClient {
         self.clientSecret = clientSecret
         self.pageSize = max(1, min(pageSize, 200))
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForRequest = NetworkTuning.requestTimeout
         self.session = URLSession(configuration: config)
     }
 

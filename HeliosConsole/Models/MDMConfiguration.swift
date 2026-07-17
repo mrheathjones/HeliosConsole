@@ -22,6 +22,12 @@ struct MDMConfiguration: Codable {
     let requiredRoleName: String
     let supportURL: String?
     let localAdminUsername: String
+
+    // Network tuning (core domain jamfPro.connectionTimeout /
+    // jamfPro.requestTimeout) — consumed via NetworkTuning at every
+    // URLRequest/URLSession construction site.
+    let connectionTimeoutSeconds: Int
+    let requestTimeoutSeconds: Int
     
     // DEPRECATED: the access domain's deviceActions allow-list is
     // authoritative for the screenShare action; no view reads this flag
@@ -172,6 +178,8 @@ struct MDMConfiguration: Codable {
         requiredRoleName: String,
         supportURL: String?,
         localAdminUsername: String,
+        connectionTimeoutSeconds: Int = 30,
+        requestTimeoutSeconds: Int = 60,
         screenShareEnabled: Bool,
         abmClientId: String?,
         abmKeyId: String?,
@@ -203,6 +211,8 @@ struct MDMConfiguration: Codable {
         self.requiredRoleName = requiredRoleName
         self.supportURL = supportURL
         self.localAdminUsername = localAdminUsername
+        self.connectionTimeoutSeconds = connectionTimeoutSeconds
+        self.requestTimeoutSeconds = requestTimeoutSeconds
         self.screenShareEnabled = screenShareEnabled
         self.abmClientId = abmClientId
         self.abmKeyId = abmKeyId
@@ -293,6 +303,8 @@ struct MDMConfiguration: Codable {
             requiredRoleName: jamfPro?.effectiveRequiredRoleName ?? "SVC_WATCHER_USER",
             supportURL: uiSettings?.effectiveSupportURL,
             localAdminUsername: core?.localAdministration?.effectiveUsername ?? "macadmin",
+            connectionTimeoutSeconds: jamfPro?.effectiveConnectionTimeout ?? 30,
+            requestTimeoutSeconds: jamfPro?.effectiveRequestTimeout ?? 60,
             screenShareEnabled: jamfPro?.effectiveScreenShareEnabled ?? false,
             abmClientId: abmClientId,
             abmKeyId: abmKeyId,
@@ -335,14 +347,18 @@ struct MDMConfiguration: Codable {
     }
     
     /// The app's built-in sidebar, used when no usable managed override is
-    /// delivered by the ui domain.
+    /// delivered by the ui domain. Ids MUST be NavigationDestination raw
+    /// values — unknown ids are skipped by SidebarView. (The previous list
+    /// referenced routes — enterprise/groundcontrol/depsearch — that never
+    /// existed in this app.)
     static let defaultSidebarItems: [SidebarItemConfig] = [
-        SidebarItemConfig(id: "dashboard", icon: "chart.bar.fill", title: "Dashboard", order: 1),
-        SidebarItemConfig(id: "enterprise", icon: "building.2.fill", title: "Enterprise", order: 2),
-        SidebarItemConfig(id: "groundcontrol", icon: "apps.iphone", title: "GroundControl", order: 3),
-        SidebarItemConfig(id: "depsearch", icon: "magnifyingglass", title: "DEP Search", order: 4),
-        SidebarItemConfig(id: "announcements", icon: "bolt.fill", title: "Announcements", order: 5),
-        SidebarItemConfig(id: "settings", icon: "gearshape.fill", title: "Settings", order: 6)
+        SidebarItemConfig(id: "dashboard", icon: "square.grid.2x2", title: "Dashboard", order: 1),
+        SidebarItemConfig(id: "devices", icon: "desktopcomputer", title: "Devices", order: 2),
+        SidebarItemConfig(id: "announcements", icon: "megaphone", title: "Announcements", order: 3),
+        SidebarItemConfig(id: "logs", icon: "doc.text.magnifyingglass", title: "Logs", order: 4),
+        SidebarItemConfig(id: "reports", icon: "chart.bar.doc.horizontal", title: "Reports", order: 5),
+        SidebarItemConfig(id: "enrollments", icon: "person.badge.plus", title: "Enrollments", order: 6),
+        SidebarItemConfig(id: "settings", icon: "gearshape", title: "Settings", order: 7)
     ]
 
     // Default configuration (fallback when no managed domain is delivered).

@@ -69,17 +69,17 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 | `appleBusinessManager.privateKey` | **credentials** | `abmPrivateKey` (moved + renamed, flat key) | **ENFORCED** — AbmAPIService |
 | `localAdministration.enabled` | core | `localAdministration.enabled` (default true) | Parsed — no view consumes the flag today (only `username` is used) |
 | `localAdministration.username` | core | `localAdministration.username` (default `macadmin`) | **ENFORCED** — LAPS lookup, DeviceView |
-| `computers.*` | features | `computers.*` (unchanged) | Parsed, **NOT yet enforced** in views |
-| `mobileDevices.*` | features | `mobileDevices.*` (unchanged) | Parsed, **NOT yet enforced** in views |
-| `healthScorecard.*` | features | `healthScorecard.*` (unchanged) | Parsed, **NOT yet enforced** in views |
+| `computers.*` | features | `computers.*` (unchanged) | **ENFORCED**: `enabled` (unified search), `enableAPIActions` (DeviceActionPolicy), `inventorySections` (inventory fetch; default now matches the sections views render), `showDashboardCard` (dashboard). `fetchInventory`/`inventoryRefreshInterval` still unenforced (no scheduler exists) |
+| `mobileDevices.*` | features | `mobileDevices.*` (unchanged) | **ENFORCED**: `enabled` (unified search), `inventorySections` (inventory fetch; default now matches the sections views render), `showDashboardCards.{iOS,iPadOS,visionOS}` (dashboard). `fetchInventory`/`inventoryRefreshInterval` still unenforced |
+| `healthScorecard.*` | features | `healthScorecard.*` + NEW `metrics[].minimumOSVersions` | **ENFORCED**: `enabled` (dashboard section), `metrics[id=checkedIn].checkedInDays` (scorecard + device health panel), `metrics[].thresholds` (all health color banding — Dashboard previously used 90/70, now schema 80/50), `metrics[id=softwareUpdateCompliance].minimumOSVersions` (fixes drifted macOS baseline: scorecard said 15, drill-down said 26; both now default 26). Per-metric `enabled`/`displayName`/`platforms` still unenforced (schema metric ids don't match the implemented scorecard set) |
 | `deviceHealth.*` | features | `deviceHealth.*` (unchanged) | Parsed, **NOT yet enforced** in views |
-| `reports.*` | features | `reports.*` (unchanged) | Parsed, **NOT yet enforced** in views |
+| `reports.*` | features | `reports.*` (unchanged) | **ENFORCED**: `enabled` hides the Reports module (sidebar). `availableReports` still unenforced — ReportsView is a filter-builder, not the schema's canned-report catalog; reconciling that model is future work |
 | `deviceActions.computer.*` (18 bools) | **access** | **`deviceActions.computer.actions`** — array of `{id, enabled, displayName}` (SHAPE CHANGED; legacy boolean map still decoded, delivered keys only) | **ENFORCED** — DeviceView actionsMenu + executeAction (strict fail-closed allow-list) |
 | `deviceActions.mobileDevice.*` (13 bools) | **access** | **`deviceActions.mobileDevice.actions`** — same array shape | Parsed + policy exposed (`mobileDeviceActionPolicy`) — no mobile actions menu exists yet |
 | `userInterface.supportURL` | ui | `userInterface.supportURL` | **ENFORCED** — LoginView |
 | `userInterface.appTitle` / `appSubtitle` | ui | same keys (`appSubtitle` default now `"Console"`) | Parsed (read into config), **no view consumes them today** |
-| `userInterface.companyName` / `logoURL` / `accentColor` / `defaultColorScheme` / `showEnrollments` / `showAnnouncements` / `showSettings` | ui | same keys | Parsed, **NOT yet enforced** in views |
-| `SidebarItems` (top-level, PascalCase) | ui | **`sidebarItems`** (RENAMED — camelCase) | Parsed, **NOT yet enforced** (SidebarView builds its own list) |
+| `userInterface.companyName` / `logoURL` / `accentColor` / `defaultColorScheme` / `showEnrollments` / `showAnnouncements` / `showSettings` | ui | same keys | `show*` switches **ENFORCED** (SidebarView). companyName/logoURL/accentColor/defaultColorScheme still unenforced (branding pass) |
+| `SidebarItems` (top-level, PascalCase) | ui | **`sidebarItems`** (RENAMED — camelCase) | **ENFORCED** — SidebarView renders from the configured list (presence/order/label/icon; ids must be route ids: dashboard, devices, announcements, logs, reports, enrollments, settings; unknown ids skipped; Cleanup stays role-gated; Settings pinned + gated by `showSettings`). Built-in default list fixed — it referenced routes (enterprise/groundcontrol/depsearch) that never existed |
 | `authentication.*` | ui | `authentication.*` (unchanged) | Parsed, **NOT yet enforced** in views |
 | `role` (top-level) | **access** | `role` — **default `"Admin"` DROPPED**; no default, fail-closed | **ENFORCED** — Cleanup gate (SidebarView / SettingsView) |
 | `cleanup.staleDays` | access | `cleanup.staleDays` (default now **90**; Int or String accepted) | **ENFORCED as a default** — CleanupSettings / CleanupDashboardView; an in-app edit stores a local override that wins (§4 step 6) |
@@ -100,6 +100,8 @@ parses and exposes it (a recorded decision — view-level enforcement is follow-
 | `cleanup.staleDays` | `30` | `90` |
 | `deviceActions` (whole block) | absent → per-key defaults (routine actions on) | **absent → Actions menu HIDDEN** — strict fail-closed allow-list; only listed ids with `enabled=true` appear. New ids: `restartSilent`, `returnToService`, `screenShare`, `unlockUserAccount`. Legacy boolean-map profiles: delivered keys are honored, undelivered keys are NO LONGER defaulted on |
 | `jamfPro.screenShareEnabled` (core) | gate for the Screen Share menu item | **DEPRECATED** — the access `deviceActions` allow-list is authoritative for `screenShare`; the core key is ignored and will be removed in a later major |
+| `jamfPro.connectionTimeout` / `requestTimeout` (core) | parsed, ignored (every call site hard-coded its own literal) | **ENFORCED** — all URLRequest/URLSession sites read them via NetworkTuning (quick calls → connectionTimeout, heavy/session-level → requestTimeout) |
+| announcements domain behavior keys | only the `Announcements` array was read | **ENFORCED** — `announcementsEnabled` (master switch), `refreshInterval` (minutes; 0 = manual-only; was hard-coded 5 min), `allowLocalFile` (local JSON source now OFF by default per schema), `allowUserDismiss`, `showUnreadBadge` |
 | `userInterface.appSubtitle` | `"Console - Admin"` | `"Console"` |
 | `configurationVersion` | `"1.0"` | `"2.0"` |
 

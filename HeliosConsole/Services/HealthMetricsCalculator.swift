@@ -29,9 +29,26 @@ final class HealthMetricsCalculator: ObservableObject {
     @Published private(set) var upToDateMetric: HealthMetricData?
     
     // MARK: - Configuration
-    
-    /// Number of days to consider a device as "recently checked in"
-    let checkInThresholdDays: Int = 7
+
+    /// Number of days to consider a device as "recently checked in" —
+    /// features domain healthScorecard.metrics[id=checkedIn].checkedInDays
+    /// (schema default 7).
+    var checkInThresholdDays: Int {
+        MDMConfigurationManager.shared.configuration.features?
+            .effectiveHealthScorecard.effectiveMetric(id: "checkedIn")?
+            .effectiveCheckedInDays ?? 7
+    }
+
+    /// Minimum compliant OS major versions for the "Up to Date" metric —
+    /// features domain healthScorecard.metrics[id=softwareUpdateCompliance]
+    /// .minimumOSVersions. The single source for BOTH the scorecard
+    /// percentage and the drill-down list (they previously hard-coded
+    /// different macOS baselines and disagreed).
+    var minimumOSVersions: FeaturesConfiguration.HealthMetricSetting.MinimumOSVersions {
+        MDMConfigurationManager.shared.configuration.features?
+            .effectiveHealthScorecard.effectiveMetric(id: "softwareUpdateCompliance")?
+            .effectiveMinimumOSVersions ?? .empty
+    }
     
     // MARK: - Private Properties
     
@@ -453,11 +470,12 @@ final class HealthMetricsCalculator: ObservableObject {
         var nonCompliantCount = 0
         var unknownCount = 0
         
-        // Define minimum "up to date" OS versions per platform
-        let minimumMacOSVersion = 15      // macOS 15.0+
-        let minimumIOSVersion = 26        // iOS 26.0+
-        let minimumIPadOSVersion = 26     // iPadOS 26.0+
-        let minimumVisionOSVersion = 2    // visionOS 2.0+
+        // Minimum "up to date" OS versions per platform (config-driven;
+        // shared with getUpToDateDevices so both always agree)
+        let minimumMacOSVersion = minimumOSVersions.effectiveMacOS
+        let minimumIOSVersion = minimumOSVersions.effectiveIOS
+        let minimumIPadOSVersion = minimumOSVersions.effectiveIPadOS
+        let minimumVisionOSVersion = minimumOSVersions.effectiveVisionOS
         
         // Process computers (macOS)
         for computer in computers {
@@ -837,11 +855,12 @@ final class HealthMetricsCalculator: ObservableObject {
     ) -> [DeviceListItem] {
         var devices: [DeviceListItem] = []
         
-        // Define minimum "up to date" OS versions per platform
-        let minimumMacOSVersion = 26      // macOS 26.0+
-        let minimumIOSVersion = 26        // iOS 26.0+
-        let minimumIPadOSVersion = 26     // iPadOS 26.0+
-        let minimumVisionOSVersion = 2    // visionOS 2.0+
+        // Minimum "up to date" OS versions per platform (config-driven;
+        // shared with calculateUpToDateMetric so both always agree)
+        let minimumMacOSVersion = minimumOSVersions.effectiveMacOS
+        let minimumIOSVersion = minimumOSVersions.effectiveIOS
+        let minimumIPadOSVersion = minimumOSVersions.effectiveIPadOS
+        let minimumVisionOSVersion = minimumOSVersions.effectiveVisionOS
         
         for computer in computers {
             let status: HealthSegmentType

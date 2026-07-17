@@ -244,7 +244,7 @@ class JamfAPIService {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
         

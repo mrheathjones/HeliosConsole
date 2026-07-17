@@ -518,7 +518,7 @@ struct DeviceListView: View {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         

@@ -145,34 +145,38 @@ struct SidebarView: View {
     
     private var navigationSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Main navigation items
-            ForEach(mainNavigationItems, id: \.self) { destination in
+            // Main navigation items (config-driven — see mainNavigationEntries)
+            ForEach(mainNavigationEntries) { entry in
                 SidebarNavigationItem(
-                    destination: destination,
-                    isSelected: selectedDestination == destination && !isInNestedView,
+                    destination: entry.destination,
+                    isSelected: selectedDestination == entry.destination && !isInNestedView,
                     action: {
-                        onNavigate(destination)
-                    }
+                        onNavigate(entry.destination)
+                    },
+                    titleOverride: entry.title,
+                    iconOverride: entry.icon
                 )
             }
-            
+
             Spacer()
-            
+
             // Divider
             Rectangle()
                 .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.08))
                 .frame(height: 1)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-            
-            // Settings
-            SidebarNavigationItem(
-                destination: .settings,
-                isSelected: selectedDestination == .settings && !isInNestedView,
-                action: {
-                    onNavigate(.settings)
-                }
-            )
+
+            // Settings (ui domain showSettings switch)
+            if showSettingsItem {
+                SidebarNavigationItem(
+                    destination: .settings,
+                    isSelected: selectedDestination == .settings && !isInNestedView,
+                    action: {
+                        onNavigate(.settings)
+                    }
+                )
+            }
             
             // Logout Button
             Button(action: {
@@ -204,13 +208,66 @@ struct SidebarView: View {
         .padding(.top, 16)
     }
     
-    private var mainNavigationItems: [NavigationDestination] {
-        var items: [NavigationDestination] = [.dashboard, .devices, .announcements, .logs, .reports, .enrollments]
-        // Cleanup (stale-device bulk actions) is gated to the Admin role.
-        if MDMConfigurationManager.shared.configuration.isCleanupAdmin {
-            items.append(.cleanup)
+    /// One resolved sidebar row: destination plus the managed label/icon
+    /// overrides from the ui domain's sidebarItems.
+    private struct ResolvedSidebarEntry: Identifiable {
+        let destination: NavigationDestination
+        let title: String
+        let icon: String
+        var id: String { destination.id }
+    }
+
+    /// Sidebar contents are config-driven: the ui domain's sidebarItems
+    /// controls presence, order, label, and icon (ids must be
+    /// NavigationDestination raw values — unknown ids are skipped); the
+    /// showAnnouncements/showEnrollments switches prune their views; and
+    /// Cleanup stays strictly role-gated no matter what the profile lists.
+    /// Settings is pinned below the divider (gated by showSettings there).
+    private var mainNavigationEntries: [ResolvedSidebarEntry] {
+        let config = MDMConfigurationManager.shared.configuration
+        let ui = config.userInterfaceExtras
+
+        var entries: [ResolvedSidebarEntry] = []
+        for item in config.sidebarItems.sorted(by: { $0.order < $1.order }) where item.isEnabled {
+            guard let destination = NavigationDestination(rawValue: item.id) else {
+                print("⚠️ ui: sidebarItems id '\(item.id)' does not match any view — skipped")
+                continue
+            }
+            switch destination {
+            case .settings, .cleanup:
+                continue // settings is pinned below; cleanup is role-gated
+            case .announcements where ui?.effectiveShowAnnouncements == false:
+                continue
+            case .enrollments where ui?.effectiveShowEnrollments == false:
+                continue
+            case .reports where config.features?.effectiveReports.effectiveEnabled == false:
+                continue // features domain: reports module disabled
+            default:
+                break
+            }
+            guard !entries.contains(where: { $0.destination == destination }) else { continue }
+            entries.append(ResolvedSidebarEntry(
+                destination: destination,
+                title: item.title.isEmpty ? destination.title : item.title,
+                icon: item.icon.isEmpty ? destination.icon : item.icon
+            ))
         }
-        return items
+
+        // Cleanup (stale-device bulk actions) is gated to the Admin role.
+        if config.isCleanupAdmin {
+            entries.append(ResolvedSidebarEntry(
+                destination: .cleanup,
+                title: NavigationDestination.cleanup.title,
+                icon: NavigationDestination.cleanup.icon
+            ))
+        }
+        return entries
+    }
+
+    /// ui domain showSettings switch (default true).
+    private var showSettingsItem: Bool {
+        MDMConfigurationManager.shared.configuration
+            .userInterfaceExtras?.effectiveShowSettings ?? true
     }
 }
 
@@ -220,23 +277,26 @@ struct SidebarNavigationItem: View {
     let destination: NavigationDestination
     let isSelected: Bool
     let action: () -> Void
-    
+    /// Managed label/icon overrides from the ui domain's sidebarItems.
+    var titleOverride: String? = nil
+    var iconOverride: String? = nil
+
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered: Bool = false
-    
+
     private var isDark: Bool {
         colorScheme == .dark
     }
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: destination.icon)
+                Image(systemName: iconOverride ?? destination.icon)
                     .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? .blue : .gray)
                     .frame(width: 24)
-                
-                Text(destination.title)
+
+                Text(titleOverride ?? destination.title)
                     .foregroundColor(isSelected ? (isDark ? .white : .primary) : .gray)
                     .font(.system(size: 14, weight: isSelected ? .medium : .regular))
                 

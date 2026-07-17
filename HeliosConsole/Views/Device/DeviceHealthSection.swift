@@ -48,9 +48,18 @@ struct DeviceHealthMetricResult: Identifiable {
 
 struct DeviceHealthEvaluator {
     
-    // Configuration
-    static let checkInThresholdDays: Int = 7
-    static let minimumMacOSVersion: Int = 26
+    // Configuration — same features-domain keys the scorecard uses, so the
+    // per-device health panel and the fleet scorecard can never disagree.
+    static var checkInThresholdDays: Int {
+        MDMConfigurationManager.shared.configuration.features?
+            .effectiveHealthScorecard.effectiveMetric(id: "checkedIn")?
+            .effectiveCheckedInDays ?? 7
+    }
+    static var minimumMacOSVersion: Int {
+        (MDMConfigurationManager.shared.configuration.features?
+            .effectiveHealthScorecard.effectiveMetric(id: "softwareUpdateCompliance")?
+            .effectiveMinimumOSVersions ?? .empty).effectiveMacOS
+    }
     
     // MARK: - Evaluate Computer Health
     
@@ -620,11 +629,7 @@ struct DeviceHealthSection: View {
         let totalEvaluated = healthResults.filter { $0.status != .excluded && $0.status != .unknown }.count
         let percentage = totalEvaluated > 0 ? (compliantCount * 100) / totalEvaluated : 0
         
-        let color: Color = {
-            if percentage >= 80 { return .green }
-            if percentage >= 50 { return .orange }
-            return .red
-        }()
+        let color = HealthThresholds.color(forPercentage: Double(percentage))
         
         return HStack(spacing: 6) {
             Circle()

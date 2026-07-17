@@ -83,6 +83,26 @@ enum HealthMetricType: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+// MARK: - Health Thresholds (config-driven banding)
+
+/// Percentage → color banding for health scores, driven by the features
+/// domain's healthScorecard.metrics[].thresholds (defaults: warning 80,
+/// critical 50 — green at/above warning, orange at/above critical, red
+/// below). Every scorecard/health surface must band through this helper so
+/// they never disagree again (Dashboard previously used 90/70 while the
+/// device health section used 80/50).
+enum HealthThresholds {
+    static func color(forPercentage percentage: Double, metricID: String? = nil) -> Color {
+        let scorecard = MDMConfigurationManager.shared.configuration
+            .features?.effectiveHealthScorecard
+        let thresholds = metricID.flatMap { scorecard?.effectiveMetric(id: $0)?.effectiveThresholds }
+            ?? FeaturesConfiguration.HealthMetricSetting.Thresholds.empty
+        if percentage >= Double(thresholds.effectiveWarning) { return .green }
+        if percentage >= Double(thresholds.effectiveCritical) { return .orange }
+        return .red
+    }
+}
+
 // MARK: - Health Segment Type
 
 enum HealthSegmentType: String, Hashable, CaseIterable {

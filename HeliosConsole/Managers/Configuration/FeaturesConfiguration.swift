@@ -49,6 +49,35 @@ struct FeaturesConfiguration: Codable {
     var effectiveDeviceHealth: DeviceHealthSettings { deviceHealth ?? .empty }
     var effectiveReports: ReportsSettings { reports ?? .empty }
 
+    /// Normalizes and validates a configured section list for a Jamf
+    /// inventory endpoint: upper-cases + trims each entry, keeps only the
+    /// values the endpoint accepts (de-duplicated, order preserved), and
+    /// returns `fallback` when a delivered profile leaves nothing valid.
+    /// Jamf 400s the entire request on a single unrecognized section, so
+    /// this guarantees the wire only ever sees accepted values. Dropped
+    /// entries are logged once so a bad profile is diagnosable.
+    static func validate(
+        _ sections: [String],
+        against valid: Set<String>,
+        fallback: [String]
+    ) -> [String] {
+        var seen = Set<String>()
+        var kept: [String] = []
+        var dropped: [String] = []
+        for raw in sections {
+            let name = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard valid.contains(name) else {
+                if !name.isEmpty { dropped.append(name) }
+                continue
+            }
+            if seen.insert(name).inserted { kept.append(name) }
+        }
+        if !dropped.isEmpty {
+            print("⚠️ features: dropped invalid inventory section(s) \(dropped) — not accepted by this Jamf endpoint")
+        }
+        return kept.isEmpty ? fallback : kept
+    }
+
     /// A fully-absent payload; every `effective*` accessor then yields the
     /// schema defaults.
     static let empty = FeaturesConfiguration(
@@ -77,14 +106,47 @@ struct FeaturesConfiguration: Codable {
         var effectiveEnableAPIActions: Bool { enableAPIActions ?? true }
         var effectiveEnableReports: Bool { enableReports ?? true }
         var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
+        /// Configured sections, or the built-in list when the key is absent
+        /// OR empty — an empty section list would break every detail view.
         var effectiveInventorySections: [String] {
-            inventorySections ?? Self.defaultInventorySections
+            guard let inventorySections, !inventorySections.isEmpty else {
+                return Self.defaultInventorySections
+            }
+            return inventorySections
         }
 
+        /// The sections actually sent to `/api/v1/computers-inventory`:
+        /// normalized, restricted to the values that endpoint accepts, and
+        /// falling back to the default when a delivered profile leaves
+        /// nothing valid. Jamf rejects the WHOLE request with a 400 if any
+        /// single section is unrecognized, so a stale or hand-edited
+        /// profile must never reach the wire with a bad value.
+        var validatedInventorySections: [String] {
+            FeaturesConfiguration.validate(
+                effectiveInventorySections,
+                against: Self.validSections,
+                fallback: Self.defaultInventorySections
+            )
+        }
+
+        /// Must stay in sync with the sections the detail views actually
+        /// render (and the schema default in Helios_Features_SCHEMA.json).
         static let defaultInventorySections = [
             "GENERAL", "HARDWARE", "OPERATING_SYSTEM", "USER_AND_LOCATION",
-            "STORAGE", "SECURITY", "DISK_ENCRYPTION", "CONFIGURATION_PROFILES",
-            "GROUP_MEMBERSHIPS", "SOFTWARE_UPDATES"
+            "DISK_ENCRYPTION", "SECURITY", "APPLICATIONS", "SOFTWARE_UPDATES",
+            "PURCHASING", "GROUP_MEMBERSHIPS"
+        ]
+
+        /// Every section `/api/v1/computers-inventory` accepts (Jamf Pro
+        /// developer reference). Any other value 400s the request.
+        static let validSections: Set<String> = [
+            "GENERAL", "DISK_ENCRYPTION", "PURCHASING", "APPLICATIONS",
+            "STORAGE", "USER_AND_LOCATION", "CONFIGURATION_PROFILES",
+            "PRINTERS", "SERVICES", "HARDWARE", "LOCAL_USER_ACCOUNTS",
+            "CERTIFICATES", "ATTACHMENTS", "PLUGINS", "PACKAGE_RECEIPTS",
+            "FONTS", "SECURITY", "OPERATING_SYSTEM", "LICENSED_SOFTWARE",
+            "IBEACONS", "SOFTWARE_UPDATES", "EXTENSION_ATTRIBUTES",
+            "CONTENT_CACHING", "GROUP_MEMBERSHIPS"
         ]
 
         static let empty = ComputersSettings(
@@ -111,13 +173,46 @@ struct FeaturesConfiguration: Codable {
         var effectiveEnableAPIActions: Bool { enableAPIActions ?? true }
         var effectiveEnableReports: Bool { enableReports ?? true }
         var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
+        /// Configured sections, or the built-in list when the key is absent
+        /// OR empty — an empty section list would break every detail view.
         var effectiveInventorySections: [String] {
-            inventorySections ?? Self.defaultInventorySections
+            guard let inventorySections, !inventorySections.isEmpty else {
+                return Self.defaultInventorySections
+            }
+            return inventorySections
         }
 
+        /// The sections actually sent to `/api/v2/mobile-devices/detail`:
+        /// normalized and restricted to the values that endpoint accepts.
+        /// NOTE the mobile vocabulary differs from computers — it uses
+        /// PROFILES / GROUPS, NOT CONFIGURATION_PROFILES / GROUP_MEMBERSHIPS;
+        /// a profile carrying the computer spellings (an easy mistake, and
+        /// the pre-2.1 schema default did exactly this) would otherwise 400
+        /// the whole fetch.
+        var validatedInventorySections: [String] {
+            FeaturesConfiguration.validate(
+                effectiveInventorySections,
+                against: Self.validSections,
+                fallback: Self.defaultInventorySections
+            )
+        }
+
+        /// Must stay in sync with the sections the detail views actually
+        /// render (and the schema default in Helios_Features_SCHEMA.json).
         static let defaultInventorySections = [
             "GENERAL", "HARDWARE", "USER_AND_LOCATION", "SECURITY",
-            "CONFIGURATION_PROFILES", "GROUP_MEMBERSHIPS"
+            "NETWORK", "PURCHASING", "APPLICATIONS", "CERTIFICATES",
+            "PROFILES", "GROUPS", "EXTENSION_ATTRIBUTES"
+        ]
+
+        /// Every section `/api/v2/mobile-devices/detail` accepts (Jamf Pro
+        /// developer reference). Any other value 400s the request.
+        static let validSections: Set<String> = [
+            "GENERAL", "HARDWARE", "USER_AND_LOCATION", "PURCHASING",
+            "SECURITY", "APPLICATIONS", "EBOOKS", "NETWORK",
+            "SERVICE_SUBSCRIPTIONS", "CERTIFICATES", "PROFILES",
+            "USER_PROFILES", "PROVISIONING_PROFILES", "SHARED_USERS",
+            "GROUPS", "EXTENSION_ATTRIBUTES"
         ]
 
         static let empty = MobileDevicesSettings(
@@ -149,6 +244,14 @@ struct FeaturesConfiguration: Codable {
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveMetrics: [HealthMetricSetting] { metrics ?? Self.defaultMetrics }
+
+        /// Lookup for a single metric's settings: the configured row wins,
+        /// otherwise the built-in default row — so a profile that delivers
+        /// only some metrics never blanks the tuning of the others.
+        func effectiveMetric(id: String) -> HealthMetricSetting? {
+            effectiveMetrics.first { $0.id == id }
+                ?? Self.defaultMetrics.first { $0.id == id }
+        }
 
         static let empty = HealthScorecardSettings(enabled: nil, metrics: nil)
 
@@ -189,12 +292,34 @@ struct FeaturesConfiguration: Codable {
         let thresholds: Thresholds?
         let checkedInDays: Int?
         let platforms: [String]?
+        /// Per-platform minimum compliant OS major version — only meaningful
+        /// on the `softwareUpdateCompliance` metric.
+        let minimumOSVersions: MinimumOSVersions?
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveDisplayName: String { displayName ?? "" }
         var effectiveThresholds: Thresholds { thresholds ?? .empty }
         var effectiveCheckedInDays: Int { checkedInDays ?? 7 }
         var effectivePlatforms: [String] { platforms ?? [] }
+        var effectiveMinimumOSVersions: MinimumOSVersions { minimumOSVersions ?? .empty }
+
+        init(
+            id: String? = nil,
+            enabled: Bool? = nil,
+            displayName: String? = nil,
+            thresholds: Thresholds? = nil,
+            checkedInDays: Int? = nil,
+            platforms: [String]? = nil,
+            minimumOSVersions: MinimumOSVersions? = nil
+        ) {
+            self.id = id
+            self.enabled = enabled
+            self.displayName = displayName
+            self.thresholds = thresholds
+            self.checkedInDays = checkedInDays
+            self.platforms = platforms
+            self.minimumOSVersions = minimumOSVersions
+        }
 
         struct Thresholds: Codable {
             let critical: Int?
@@ -204,6 +329,23 @@ struct FeaturesConfiguration: Codable {
             var effectiveWarning: Int { warning ?? 80 }
 
             static let empty = Thresholds(critical: nil, warning: nil)
+        }
+
+        /// Minimum compliant OS major version per platform. Defaults track
+        /// the current major releases (schema default; keep in sync with
+        /// Helios_Features_SCHEMA.json).
+        struct MinimumOSVersions: Codable {
+            let macOS: Int?
+            let iOS: Int?
+            let iPadOS: Int?
+            let visionOS: Int?
+
+            var effectiveMacOS: Int { macOS ?? 26 }
+            var effectiveIOS: Int { iOS ?? 26 }
+            var effectiveIPadOS: Int { iPadOS ?? 26 }
+            var effectiveVisionOS: Int { visionOS ?? 2 }
+
+            static let empty = MinimumOSVersions(macOS: nil, iOS: nil, iPadOS: nil, visionOS: nil)
         }
     }
 

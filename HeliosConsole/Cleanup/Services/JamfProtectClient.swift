@@ -23,7 +23,7 @@ actor JamfProtectClient {
         self.clientID = clientID
         self.password = password
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForRequest = NetworkTuning.requestTimeout
         self.session = URLSession(configuration: config)
     }
 

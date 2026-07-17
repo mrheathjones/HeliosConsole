@@ -210,7 +210,7 @@ final class ComputerInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
         
@@ -258,7 +258,14 @@ final class ComputerInventoryService: ObservableObject {
         let sortParam = "\(sortField):\(sortOrder)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "\(sortField):\(sortOrder)"
         
         let endpoint = "/api/v1/computers-inventory"
-        let sections = "section=GENERAL&section=HARDWARE&section=OPERATING_SYSTEM&section=USER_AND_LOCATION&section=DISK_ENCRYPTION&section=SECURITY&section=APPLICATIONS&section=SOFTWARE_UPDATES&section=PURCHASING&section=GROUP_MEMBERSHIPS"
+        // Sections come from features.computers.inventorySections, validated
+        // against the values /api/v1/computers-inventory accepts (an invalid
+        // one 400s the whole request). Falls back to the default list.
+        let sectionNames = (MDMConfigurationManager.shared.configuration
+            .features?.effectiveComputers ?? .empty).validatedInventorySections
+        let sections = sectionNames
+            .map { "section=\($0)" }
+            .joined(separator: "&")
         let queryParams = "\(sections)&page=\(page)&page-size=\(pageSize)&sort=\(sortParam)"
         
         guard let url = URL(string: "\(jamfURL)\(endpoint)?\(queryParams)") else {
@@ -269,7 +276,7 @@ final class ComputerInventoryService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         

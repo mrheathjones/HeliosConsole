@@ -156,12 +156,22 @@ final class UnifiedDeviceSearchService: ObservableObject {
         
         do {
             let token = try await getBearerToken()
-            
+
+            // features domain module gates: a disabled platform is excluded
+            // from unified search (main window AND the menu bar companion).
+            let features = MDMConfigurationManager.shared.configuration.features
+            let computersEnabled = features?.effectiveComputers.effectiveEnabled ?? true
+            let mobilesEnabled = features?.effectiveMobileDevices.effectiveEnabled ?? true
+
             // Search computers and mobile devices in parallel
             // Each search checks both name AND serial number
-            async let computersTask = searchComputers(query: trimmedQuery, token: token)
-            async let mobilesTask = searchMobileDevices(query: trimmedQuery, token: token)
-            
+            async let computersTask = computersEnabled
+                ? searchComputers(query: trimmedQuery, token: token)
+                : []
+            async let mobilesTask = mobilesEnabled
+                ? searchMobileDevices(query: trimmedQuery, token: token)
+                : []
+
             let (computers, mobiles) = await (computersTask, mobilesTask)
             
             // Store results
@@ -247,7 +257,7 @@ final class UnifiedDeviceSearchService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
@@ -321,7 +331,7 @@ final class UnifiedDeviceSearchService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
@@ -389,7 +399,7 @@ final class UnifiedDeviceSearchService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
@@ -447,7 +457,7 @@ final class UnifiedDeviceSearchService: ObservableObject {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
 

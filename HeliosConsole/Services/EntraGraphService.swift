@@ -87,8 +87,8 @@ final class EntraGraphService {
         self.certPEM = (certPEM?.isEmpty == false) ? certPEM : nil
 
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.timeoutIntervalForRequest = 60
-        cfg.timeoutIntervalForResource = 90
+        cfg.timeoutIntervalForRequest = NetworkTuning.requestTimeout
+        cfg.timeoutIntervalForResource = NetworkTuning.requestTimeout * 1.5  // keeps the shipped 60->90 proportion
         self.session = URLSession(configuration: cfg)
     }
 

@@ -1271,7 +1271,7 @@ struct DeviceView: View {
             
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.timeoutInterval = 30
+            request.timeoutInterval = NetworkTuning.connectionTimeout
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -1560,7 +1560,7 @@ struct DeviceView: View {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -1614,7 +1614,7 @@ struct DeviceView: View {
             if let url = components?.url {
                 var request = URLRequest(url: url)
                 request.httpMethod = "GET"
-                request.timeoutInterval = 30
+                request.timeoutInterval = NetworkTuning.connectionTimeout
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
@@ -1659,7 +1659,7 @@ struct DeviceView: View {
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
@@ -1799,7 +1799,7 @@ struct DeviceView: View {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -1853,7 +1853,7 @@ struct DeviceView: View {
             
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.timeoutInterval = 30
+            request.timeoutInterval = NetworkTuning.connectionTimeout
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             
@@ -1921,7 +1921,7 @@ struct DeviceView: View {
             
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.timeoutInterval = 30
+            request.timeoutInterval = NetworkTuning.connectionTimeout
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             
@@ -2029,7 +2029,7 @@ struct DeviceView: View {
             
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.timeoutInterval = 30
+            request.timeoutInterval = NetworkTuning.connectionTimeout
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
