@@ -1025,6 +1025,57 @@ class ABMAPIService: ObservableObject {
         return last
     }
 
+    // MARK: - Assignment Orchestration (shared by DeviceView + ABM Lookup)
+
+    /// The interpreted end state of an assign/unassign attempt — everything
+    /// a UI needs to render a result without re-deriving activity semantics.
+    enum ABMAssignmentOutcome {
+        /// Terminal COMPLETED with a clean subStatus.
+        case succeeded
+        /// Terminal COMPLETED but Apple reported per-device errors; the
+        /// associated string is the activity CSV log (or a fetch-failure
+        /// note) for display.
+        case completedWithErrors(detail: String)
+        /// Terminal FAILED / STOPPED.
+        case failed(status: String)
+        /// Polling ran out while the activity was still in progress — the
+        /// request was ACCEPTED and may still complete on Apple's side.
+        case stillRunning(activityId: String)
+    }
+
+    /// Submits an assign/unassign for one device and polls to a terminal
+    /// state. Throws only on submission failure — an accepted-but-unhappy
+    /// activity is reported through the outcome, not an error, because at
+    /// that point the change may be partially applied on Apple's side.
+    func performAssignment(
+        _ type: ABMActivityType,
+        deviceId: String,
+        mdmServerId: String
+    ) async throws -> ABMAssignmentOutcome {
+        let activity = try await submitDeviceActivity(type, deviceIds: [deviceId], mdmServerId: mdmServerId)
+        let final = try await pollActivity(id: activity.id)
+
+        switch final.status {
+        case .completed:
+            // Allowlist, not blocklist: only COMPLETED_WITH_SUCCESS counts
+            // as success. A missing or newly-introduced subStatus must not
+            // let callers update local state as if the change verified.
+            if final.subStatus == .completedWithSuccess {
+                return .succeeded
+            }
+            var detail = "Apple reported completion sub-status \(final.rawSubStatus ?? "unknown")."
+            if let urlString = final.downloadUrl,
+               let csv = try? await fetchActivityLog(downloadUrl: urlString) {
+                detail = csv
+            }
+            return .completedWithErrors(detail: detail)
+        case .failed, .stopped:
+            return .failed(status: final.rawStatus ?? "FAILED")
+        case .inProgress, .unknown:
+            return .stillRunning(activityId: final.id)
+        }
+    }
+
     /// The per-device CSV log Apple publishes for completed activities —
     /// the only error detail available when subStatus is COMPLETED_WITH_ERROR.
     /// The URL is presigned; sending Authorization would break it.
@@ -1162,6 +1213,35 @@ final class ABMDeviceCache: ObservableObject {
     func assignedServer(forDeviceId deviceId: String) -> ABMMdmServer? {
         guard let serverId = assignmentMap[deviceId] else { return nil }
         return mdmServers.first { $0.id == serverId }
+    }
+
+    /// Applies a locally-known assignment change (after a successful
+    /// assign/unassign) so the list reflects reality without a full org
+    /// re-sweep. Pass nil serverId for an unassignment.
+    func applyAssignment(deviceId: String, serverId: String?) {
+        if let serverId {
+            assignmentMap[deviceId] = serverId
+        } else {
+            assignmentMap.removeValue(forKey: deviceId)
+        }
+        if let index = devices.firstIndex(where: { $0.id == deviceId }) {
+            let d = devices[index]
+            devices[index] = ABMOrgDevice(
+                id: d.id,
+                serialNumber: d.serialNumber,
+                deviceModel: d.deviceModel,
+                productFamily: d.productFamily,
+                productType: d.productType,
+                deviceCapacity: d.deviceCapacity,
+                color: d.color,
+                status: serverId == nil ? "UNASSIGNED" : "ASSIGNED",
+                addedToOrgDateTime: d.addedToOrgDateTime,
+                updatedDateTime: d.updatedDateTime,
+                orderNumber: d.orderNumber,
+                orderDateTime: d.orderDateTime,
+                assignedServerId: serverId
+            )
+        }
     }
 }
 

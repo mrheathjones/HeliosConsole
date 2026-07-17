@@ -83,6 +83,7 @@ struct DeviceView: View {
     @State private var pendingRTSOptions: AccessConfiguration.DeviceActionOptions? = nil
     @State private var pendingRTSEntraConfigured: Bool = false
     @State private var showingUnlockAccountSheet: Bool = false
+    @State private var showingABMAssignSheet: Bool = false
     @State private var unlockUsername: String = ""
     @State private var showingLocalAdminPassword: Bool = false
     @State private var localAdminPassword: String = ""
@@ -209,6 +210,18 @@ struct DeviceView: View {
         .navigationBarBackButtonHidden(true)
         .task {
             await loadFullDetails()
+        }
+        .sheet(isPresented: $showingABMAssignSheet) {
+            ABMAssignmentSheet(
+                serialNumber: displayComputer.serialNumber ?? "",
+                deviceName: displayComputer.displayName,
+                title: actionPolicy.menuLabel(for: .abmAssign),
+                policyProvider: { actionPolicy },
+                onFinished: { success, _, error in
+                    logABMAction(.abmAssign, serial: displayComputer.serialNumber ?? "Unknown",
+                                 success: success, error: error)
+                }
+            )
         }
     }
     
@@ -691,6 +704,17 @@ struct DeviceView: View {
             showingUnlockAccountSheet = true
             return
         }
+        if action == .abmAssign {
+            // Server selection happens inside the sheet, so it owns the
+            // whole flow (like the unlock-account sheet). Same defense in
+            // depth as executeAction: never trust the menu filter alone.
+            if let denial = actionPolicy.denialReason(for: .abmAssign) {
+                Task { await reportActionDenial(denial, for: .abmAssign) }
+            } else {
+                showingABMAssignSheet = true
+            }
+            return
+        }
         if action == .returnToService {
             // Freeze the plan the confirmation dialog will describe.
             pendingRTSOptions = actionPolicy.options(for: .returnToService)
@@ -743,18 +767,14 @@ struct DeviceView: View {
             // keep the switch exhaustive and safe.
             await MainActor.run { showingUnlockAccountSheet = true }
             return
-        case .abmAssign, .abmUnassign:
-            // Grantable ahead of the execution UI (ships in a follow-up PR)
-            // so profiles can be staged — until then, fail loudly, never
-            // silently.
-            await MainActor.run {
-                commandResult = CommandResult(
-                    success: false,
-                    title: actionPolicy.menuLabel(for: action),
-                    message: "ABM \(action == .abmAssign ? "assignment" : "unassignment") is not available in this build yet. The action is granted by your profile and will activate in an upcoming release."
-                )
-                showingCommandAlert = true
-            }
+        case .abmAssign:
+            // Never routed here (trigger() opens the sheet, which owns the
+            // flow and its own audit logging) — keep the switch exhaustive.
+            await MainActor.run { showingABMAssignSheet = true }
+            return
+        case .abmUnassign:
+            await executeABMUnassign()
+            return // logs internally with ABM-specific detail
         }
         
         // Centralized logging for all MDM commands (except Screen Share which logs internally)
@@ -769,6 +789,88 @@ struct DeviceView: View {
                 errorMessage: result.success ? nil : result.message
             )
         }
+    }
+
+    /// Removes this device's MDM assignment in Apple Business Manager.
+    /// The grant's allowedMdmServers governs which servers the operator may
+    /// unassign FROM — checked against the device's CURRENT server.
+    private func executeABMUnassign() async {
+        guard let serial = displayComputer.serialNumber, !serial.isEmpty else {
+            await showABMResult(success: false, title: "Unassign from MDM Server",
+                                message: "This device has no serial number to look up in Apple Business Manager.")
+            return
+        }
+
+        await MainActor.run { isExecutingCommand = true }
+
+        do {
+            let device = try await ABMAssignmentExecutor.resolveDevice(serial: serial)
+            let servers = try await ABMAssignmentExecutor.loadServers()
+            guard let current = try await ABMAssignmentExecutor.currentServer(for: device, servers: servers) else {
+                await showABMResult(success: false, title: "Unassign from MDM Server",
+                                    message: "The device is not assigned to any MDM server in Apple Business Manager — there is nothing to unassign.")
+                return
+            }
+
+            let options = actionPolicy.options(for: .abmUnassign)
+            guard options.permitsMdmServer(named: current.serverName) else {
+                await showABMResult(success: false, title: "Not Permitted",
+                                    message: "Your role's grant does not permit unassigning devices from \(current.serverName).")
+                logABMAction(.abmUnassign, serial: serial, success: false,
+                             error: "Denied by allowedMdmServers for server \(current.serverName)")
+                return
+            }
+
+            let outcome = try await ABMAPIService.shared.performAssignment(
+                .unassignDevices, deviceId: device.id, mdmServerId: current.id
+            )
+
+            switch outcome {
+            case .succeeded:
+                await MainActor.run {
+                    ABMDeviceCache.shared.applyAssignment(deviceId: device.id, serverId: nil)
+                }
+                await showABMResult(success: true, title: "Unassigned from \(current.serverName)",
+                                    message: "The device no longer has an MDM server assignment in Apple Business Manager. Until it is reassigned, it cannot enroll via Automated Device Enrollment.")
+                logABMAction(.abmUnassign, serial: serial, success: true, error: nil)
+            case .completedWithErrors(let detail):
+                await showABMResult(success: false, title: "Completed With Errors",
+                                    message: "Apple accepted the request but reported errors:\n\n\(detail)")
+                logABMAction(.abmUnassign, serial: serial, success: false, error: "COMPLETED_WITH_ERROR")
+            case .failed(let status):
+                await showABMResult(success: false, title: "Unassign Failed",
+                                    message: "Apple Business Manager reported the activity as \(status).")
+                logABMAction(.abmUnassign, serial: serial, success: false, error: status)
+            case .stillRunning(let activityId):
+                await showABMResult(success: false, title: "Still Processing",
+                                    message: "Apple accepted the request but it had not completed when polling stopped (activity \(activityId)). Check the ABM Lookup tab shortly to confirm.")
+                logABMAction(.abmUnassign, serial: serial, success: false, error: "Timed out polling activity \(activityId)")
+            }
+        } catch {
+            await showABMResult(success: false, title: "Unassign Failed", message: error.localizedDescription)
+            logABMAction(.abmUnassign, serial: serial, success: false, error: error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func showABMResult(success: Bool, title: String, message: String) {
+        // Every executeABMUnassign path ends here, so the busy flag clears
+        // before (never after) the result alert appears.
+        isExecutingCommand = false
+        commandResult = CommandResult(success: success, title: title, message: message)
+        showingCommandAlert = true
+    }
+
+    private func logABMAction(_ action: DeviceAction, serial: String, success: Bool, error: String?) {
+        ActionLogService.shared.logAction(
+            actionName: action.logName,
+            actionCategory: action.logCategory,
+            deviceName: displayComputer.displayName,
+            deviceSerialNumber: serial,
+            deviceId: displayComputer.id,
+            success: success,
+            errorMessage: error
+        )
     }
 
     /// Shared denial handling for the defense-in-depth policy re-checks
