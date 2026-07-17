@@ -85,6 +85,12 @@ final class EntraAuthService: NSObject {
     /// ever land on an empty app.
     private let hasAnyDefinedRole: ([String]) -> Bool
 
+    /// Role names from the profile, for the refusal log ONLY — never for the
+    /// decision, which stays the closure above so the rule has one home.
+    /// A name mismatch between the Entra app-role Value and the profile is the
+    /// most common setup error and is invisible without this.
+    private let definedRoleNamesForDiagnostics: [String]
+
     private let allowedGroupIds: [String]
 
     private let session: URLSession
@@ -102,6 +108,7 @@ final class EntraAuthService: NSObject {
         self.hasAnyDefinedRole = {
             MDMConfiguration.hasAnyDefinedRole(in: $0, definitions: roleDefinitions)
         }
+        self.definedRoleNamesForDiagnostics = roleDefinitions.keys.sorted()
         self.allowedGroupIds = configuration.effectiveEntraAllowedGroupIds
 
         let cfg = URLSessionConfiguration.ephemeral
@@ -290,6 +297,17 @@ final class EntraAuthService: NSObject {
         // from these names against the current configuration.
         let roles = claims["roles"] as? [String] ?? []
         guard hasAnyDefinedRole(roles) else {
+            // Console-only: the on-screen copy stays non-technical (an end user
+            // is not owed the role taxonomy), but an admin testing setup needs
+            // to see WHY — names match exactly and case-sensitively.
+            let tokenRoles = roles.isEmpty ? "(none — the token carried no roles claim)" : roles.joined(separator: ", ")
+            let defined = definedRoleNamesForDiagnostics.isEmpty
+                ? "(none — the access profile delivered no roles block)"
+                : definedRoleNamesForDiagnostics.joined(separator: ", ")
+            print("⚠️ signIn: refused — no role in the token matches the profile.\n"
+                  + "    token roles (Entra app-role Values): \(tokenRoles)\n"
+                  + "    defined in access.roles[].name:       \(defined)\n"
+                  + "    Names must match EXACTLY (case-sensitive).")
             throw AuthError.notAuthorized(
                 "You signed in successfully, but your account has no Helios Console role. Contact your admin about Helios role assignment."
             )

@@ -489,6 +489,19 @@ struct AccessConfiguration: Codable {
                 if let actionsKey = DynamicKey(stringValue: "actions"),
                    container.contains(actionsKey),
                    let decoded = try? container.decode([DeviceActionSetting].self, forKey: actionsKey) {
+                    // A profile carrying BOTH shapes is a half-migrated v2.0
+                    // profile: the flat booleans read like grants and do
+                    // nothing, so an admin sees actions missing with no clue.
+                    let strays = container.allKeys
+                        .filter { $0.stringValue != "actions" }
+                        .filter { (try? container.decode(Bool.self, forKey: $0)) != nil }
+                        .map(\.stringValue)
+                        .sorted()
+                    if !strays.isEmpty {
+                        print("⚠️ access.deviceActions: legacy flat action keys IGNORED — the 'actions' "
+                              + "array is authoritative. Add these to it if they are meant to be "
+                              + "available: \(strays.joined(separator: ", "))")
+                    }
                     actions = decoded
                     return
                 }

@@ -503,7 +503,8 @@ struct MDMConfiguration: Codable {
 
         // Managed sidebar override: usable ui-domain items win; otherwise
         // keep the built-in default sidebar.
-        let managedSidebar = (ui?.effectiveSidebarItems ?? [])
+        let deliveredSidebar = ui?.effectiveSidebarItems ?? []
+        let managedSidebar = deliveredSidebar
             .filter { $0.isUsable }
             .map {
                 SidebarItemConfig(
@@ -514,6 +515,16 @@ struct MDMConfiguration: Codable {
                     order: $0.effectiveOrder
                 )
             }
+        // Falling back to the built-in sidebar silently discards a delivered
+        // order — say so, or an admin sees the default order with no clue why.
+        if !deliveredSidebar.isEmpty && managedSidebar.isEmpty {
+            print("⚠️ ui.sidebarItems: \(deliveredSidebar.count) item(s) delivered but none usable "
+                  + "(each needs a non-empty id and isEnabled != false) — using the built-in sidebar, "
+                  + "so any delivered order is IGNORED")
+        } else if deliveredSidebar.count != managedSidebar.count {
+            let dropped = deliveredSidebar.filter { !$0.isUsable }.map { $0.effectiveID.isEmpty ? "(no id)" : $0.effectiveID }
+            print("⚠️ ui.sidebarItems: skipped \(dropped.count) unusable item(s): \(dropped.joined(separator: ", "))")
+        }
         let sidebarItems = managedSidebar.isEmpty
             ? MDMConfiguration.defaultSidebarItems
             : managedSidebar

@@ -161,9 +161,13 @@ struct SidebarItemSetting: Codable {
 
     var effectiveID: String { nonEmptyTrimmed(id) ?? "" }
 
-    /// SF Symbol name; a generic placeholder when not delivered.
-    var effectiveIcon: String { nonEmptyTrimmed(icon) ?? "circle" }
+    /// SF Symbol name; EMPTY when not delivered so SidebarView substitutes the
+    /// destination's built-in icon. A placeholder here would be non-empty and
+    /// would defeat that fallback, rendering a blank glyph instead.
+    var effectiveIcon: String { nonEmptyTrimmed(icon) ?? "" }
 
+    /// Empty when not delivered — SidebarView substitutes the destination's
+    /// built-in label.
     var effectiveTitle: String { nonEmptyTrimmed(title) ?? "" }
 
     var effectiveIsEnabled: Bool { isEnabled ?? true }
@@ -171,9 +175,13 @@ struct SidebarItemSetting: Codable {
     /// Sort order (ascending). Items without one sink to the end.
     var effectiveOrder: Int { order ?? Int.max }
 
-    /// Usable = shown: enabled with a non-empty id and title.
+    /// Usable = enabled with a non-empty id. `title` and `icon` are OPTIONAL in
+    /// the schema and SidebarView falls back to the destination's built-in
+    /// label/icon, so requiring them here would discard items the app renders
+    /// fine — and discarding every item silently reverts the whole sidebar to
+    /// the built-in default order, ignoring the admin's `order` values.
     var isUsable: Bool {
-        effectiveIsEnabled && !effectiveID.isEmpty && !effectiveTitle.isEmpty
+        effectiveIsEnabled && !effectiveID.isEmpty
     }
 }
 
