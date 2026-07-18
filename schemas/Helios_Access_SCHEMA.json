@@ -89,7 +89,8 @@
                 "unlockUserAccount",
                 "wipe",
                 "abmAssign",
-                "abmUnassign"
+                "abmUnassign",
+                "assignPreStage"
               ]
             },
             "default": []
@@ -139,8 +140,8 @@
           },
           "allowedPrestages": {
             "type": "array",
-            "title": "Allowed PreStages (Pre-Stage tab + prestage-on-assign)",
-            "description": "Jamf Computer PreStage Enrollment displayNames this role may select — BOTH in the Devices module's Pre-Stage tab (grant the tab itself via deviceTabs: prestage) AND in the optional prestage-on-assign step after abmAssign (see allowPrestageOnAssign). Each entry must match a PreStage displayName EXACTLY (case-sensitive), except the RESERVED literal `all` (any letter case), which grants every PreStage — a PreStage actually named \"all\" can never be individually granted; rename it in Jamf if one exists. Absent or empty = no PreStage offered even when the tab or the assign step is granted (fail-closed). UNIONED across a user's matched roles. Typical support role: a curated list of names. Typical admin role: [\"all\"].",
+            "title": "Allowed PreStages (Pre-Stage tab + prestage-on-assign + Assign to PreStage action)",
+            "description": "Jamf Computer PreStage Enrollment displayNames this role may select — in the Devices module's Pre-Stage tab (grant the tab itself via deviceTabs: prestage), in the optional prestage-on-assign step after abmAssign (see allowPrestageOnAssign), AND in the `assignPreStage` computer device action (grant the action itself via computerActions: assignPreStage). Each entry must match a PreStage displayName EXACTLY (case-sensitive), except the RESERVED literal `all` (any letter case), which grants every PreStage — a PreStage actually named \"all\" can never be individually granted; rename it in Jamf if one exists. Absent or empty = no PreStage offered even when the tab, the assign step, or the assignPreStage action is granted (fail-closed). UNIONED across a user's matched roles. Typical support role: a curated list of names. Typical admin role: [\"all\"].",
             "items": {
               "type": "string",
               "title": "PreStage Display Name (or `all`)"

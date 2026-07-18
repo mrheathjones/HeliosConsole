@@ -84,6 +84,7 @@ struct DeviceView: View {
     @State private var pendingRTSEntraConfigured: Bool = false
     @State private var showingUnlockAccountSheet: Bool = false
     @State private var showingABMAssignSheet: Bool = false
+    @State private var showingPreStageAssignSheet: Bool = false
     @State private var unlockUsername: String = ""
     @State private var showingLocalAdminPassword: Bool = false
     @State private var localAdminPassword: String = ""
@@ -220,6 +221,18 @@ struct DeviceView: View {
                 onFinished: { success, _, error in
                     logABMAction(.abmAssign, serial: displayComputer.serialNumber ?? "Unknown",
                                  success: success, error: error)
+                }
+            )
+        }
+        .sheet(isPresented: $showingPreStageAssignSheet) {
+            PreStageAssignmentSheet(
+                serialNumber: displayComputer.serialNumber ?? "",
+                deviceName: displayComputer.displayName,
+                title: ActionBranding.label(for: .assignPreStage),
+                policyProvider: { actionPolicy },
+                onFinished: { success, _, detail in
+                    logABMAction(.assignPreStage, serial: displayComputer.serialNumber ?? "Unknown",
+                                 success: success, error: detail)
                 }
             )
         }
@@ -715,6 +728,17 @@ struct DeviceView: View {
             }
             return
         }
+        if action == .assignPreStage {
+            // PreStage selection + optional asset tag happen inside the
+            // sheet, so it owns the whole flow (like abmAssign). Same
+            // defense in depth: never trust the menu filter alone.
+            if let denial = actionPolicy.denialReason(for: .assignPreStage) {
+                Task { await reportActionDenial(denial, for: .assignPreStage) }
+            } else {
+                showingPreStageAssignSheet = true
+            }
+            return
+        }
         if action == .returnToService {
             // Freeze the plan the confirmation dialog will describe.
             pendingRTSOptions = actionPolicy.returnToServiceOptions()
@@ -775,6 +799,11 @@ struct DeviceView: View {
         case .abmUnassign:
             await executeABMUnassign()
             return // logs internally with ABM-specific detail
+        case .assignPreStage:
+            // Never routed here (trigger() opens the sheet, which owns the
+            // flow and its own audit logging) — keep the switch exhaustive.
+            await MainActor.run { showingPreStageAssignSheet = true }
+            return
         }
         
         // Centralized logging for all MDM commands (except Screen Share which logs internally)

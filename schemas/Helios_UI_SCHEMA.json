@@ -195,7 +195,8 @@
               "unlockUserAccount",
               "sendBlankPush",
               "abmAssign",
-              "abmUnassign"
+              "abmUnassign",
+              "assignPreStage"
             ]
           },
           "displayName": {
