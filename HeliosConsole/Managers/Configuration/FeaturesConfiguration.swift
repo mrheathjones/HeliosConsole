@@ -83,6 +83,35 @@ struct ManagedCleanupSettings: Codable {
     }
 }
 
+/// The managed `localAdministration` block: the local admin account whose
+/// LAPS password Helios looks up in DeviceView.
+///
+/// HOME DOMAIN: `features.localAdministration`. It is still decoded from
+/// `core.localAdministration` for backward compatibility (aliased as
+/// `CoreConfiguration.LocalAdminSettings`) because deployed core profiles
+/// carry it; the composition layer prefers the features copy.
+struct ManagedLocalAdminSettings: Codable {
+
+    /// Whether local administration features are enabled.
+    var enabled: Bool?
+
+    /// Short name of the managed local administrator account.
+    var username: String?
+
+    /// Enabled flag with the documented default applied (default true).
+    var effectiveEnabled: Bool { enabled ?? true }
+
+    /// Local admin username with the documented default applied.
+    var effectiveUsername: String {
+        let name = username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "macadmin" : name
+    }
+
+    /// True when the profile delivered no values at all — the signal the
+    /// composition layer uses to fall back to the legacy core copy.
+    var isEmpty: Bool { enabled == nil && username == nil }
+}
+
 /// Feature modules & tuning for Helios Console — delivered via the
 /// `com.herojoneslabs.helios.console.features` managed-preferences domain (all managed Macs).
 struct FeaturesConfiguration: Codable {
@@ -117,6 +146,12 @@ struct FeaturesConfiguration: Codable {
     /// composition layer prefers this one and falls back.
     let cleanup: ManagedCleanupSettings?
 
+    /// Local administrator account settings for the DeviceView LAPS lookup.
+    /// MOVED HERE from the core domain: core is connection and integration
+    /// identity, and this is a feature of a view. The core domain still
+    /// decodes its legacy copy; the composition layer prefers this one.
+    let localAdministration: ManagedLocalAdminSettings?
+
     // MARK: - Effective accessors (defaults per schemas/Helios_Features_SCHEMA.json)
 
     var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
@@ -128,6 +163,9 @@ struct FeaturesConfiguration: Codable {
     var effectiveActionLog: ActionLogSettings { actionLog ?? .empty }
     var effectiveUserExperience: UserExperienceSettings { userExperience ?? .empty }
     var effectiveCleanup: ManagedCleanupSettings { cleanup ?? ManagedCleanupSettings() }
+    var effectiveLocalAdministration: ManagedLocalAdminSettings {
+        localAdministration ?? ManagedLocalAdminSettings()
+    }
 
     /// Normalizes and validates a configured section list for a Jamf
     /// inventory endpoint: upper-cases + trims each entry, keeps only the
@@ -169,7 +207,8 @@ struct FeaturesConfiguration: Codable {
         reports: nil,
         actionLog: nil,
         userExperience: nil,
-        cleanup: nil
+        cleanup: nil,
+        localAdministration: nil
     )
 
     // MARK: - User experience (top-level area switches)

@@ -294,8 +294,8 @@
     },
     "localAdministration": {
       "type": "object",
-      "title": "Local Administration",
-      "description": "Local administrator account settings used by the LAPS password lookup in DeviceView.",
+      "title": "Local Administration (DEPRECATED — moved to the features domain)",
+      "description": "DEPRECATED: these settings now live in the features domain (features.localAdministration). Still read here so deployed profiles keep working, but features wins when both are present — set them there and remove this block.",
       "properties": {
         "enabled": {
           "type": "boolean",

@@ -63,14 +63,11 @@
 				<false/>
 			</dict>
 
-			<!-- Local admin (LAPS lookup) account. -->
-			<key>localAdministration</key>
-			<dict>
-				<key>enabled</key>
-				<true/>
-				<key>username</key>
-				<string>macadmin</string>
-			</dict>
+			<!-- Local admin (LAPS lookup) has MOVED to the features domain
+			     (features > localAdministration) — see payload 4/5 below.
+			     A profile still delivering it here keeps working (the app
+			     falls back to it and logs a notice), but the features copy
+			     wins when both are present. -->
 
 			<!-- Optional Apple Business Manager connection. The PEM
 			     private key goes in the credentials payload (abmPrivateKey). -->
@@ -589,6 +586,16 @@
 				<true/>
 				<key>showSettings</key>
 				<true/>
+			</dict>
+
+			<!-- Local admin account for the LAPS lookup in the device view
+			     (MOVED here from the core domain). -->
+			<key>localAdministration</key>
+			<dict>
+				<key>enabled</key>
+				<true/>
+				<key>username</key>
+				<string>macadmin</string>
 			</dict>
 
 			<!-- Cleanup TUNABLES (MOVED here from the access domain).

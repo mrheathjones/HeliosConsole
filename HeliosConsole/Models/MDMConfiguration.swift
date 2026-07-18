@@ -557,6 +557,10 @@ struct MDMConfiguration: Codable {
         print("ℹ️ cleanup tunables: read from the LEGACY access domain — they now belong in features.cleanup. Re-push the features profile; the access copy is honored until you do.")
     }()
 
+    private static let legacyLocalAdminDomainWarning: Void = {
+        print("ℹ️ localAdministration: read from the LEGACY core domain — it now belongs in features.localAdministration. Re-push the features profile; the core copy is honored until you do.")
+    }()
+
     /// Resolved Entra Graph credentials (pointer domain → values), produced
     /// by the aggregation layer's resolver from `CoreConfiguration.entra`.
     struct ResolvedEntraCredentials {
@@ -668,6 +672,17 @@ struct MDMConfiguration: Codable {
             _ = MDMConfiguration.legacyCleanupDomainWarning
         }
 
+        // Same whole-block rule for the LAPS local-admin settings.
+        let featuresLocalAdmin = features?.localAdministration
+        let legacyLocalAdmin = core?.localAdministration
+        let resolvedLocalAdmin: ManagedLocalAdminSettings = {
+            if let featuresLocalAdmin, !featuresLocalAdmin.isEmpty { return featuresLocalAdmin }
+            return legacyLocalAdmin ?? ManagedLocalAdminSettings()
+        }()
+        if (featuresLocalAdmin?.isEmpty ?? true), legacyLocalAdmin != nil {
+            _ = MDMConfiguration.legacyLocalAdminDomainWarning
+        }
+
         self.init(
             jamfURL: jamfPro?.serverURL ?? "",
             masterClientID: jamfPro?.masterClientID ?? "",
@@ -677,7 +692,7 @@ struct MDMConfiguration: Codable {
             sidebarItems: sidebarItems,
             requiredRoleName: jamfPro?.effectiveRequiredRoleName ?? "HeliosConsoleAPIRole",
             supportURL: uiSettings?.effectiveSupportURL,
-            localAdminUsername: core?.localAdministration?.effectiveUsername ?? "macadmin",
+            localAdminUsername: resolvedLocalAdmin.effectiveUsername,
             connectionTimeoutSeconds: jamfPro?.effectiveConnectionTimeout ?? 30,
             requestTimeoutSeconds: jamfPro?.effectiveRequestTimeout ?? 60,
             eraseAckTimeoutSeconds: jamfPro?.effectiveEraseAckTimeoutSeconds ?? 180,

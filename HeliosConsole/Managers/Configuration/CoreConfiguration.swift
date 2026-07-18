@@ -73,6 +73,8 @@ struct CoreConfiguration: Codable {
     var signIn: SignInSettings?
 
     /// Local administrator account settings (LAPS lookup in DeviceView).
+    /// LEGACY LOCATION — moved to the features domain; still decoded here as
+    /// a fallback so deployed core profiles keep working.
     var localAdministration: LocalAdminSettings?
 
     /// Sign-in behavior preferences: biometric requirement, idle session
@@ -461,25 +463,14 @@ struct CoreConfiguration: Codable {
         }
     }
 
-    // MARK: - Local administration
+    // MARK: - Local administration (legacy location)
 
-    /// `localAdministration` block: the managed local admin account whose
-    /// LAPS password Helios looks up (DeviceView).
-    struct LocalAdminSettings: Codable {
-
-        /// Whether local administration features are enabled.
-        var enabled: Bool?
-
-        /// Short name of the managed local administrator account.
-        var username: String?
-
-        /// Enabled flag with the documented default applied (default true).
-        var effectiveEnabled: Bool { enabled ?? true }
-
-        /// Local admin username with the documented default applied.
-        var effectiveUsername: String {
-            let name = username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return name.isEmpty ? "macadmin" : name
-        }
-    }
+    /// The `localAdministration` block, as delivered by the CORE domain.
+    ///
+    /// LEGACY LOCATION: it now belongs to the FEATURES domain — the LAPS
+    /// lookup is a feature of DeviceView, not a connection setting. Still
+    /// decoded here so already-deployed core profiles keep working; the
+    /// composition layer prefers the features copy and falls back to this
+    /// one. See `ManagedLocalAdminSettings`.
+    typealias LocalAdminSettings = ManagedLocalAdminSettings
 }
