@@ -104,6 +104,26 @@
             "school"
           ],
           "default": "business"
+        },
+        "defaultMdmServerName": {
+          "type": "string",
+          "title": "ABM Lookup — Default MDM Server Filter",
+          "description": "Preselect the ABM Lookup server filter to this MDM server, matched by NAME exactly as it appears in Apple Business Manager (case-insensitive). A STARTING POINT the operator can still change or clear — not an enforced lock. If the name matches no server, the filter stays on 'Any Server'."
+        },
+        "defaultDeviceType": {
+          "type": "string",
+          "title": "ABM Lookup — Default Device Type Filter",
+          "description": "Preselect the ABM Lookup device-type filter. A STARTING POINT the operator can still change or clear. Anything unrecognized falls back to 'all'.",
+          "enum": [
+            "all",
+            "mac",
+            "iphone",
+            "ipad",
+            "appletv",
+            "watch",
+            "vision"
+          ],
+          "default": "all"
         }
       }
     },

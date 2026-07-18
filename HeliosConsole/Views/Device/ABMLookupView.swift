@@ -52,9 +52,20 @@ struct ABMLookupView: View {
     @State private var searchText = ""
     @State private var assignmentFilter: ABMAssignmentFilter = .all
     @State private var selectedServerId: String?
+    @State private var selectedDeviceType: ABMDeviceType = .all
     @State private var selectedDevice: ABMOrgDevice?
     @State private var isLoading = false
     @State private var loadError: String?
+
+    /// Config-profile default filters (defaultMdmServerName / defaultDeviceType)
+    /// are a STARTING POINT applied once — after that the operator's choices
+    /// stand, so we never re-override a filter they cleared. Tracked
+    /// INDEPENDENTLY: device type has no dependency and applies immediately,
+    /// while the server default must wait for the server list to resolve its
+    /// name→id. A shared flag made a configured server default (with a slow or
+    /// failed server-list load) also swallow the device-type default.
+    @State private var didApplyDefaultDeviceType = false
+    @State private var didApplyDefaultServer = false
 
     // Assign / unassign flow state (PR D)
     @State private var assignSheetDevice: ABMOrgDevice?
@@ -93,6 +104,10 @@ struct ABMLookupView: View {
                 return false
             }
 
+            if !selectedDeviceType.matches(productFamily: device.productFamily) {
+                return false
+            }
+
             if !query.isEmpty {
                 let assetTag = assetTagsBySerial[device.serialNumber.uppercased()] ?? ""
                 let matches = device.serialNumber.lowercased().contains(query)
@@ -127,7 +142,17 @@ struct ABMLookupView: View {
     }
 
     private var hasActiveFilters: Bool {
-        !searchText.isEmpty || assignmentFilter != .all || selectedServerId != nil
+        !searchText.isEmpty || assignmentFilter != .all || selectedServerId != nil || selectedDeviceType != .all
+    }
+
+    /// Device types actually present in the inventory, in enum order, always
+    /// including .all. Keeps the menu honest — no "iPad" option for a Mac-only
+    /// org — while a configured default that no longer matches still resolves
+    /// harmlessly to showing everything.
+    private var availableDeviceTypes: [ABMDeviceType] {
+        ABMDeviceType.allCases.filter { type in
+            type == .all || cache.devices.contains { type.matches(productFamily: $0.productFamily) }
+        }
     }
 
     // MARK: - Body
@@ -160,12 +185,21 @@ struct ABMLookupView: View {
         }
         .task {
             rebuildAssetTagMap()
+            applyConfigDefaultsIfNeeded()
             // Gate on isCacheValid, not hasCachedData: a tenant whose ABM
             // org is genuinely empty would otherwise re-sweep on every
             // tab entry (hasCachedData requires a non-empty device list).
             if abmService.isConfigured && !cache.isCacheValid && !isLoading {
                 await loadInventory()
             }
+            // Servers may have just landed via loadInventory — resolve a
+            // configured default-server name now that the list exists.
+            applyConfigDefaultsIfNeeded()
+        }
+        // The preload can populate the server list after this view's first
+        // .task ran; re-attempt default resolution when it arrives.
+        .onChange(of: cache.mdmServers.count) { _, _ in
+            applyConfigDefaultsIfNeeded()
         }
         .sheet(item: $selectedDevice) { device in
             ABMDeviceDetailSheet(
@@ -232,11 +266,7 @@ struct ABMLookupView: View {
         loadError = nil
 
         do {
-            let servers = try await ABMAPIService.shared.fetchMdmServers()
-            let devices = try await ABMAPIService.shared.fetchAllOrgDevices()
-            let assignmentMap = try await ABMAPIService.shared.buildAssignmentMap(servers: servers)
-
-            cache.updateCache(devices: devices, mdmServers: servers, assignmentMap: assignmentMap)
+            try await cache.loadFromNetwork()
             rebuildAssetTagMap()
         } catch {
             loadError = error.localizedDescription
@@ -262,6 +292,44 @@ struct ABMLookupView: View {
         }
 
         assetTagsBySerial = map
+    }
+
+    /// Applies the config-profile default filters ONCE each, independently.
+    /// Device type applies immediately (no dependency). The server default is
+    /// named and needs the server list to resolve name→id, so it applies as
+    /// soon as the list is present (re-attempted via the onChange below); a
+    /// configured name that matches nothing settles on "Any Server". Called on
+    /// appear, after a load, and whenever the server count changes.
+    @MainActor
+    private func applyConfigDefaultsIfNeeded() {
+        let config = MDMConfigurationManager.shared.configuration
+
+        if !didApplyDefaultDeviceType {
+            selectedDeviceType = ABMDeviceType.from(config.abmDefaultDeviceType)
+            didApplyDefaultDeviceType = true
+            NSLog("ABM: Applied default device-type filter '%@' (config: %@)",
+                  selectedDeviceType.rawValue, config.abmDefaultDeviceType ?? "nil")
+        }
+
+        if !didApplyDefaultServer {
+            guard let name = config.abmDefaultMdmServerName else {
+                didApplyDefaultServer = true  // none configured — nothing to do
+                return
+            }
+            // Need the server list to resolve the name; retry when it arrives.
+            guard !cache.mdmServers.isEmpty else { return }
+
+            if let match = cache.mdmServers.first(where: {
+                $0.serverName.caseInsensitiveCompare(name) == .orderedSame
+            }) {
+                selectedServerId = match.id
+                NSLog("ABM: Applied default MDM server filter '%@' → id %@", name, match.id)
+            } else {
+                NSLog("ABM: Default MDM server '%@' matched no server in the %d loaded — leaving 'Any Server'",
+                      name, cache.mdmServers.count)
+            }
+            didApplyDefaultServer = true
+        }
     }
 
     @MainActor
@@ -316,7 +384,10 @@ struct ABMLookupView: View {
                         if let lastFetch = cache.lastFetchDate {
                             Text("•")
                                 .foregroundColor(.gray)
-                            Text("Updated \(lastFetch.formatted(date: .omitted, time: .shortened))")
+                            // Date + time: this inventory can be served from a
+                            // persisted cache written on an earlier launch, so
+                            // show how old it actually is, not just the time.
+                            Text("Updated \(lastFetch.formatted(date: .abbreviated, time: .shortened))")
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                         }
@@ -376,6 +447,9 @@ struct ABMLookupView: View {
 
             // MDM server filter menu
             serverFilterMenu
+
+            // Device-type filter menu
+            deviceTypeFilterMenu
 
             Spacer()
 
@@ -466,6 +540,45 @@ struct ABMLookupView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(selectedServerId != nil ? Color.blue : Color.white.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var deviceTypeFilterMenu: some View {
+        let isActive = selectedDeviceType != .all
+        return Menu {
+            ForEach(availableDeviceTypes) { type in
+                Button {
+                    selectedDeviceType = type
+                } label: {
+                    if selectedDeviceType == type {
+                        Label(type.title, systemImage: "checkmark")
+                    } else {
+                        Text(type.title)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: selectedDeviceType.icon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(selectedDeviceType.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundColor(isActive ? .white : .white.opacity(0.8))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isActive ? Color.blue : Color.white.opacity(0.05))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isActive ? Color.blue : Color.white.opacity(0.1), lineWidth: 1)
             )
         }
         .menuStyle(.borderlessButton)
@@ -819,6 +932,7 @@ struct ABMLookupView: View {
                     searchText = ""
                     assignmentFilter = .all
                     selectedServerId = nil
+                    selectedDeviceType = .all
                 }
             } label: {
                 HStack(spacing: 6) {
