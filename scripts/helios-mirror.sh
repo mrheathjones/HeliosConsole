@@ -78,8 +78,21 @@ if [[ -n "$(git -C "$REPO" status --porcelain)" ]]; then
     printf '    They are NOT on GitHub; commit and push for the third copy.\n'
 fi
 
+# Purge Finder droppings from the MIRROR before syncing. They are excluded
+# from transfer, and rsync will not delete a directory that still has an
+# excluded file in it — so a folder removed from the repo would linger in the
+# mirror forever, kept alive by a stray .DS_Store, and fail the drift check.
+# (--delete-excluded would fix that too, but it would also wipe dist/, which
+# is excluded precisely so build-pkg.sh's pkg archive survives.)
+find "$MIRROR" -name '.DS_Store' -type f -delete 2>/dev/null || true
+
 info "Mirroring $REPO"
 info "       -> $MIRROR"
+# With the droppings gone, a directory the repo no longer has is genuinely
+# empty, so --delete removes it on its own. Do NOT add a blanket empty-dir
+# purge here: the repo legitimately contains empty directories (e.g.
+# .xcworkspace/xcshareddata/swiftpm/configuration) and deleting those just
+# makes the next sync recreate them — permanent phantom drift.
 rsync -a --delete "${EXCLUDES[@]}" "$REPO/" "$MIRROR/"
 
 # Single-file complete-history snapshot (see BUNDLE note above).

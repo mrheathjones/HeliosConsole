@@ -541,26 +541,6 @@ struct MDMConfiguration: Codable {
         print("⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).")
     }()
 
-    /// Same once-per-launch mechanism for the three relocated blocks. These
-    /// are NOT errors — the legacy value is being honored — but an admin
-    /// editing the new domain while an old profile still wins needs to know
-    /// which copy is in effect.
-    private static let legacyAuthenticationDomainWarning: Void = {
-        print("ℹ️ authentication: read from the LEGACY ui domain — it now belongs in core. Re-push the core profile with an `authentication` block; the ui copy is honored until you do.")
-    }()
-
-    private static let legacyUserExperienceDomainWarning: Void = {
-        print("ℹ️ showAnnouncements/showSettings: read from the LEGACY ui domain — they now belong in features.userExperience. Re-push the features profile; the ui copies are honored until you do.")
-    }()
-
-    private static let legacyCleanupDomainWarning: Void = {
-        print("ℹ️ cleanup tunables: read from the LEGACY access domain — they now belong in features.cleanup. Re-push the features profile; the access copy is honored until you do.")
-    }()
-
-    private static let legacyLocalAdminDomainWarning: Void = {
-        print("ℹ️ localAdministration: read from the LEGACY core domain — it now belongs in features.localAdministration. Re-push the features profile; the core copy is honored until you do.")
-    }()
-
     /// Resolved Entra Graph credentials (pointer domain → values), produced
     /// by the aggregation layer's resolver from `CoreConfiguration.entra`.
     struct ResolvedEntraCredentials {
@@ -631,57 +611,21 @@ struct MDMConfiguration: Codable {
             ? MDMConfiguration.defaultSidebarItems
             : managedSidebar
 
-        // MARK: Relocated keys — new domain preferred, legacy domain honored
+        // Each of these five settings moved domains in the schema cleanup and
+        // is now read ONLY from its current home — the transitional reads of
+        // the old locations were removed once every deployed profile carried
+        // the new layout. An undelivered key falls to its documented default,
+        // exactly like any other key in its domain.
         //
-        // Four blocks moved domains in the schema cleanup. Each is read from
-        // its NEW home first and falls back to its LEGACY home, so a Mac that
-        // has not yet received re-pushed profiles keeps its current behavior
-        // and there is no flag day. The legacy read can be dropped once every
-        // deployed profile has been re-pushed.
-        //
-        //   authentication:  ui     → core
-        //   showAnnouncements/showSettings: ui → features.userExperience
-        //   cleanup tunables: access → features.cleanup
+        //   core.authentication              (was ui.authentication)
+        //   features.userExperience.show*    (was ui.userInterface.show*)
+        //   features.cleanup                 (was access.cleanup)
+        //   features.localAdministration     (was core.localAdministration)
 
-        let resolvedAuthentication = core?.authentication ?? ui?.authentication
-        if core?.authentication == nil, ui?.authentication != nil {
-            _ = MDMConfiguration.legacyAuthenticationDomainWarning
-        }
-
-        // Only the delivered switch wins; an undelivered one falls through to
-        // ui, then to the schema default (true) at the accessor.
-        let featuresUX = features?.userExperience
-        let resolvedShowAnnouncements = featuresUX?.showAnnouncements
-            ?? uiSettings?.showAnnouncements ?? true
-        let resolvedShowSettings = featuresUX?.showSettings
-            ?? uiSettings?.showSettings ?? true
-        if featuresUX == nil,
-           uiSettings?.showAnnouncements != nil || uiSettings?.showSettings != nil {
-            _ = MDMConfiguration.legacyUserExperienceDomainWarning
-        }
-
-        // features.cleanup wins whole-block only when it delivered something;
-        // an empty/absent block falls back to the legacy access copy.
-        let featuresCleanup = features?.cleanup
-        let legacyCleanup = access?.cleanup
-        let resolvedCleanup: ManagedCleanupSettings = {
-            if let featuresCleanup, !featuresCleanup.isEmpty { return featuresCleanup }
-            return legacyCleanup ?? ManagedCleanupSettings()
-        }()
-        if (featuresCleanup?.isEmpty ?? true), legacyCleanup != nil {
-            _ = MDMConfiguration.legacyCleanupDomainWarning
-        }
-
-        // Same whole-block rule for the LAPS local-admin settings.
-        let featuresLocalAdmin = features?.localAdministration
-        let legacyLocalAdmin = core?.localAdministration
-        let resolvedLocalAdmin: ManagedLocalAdminSettings = {
-            if let featuresLocalAdmin, !featuresLocalAdmin.isEmpty { return featuresLocalAdmin }
-            return legacyLocalAdmin ?? ManagedLocalAdminSettings()
-        }()
-        if (featuresLocalAdmin?.isEmpty ?? true), legacyLocalAdmin != nil {
-            _ = MDMConfiguration.legacyLocalAdminDomainWarning
-        }
+        let resolvedShowAnnouncements = features?.effectiveUserExperience.effectiveShowAnnouncements ?? true
+        let resolvedShowSettings = features?.effectiveUserExperience.effectiveShowSettings ?? true
+        let resolvedCleanup = features?.effectiveCleanup ?? ManagedCleanupSettings()
+        let resolvedLocalAdmin = features?.effectiveLocalAdministration ?? ManagedLocalAdminSettings()
 
         self.init(
             jamfURL: jamfPro?.serverURL ?? "",
@@ -728,7 +672,7 @@ struct MDMConfiguration: Codable {
             entraClientSecret: resolvedEntra.clientSecret,
             entraCertPEM: resolvedEntra.certPEM,
             features: features,
-            authentication: resolvedAuthentication,
+            authentication: core?.authentication,
             showAnnouncements: resolvedShowAnnouncements,
             showSettings: resolvedShowSettings,
             userInterfaceExtras: uiSettings,

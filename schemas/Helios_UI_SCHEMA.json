@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
-      "default": "2.4"
+      "default": "3.0"
     },
     "userInterface": {
       "type": "object",

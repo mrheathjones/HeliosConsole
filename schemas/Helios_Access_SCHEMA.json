@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the app logs it, nothing else reads it).",
-      "default": "2.7"
+      "default": "3.0"
     },
     "role": {
       "type": "string",
@@ -185,31 +185,6 @@
           "name"
         ],
         "additionalProperties": false
-      }
-    },
-    "cleanup": {
-      "type": "object",
-      "title": "Cleanup Settings (DEPRECATED — moved to the features domain)",
-      "description": "DEPRECATED: these tunables now live in the features domain (features.cleanup). Still read here so deployed profiles keep working, but features wins when both are present — set them there and remove this block. Module visibility and sub-actions remain role-based, above.",
-      "properties": {
-        "staleDays": {
-          "type": "integer",
-          "title": "Stale Threshold (days)",
-          "description": "Days without check-in before a device counts as stale. Deliver as an integer; the app also tolerates a string value (e.g. \"90\") because some deployed profiles ship it that way.",
-          "default": 90
-        },
-        "defaultStaticGroupID": {
-          "type": "string",
-          "title": "Default Static Group ID",
-          "description": "Jamf static group ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
-          "default": ""
-        },
-        "defaultSiteID": {
-          "type": "string",
-          "title": "Default Site ID",
-          "description": "Jamf site ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
-          "default": ""
-        }
       }
     }
   }

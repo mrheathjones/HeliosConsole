@@ -63,11 +63,6 @@
 				<false/>
 			</dict>
 
-			<!-- Local admin (LAPS lookup) has MOVED to the features domain
-			     (features > localAdministration) — see payload 4/5 below.
-			     A profile still delivering it here keeps working (the app
-			     falls back to it and logs a notice), but the features copy
-			     wins when both are present. -->
 
 			<!-- Optional Apple Business Manager connection. The PEM
 			     private key goes in the credentials payload (abmPrivateKey). -->
@@ -150,11 +145,8 @@
 			</dict>
 			-->
 
-			<!-- Sign-in behavior (MOVED here from the ui domain — this is
-			     sign-in policy, so it belongs beside signIn above). A ui
-			     profile still delivering `authentication` keeps working
-			     (the app falls back to it and logs a notice), but this copy
-			     wins when both are present. -->
+			<!-- Sign-in behavior: biometric requirement, idle lock,
+			     Remember Me. Sign-in POLICY, so it lives beside signIn. -->
 			<key>authentication</key>
 			<dict>
 				<key>requireBiometric</key>
@@ -433,15 +425,10 @@
 				-->
 			</array>
 
-			<!-- Cleanup TUNABLES have MOVED to the features domain
-			     (features > cleanup) — see payload 4/5 below. This domain
-			     is for GRANTS, and those tunables grant nothing. A profile
-			     still delivering `cleanup` here keeps working (the app
-			     falls back to it and logs a notice), but the features copy
-			     wins when both are present. Set it there and drop it here.
-
-			     The Cleanup MODULE is still granted here: "cleanup" in a
-			     role's modules list, plus that role's cleanupActions. -->
+			<!-- The Cleanup MODULE is granted here: "cleanup" in a role's
+			     modules list, plus that role's cleanupActions. Its TUNABLES
+			     (staleDays etc.) live in the features payload — this domain
+			     is for grants only. -->
 
 			<!-- Device Actions allow-list — LAYER 1 OF 2, STRICT FAIL-CLOSED.
 			     This block says which actions EXIST on THIS Mac; the
@@ -577,9 +564,9 @@
 				<integer>15</integer>
 			</dict>
 
-			<!-- Top-level area switches (MOVED here from the ui domain).
-			     These only HIDE an area the signed-in role already grants —
-			     they never reveal one it withholds. -->
+			<!-- Top-level area switches. These only HIDE an area the
+			     signed-in role already grants — never reveal one it
+			     withholds. -->
 			<key>userExperience</key>
 			<dict>
 				<key>showAnnouncements</key>
@@ -588,8 +575,7 @@
 				<true/>
 			</dict>
 
-			<!-- Local admin account for the LAPS lookup in the device view
-			     (MOVED here from the core domain). -->
+			<!-- Local admin account for the LAPS lookup in the device view. -->
 			<key>localAdministration</key>
 			<dict>
 				<key>enabled</key>
@@ -598,9 +584,8 @@
 				<string>macadmin</string>
 			</dict>
 
-			<!-- Cleanup TUNABLES (MOVED here from the access domain).
-			     Grants nothing — the Cleanup module and its sub-actions are
-			     still role-gated in the access payload above. -->
+			<!-- Cleanup TUNABLES. Grants nothing — the Cleanup module and
+			     its sub-actions are role-gated in the access payload. -->
 			<key>cleanup</key>
 			<dict>
 				<key>staleDays</key>

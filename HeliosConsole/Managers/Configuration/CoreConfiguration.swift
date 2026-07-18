@@ -29,6 +29,27 @@
 
 import Foundation
 
+/// The `authentication` dictionary: sign-in behavior preferences.
+///
+/// Lives in the CORE domain — this is sign-in policy, so it belongs beside
+/// the `signIn` block rather than with branding in ui, where it used to sit.
+struct AuthenticationSettings: Codable {
+    var requireBiometric: Bool?
+    var allowBiometricSetup: Bool?
+    var sessionTimeout: Int?
+    var allowRememberMe: Bool?
+
+    var effectiveRequireBiometric: Bool { requireBiometric ?? false }
+
+    var effectiveAllowBiometricSetup: Bool { allowBiometricSetup ?? true }
+
+    /// Idle session timeout in minutes; 0 = no timeout. Negative values from
+    /// a malformed profile are clamped to 0 (disabled) rather than trusted.
+    var effectiveSessionTimeoutMinutes: Int { max(0, sessionTimeout ?? 0) }
+
+    var effectiveAllowRememberMe: Bool { allowRememberMe ?? true }
+}
+
 /// Managed connection & integration settings for Helios Console, delivered
 /// by the `com.herojoneslabs.helios.console.core` configuration profile.
 ///
@@ -72,18 +93,10 @@ struct CoreConfiguration: Codable {
     /// credentials. An absent block keeps the email flow unchanged.
     var signIn: SignInSettings?
 
-    /// Local administrator account settings (LAPS lookup in DeviceView).
-    /// LEGACY LOCATION — moved to the features domain; still decoded here as
-    /// a fallback so deployed core profiles keep working.
-    var localAdministration: LocalAdminSettings?
-
     /// Sign-in behavior preferences: biometric requirement, idle session
-    /// timeout, Remember Me. MOVED HERE from the ui domain, which owned it
-    /// before the domain cleanup — this is sign-in policy and belongs beside
-    /// the `signIn` block that decides how sign-in happens at all, not with
-    /// branding. The ui domain still decodes its legacy copy; the composition
-    /// layer (MDMConfiguration.build) prefers this one and falls back to it,
-    /// so already-deployed ui profiles keep working untouched.
+    /// timeout, Remember Me. Lives here rather than in the ui domain because
+    /// it is sign-in POLICY — it belongs beside the `signIn` block that
+    /// decides how sign-in happens at all, not with branding.
     var authentication: AuthenticationSettings?
 
     // MARK: - Effective accessors (defaults live here, never in decode)
@@ -463,14 +476,4 @@ struct CoreConfiguration: Codable {
         }
     }
 
-    // MARK: - Local administration (legacy location)
-
-    /// The `localAdministration` block, as delivered by the CORE domain.
-    ///
-    /// LEGACY LOCATION: it now belongs to the FEATURES domain — the LAPS
-    /// lookup is a feature of DeviceView, not a connection setting. Still
-    /// decoded here so already-deployed core profiles keep working; the
-    /// composition layer prefers the features copy and falls back to this
-    /// one. See `ManagedLocalAdminSettings`.
-    typealias LocalAdminSettings = ManagedLocalAdminSettings
 }

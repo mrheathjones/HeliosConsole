@@ -21,14 +21,13 @@
 
 import Foundation
 
-/// Codable model for the `com.herojoneslabs.helios.console.ui` managed-preference domain:
-/// branding (`userInterface`), the optional sidebar override (`sidebarItems`,
-/// camelCase — renamed from the legacy top-level `SidebarItems`), and sign-in
-/// behavior (`authentication`).
+/// Codable model for the `com.herojoneslabs.helios.console.ui` managed-preference
+/// domain: branding (`userInterface`) plus the optional cosmetic override
+/// lists (`sidebarItems`, `deviceTabs`, `deviceActionLabels`).
 ///
-/// NOTE (recorded decision): `sidebarItems` and `authentication` are parsed
-/// and exposed but not yet enforced in views — SidebarView builds its own
-/// list today. See docs/ConfigProfileMigration.md for enforcement status.
+/// PURELY COSMETIC. This domain gates nothing: presence and ordering are the
+/// access domain's roles, feature switches are the features domain, and
+/// sign-in policy is core's `authentication`.
 struct UserInterfaceConfiguration: Codable {
 
     /// Managed-preference domain this model is decoded from.
@@ -57,11 +56,8 @@ struct UserInterfaceConfiguration: Codable {
     /// action's built-in label and icon.
     var deviceActionLabels: [DeviceActionLabelSetting]?
 
-    /// Sign-in behavior preferences.
-    var authentication: AuthenticationSettings?
-
     enum CodingKeys: String, CodingKey {
-        case configurationVersion, userInterface, sidebarItems, deviceTabs, deviceActionLabels, authentication
+        case configurationVersion, userInterface, sidebarItems, deviceTabs, deviceActionLabels
     }
 
     init(
@@ -69,15 +65,13 @@ struct UserInterfaceConfiguration: Codable {
         userInterface: UserInterfaceSettings? = nil,
         sidebarItems: [SidebarItemSetting]? = nil,
         deviceTabs: [DeviceTabLabelSetting]? = nil,
-        deviceActionLabels: [DeviceActionLabelSetting]? = nil,
-        authentication: AuthenticationSettings? = nil
+        deviceActionLabels: [DeviceActionLabelSetting]? = nil
     ) {
         self.configurationVersion = configurationVersion
         self.userInterface = userInterface
         self.sidebarItems = sidebarItems
         self.deviceTabs = deviceTabs
         self.deviceActionLabels = deviceActionLabels
-        self.authentication = authentication
     }
 
     /// Per-key resilient decode: this whole domain is cosmetic, so ONE
@@ -91,7 +85,6 @@ struct UserInterfaceConfiguration: Codable {
         sidebarItems = try? container.decodeIfPresent([SidebarItemSetting].self, forKey: .sidebarItems)
         deviceTabs = try? container.decodeIfPresent([DeviceTabLabelSetting].self, forKey: .deviceTabs)
         deviceActionLabels = try? container.decodeIfPresent([DeviceActionLabelSetting].self, forKey: .deviceActionLabels)
-        authentication = try? container.decodeIfPresent(AuthenticationSettings.self, forKey: .authentication)
     }
 
     // MARK: - Effective values (defaults applied here, never in storage)
@@ -165,8 +158,6 @@ struct UserInterfaceSettings: Codable {
     var logoURL: String?
     var accentColor: String?
     var defaultColorScheme: String?
-    var showAnnouncements: Bool?
-    var showSettings: Bool?
     /// Marketing tagline under the wordmark on the welcome screen.
     var tagline: String?
     /// Footer/copyright line for the Settings About card.
@@ -220,9 +211,6 @@ struct UserInterfaceSettings: Codable {
         }
         return parsed
     }
-
-    var effectiveShowAnnouncements: Bool { showAnnouncements ?? true }
-    var effectiveShowSettings: Bool { showSettings ?? true }
 
     /// Welcome-screen tagline. `nil` → built-in copy.
     var effectiveTagline: String? { nonEmptyTrimmed(tagline) }
@@ -384,26 +372,6 @@ struct DeviceActionLabelSetting: Codable {
     var effectiveID: String { nonEmptyTrimmed(id) ?? "" }
     var effectiveDisplayName: String { nonEmptyTrimmed(displayName) ?? "" }
     var effectiveIcon: String { nonEmptyTrimmed(icon) ?? "" }
-}
-
-// MARK: - authentication section
-
-/// The `authentication` dictionary: sign-in behavior preferences.
-struct AuthenticationSettings: Codable {
-    var requireBiometric: Bool?
-    var allowBiometricSetup: Bool?
-    var sessionTimeout: Int?
-    var allowRememberMe: Bool?
-
-    var effectiveRequireBiometric: Bool { requireBiometric ?? false }
-
-    var effectiveAllowBiometricSetup: Bool { allowBiometricSetup ?? true }
-
-    /// Idle session timeout in minutes; 0 = no timeout. Negative values from
-    /// a malformed profile are clamped to 0 (disabled) rather than trusted.
-    var effectiveSessionTimeoutMinutes: Int { max(0, sessionTimeout ?? 0) }
-
-    var effectiveAllowRememberMe: Bool { allowRememberMe ?? true }
 }
 
 // MARK: - Helpers

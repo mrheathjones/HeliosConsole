@@ -65,31 +65,25 @@ struct AccessConfiguration: Codable {
     /// resolves to `UserCapabilities.none`. There is no built-in fallback role.
     var roles: [RoleDefinition]?
 
-    /// Defaults for the Cleanup (stale device) feature.
-    var cleanup: CleanupSettings?
-
     // MARK: - Effective accessors
 
     var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
     var effectiveRoles: [RoleDefinition] { roles ?? [] }
-    var effectiveCleanup: CleanupSettings { cleanup ?? CleanupSettings() }
 
     // MARK: - Domain decode (resilient by key)
 
     enum CodingKeys: String, CodingKey {
-        case configurationVersion, role, roles, cleanup
+        case configurationVersion, role, roles
     }
 
     init(
         configurationVersion: String? = nil,
         role: String? = nil,
-        roles: [RoleDefinition]? = nil,
-        cleanup: CleanupSettings? = nil
+        roles: [RoleDefinition]? = nil
     ) {
         self.configurationVersion = configurationVersion
         self.role = role
         self.roles = roles
-        self.cleanup = cleanup
     }
 
     /// Per-key resilient decode. ManagedDomainLoader catches a thrown decode
@@ -103,7 +97,6 @@ struct AccessConfiguration: Codable {
         configurationVersion = try? container.decode(String.self, forKey: .configurationVersion)
         role = try? container.decode(String.self, forKey: .role)
         roles = Self.decodeRoles(from: container)
-        cleanup = try? container.decode(CleanupSettings.self, forKey: .cleanup)
     }
 
     /// Lenient `roles` decode over the array shape. Each element is decoded
@@ -305,17 +298,6 @@ struct AccessConfiguration: Codable {
                 .filter { !$0.isEmpty }
         }
     }
-
-    // MARK: - Cleanup settings (managed payload — legacy location)
-
-    /// The managed `cleanup` dictionary, as delivered by the ACCESS domain.
-    ///
-    /// LEGACY LOCATION: these tunables now belong to the FEATURES domain
-    /// (`features.cleanup`) — access is for grants, and these grant nothing.
-    /// The key is still decoded here so already-deployed access profiles keep
-    /// working; the composition layer prefers the features copy and falls
-    /// back to this one. See `ManagedCleanupSettings`.
-    typealias CleanupSettings = ManagedCleanupSettings
 
     // MARK: - Return to Service cleanup options (role-scoped)
 
