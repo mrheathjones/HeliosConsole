@@ -2,19 +2,19 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.core",
   "title": "Helios Console — Core",
-  "description": "Connection & integrations tier of the Helios Console managed configuration. Preference domain: com.herojoneslabs.helios.console.core — deploy as its own Jamf Pro 'Application & Custom Settings' configuration profile, scoped to ALL managed Macs running Helios. This domain holds the non-secret connection settings: the Jamf Pro server + master API client identity, the optional Apple Business Manager and Jamf Protect integrations, the Microsoft Entra credential POINTER, and local administration settings. SECURITY: this domain carries NO secrets — the Jamf Pro master client secret, ABM private key, and Jamf Protect password are delivered separately in com.herojoneslabs.helios.console.credentials so they can be scoped and rotated independently; masterClientID and the other IDs here are not secret. The entra block only points at a separate admin-chosen managed-preferences domain that holds the Graph credentials — no Entra secrets live here either. Values delivered here are FORCED and override in-app Settings; profile changes take effect at app relaunch.",
+  "description": "Connection and integration settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.core — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios. Holds the non-secret connection settings: Jamf Pro server + master client identity, optional ABM / Jamf Protect / Entra integrations, sign-in method, and local administration. All secrets are delivered separately in com.herojoneslabs.helios.console.credentials. Values override in-app Settings and take effect at app relaunch.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema version for compatibility checking (informational — the loader logs it, nothing else reads it)",
-      "default": "2.4"
+      "default": "3.0"
     },
     "jamfPro": {
       "type": "object",
       "title": "Jamf Pro Connection",
-      "description": "Jamf Pro server connection and master API client identity. REQUIRED — Helios cannot operate without serverURL and masterClientID. The matching OAuth client secret is NOT set here; it is delivered as jamfProClientSecret in the com.herojoneslabs.helios.console.credentials profile.",
+      "description": "Jamf Pro server connection and master API client identity. Required — Helios cannot operate without serverURL and masterClientID. The matching client secret is delivered in the credentials profile.",
       "properties": {
         "serverURL": {
           "type": "string",
@@ -25,13 +25,13 @@
         "masterClientID": {
           "type": "string",
           "title": "Master API Client ID",
-          "description": "OAuth client_id of the Jamf API Client used by Helios. Not secret. The paired client_secret is delivered via the com.herojoneslabs.helios.console.credentials profile (jamfProClientSecret).",
+          "description": "OAuth client_id of the Jamf API client used by Helios. Not secret — the paired secret is jamfProClientSecret in the credentials profile.",
           "minLength": 1
         },
         "requiredRoleName": {
           "type": "string",
           "title": "Required Jamf API Role Name",
-          "description": "Name of the Jamf API Role used when provisioning per-user API clients. Load-bearing — per-user API client provisioning targets this role name; only change it if the role in Jamf Pro is renamed. NEUTRAL default — deliver your org’s real Jamf API Role name; provisioning targets this role.",
+          "description": "Jamf API Role name targeted when provisioning per-user API clients. Deliver your org's real role name; change only if the role in Jamf Pro is renamed.",
           "default": "HeliosConsoleAPIRole"
         },
         "connectionTimeout": {
@@ -77,7 +77,7 @@
     "appleBusinessManager": {
       "type": "object",
       "title": "Apple Business Manager (optional)",
-      "description": "Optional Apple Business Manager API connection. Omit this block entirely if the ABM integration is not used. The PEM private key is NOT set here; it is delivered as abmPrivateKey in the com.herojoneslabs.helios.console.credentials profile — ABM is considered configured only when clientID, keyID, and that private key are all present.",
+      "description": "Optional Apple Business Manager API connection — omit entirely if unused. The private key is delivered as abmPrivateKey in the credentials profile; ABM is configured only when clientID, keyID, and that key are all present.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -108,12 +108,12 @@
         "defaultMdmServerName": {
           "type": "string",
           "title": "ABM Lookup — Default MDM Server Filter",
-          "description": "Preselect the ABM Lookup server filter to this MDM server, matched by NAME exactly as it appears in Apple Business Manager (case-insensitive). A STARTING POINT the operator can still change or clear — not an enforced lock. If the name matches no server, the filter stays on 'Any Server'."
+          "description": "Preselect the ABM Lookup server filter to this MDM server name (case-insensitive match). A starting point the operator can change — not a lock. No match = 'Any Server'."
         },
         "defaultDeviceType": {
           "type": "string",
           "title": "ABM Lookup — Default Device Type Filter",
-          "description": "Preselect the ABM Lookup device-type filter. A STARTING POINT the operator can still change or clear. Anything unrecognized falls back to 'all'.",
+          "description": "Preselect the ABM Lookup device-type filter. A starting point the operator can change. Unrecognized values fall back to 'all'.",
           "enum": [
             "all",
             "mac",
@@ -130,7 +130,7 @@
     "jamfProtect": {
       "type": "object",
       "title": "Jamf Protect (optional)",
-      "description": "Optional Jamf Protect tenant connection for the Cleanup feature's Protect cards and independent Protect-record deletion. Omit this block entirely if Jamf Protect is not used. The API password is NOT set here; it MAY be delivered as jamfProtectPassword in the com.herojoneslabs.helios.console.credentials profile (which locks the in-app field) — if it is delivered nowhere, the app falls back to in-app entry stored in the Keychain (com.herojoneslabs.helios.console.protect.password).",
+      "description": "Optional Jamf Protect tenant connection for the Cleanup feature — omit entirely if unused. The API password may be delivered as jamfProtectPassword in the credentials profile (locks the in-app field); otherwise the app falls back to in-app entry stored in the Keychain.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -153,12 +153,12 @@
     "entra": {
       "type": "object",
       "title": "Microsoft Entra Device Cleanup (optional)",
-      "description": "Entra (Graph) cleanup for the Return to Service action. When present, Return to Service also deletes the erased Mac's Entra device object(s) by displayName so it can re-register cleanly with PSSO / Company Portal. This block only POINTS to a SEPARATE preference domain holding the Graph credentials — the secrets are NOT stored here — so you can reuse an Entra credential plist you already deploy without duplicating it. The Entra app registration needs the Device.ReadWrite.All application permission AND the 'Cloud Device Administrator' Entra role (without the role, Graph returns 403 on delete and the app logs it, non-fatal). Omit this block to disable Entra cleanup.",
+      "description": "Optional Entra (Graph) cleanup for Return to Service — deletes the erased Mac's Entra device object(s) so it can re-register cleanly. Omit to disable. This block only points to a separate preference domain holding the Graph credentials; no secrets live here. The app registration needs Device.ReadWrite.All plus the Cloud Device Administrator role.",
       "properties": {
         "credentialDomain": {
           "type": "string",
           "title": "Credential Domain (bundle identifier)",
-          "description": "Preference domain of the separate managed-preferences payload holding the Entra Graph credentials (e.g. com.herojoneslabs.helios.console.entra). The domain name is entirely admin-chosen — the value shown is only an example, and an already-deployed credential domain can be reused as-is: renaming the example does not require renaming your deployed credential plist domain, just keep this pointer matching whatever domain you actually deploy. Helios (unsandboxed) reads it via UserDefaults(suiteName:) from /Library/Managed Preferences/<domain>.plist. That domain must supply a tenant id, a client id, and at least one of a certificate PEM string (preferred — Helios signs a PS256 client assertion) or a client secret (fallback)."
+          "description": "Preference domain of the separate managed-preferences payload holding the Entra Graph credentials (admin-chosen, e.g. com.herojoneslabs.helios.console.entra). That domain must supply a tenant id, a client id, and a certificate PEM string (preferred) or client secret. An already-deployed credential plist can be reused as-is — just keep this pointer matching it."
         },
         "tenantIdKey": {
           "type": "string",
@@ -199,12 +199,12 @@
     "signIn": {
       "type": "object",
       "title": "Interactive Sign-In (optional)",
-      "description": "How users sign INTO Helios itself — IDENTITY ONLY. This block decides WHO the user is and which role NAMES they carry; it grants no capabilities. What each role name can actually do is defined entirely in the ACCESS domain's `roles` block (com.herojoneslabs.helios.console.access) — see schemas/Helios_Access_SCHEMA.json. Omit this block entirely to keep the built-in email sign-in flow, in which case the access domain's `role` key names the user's single role instead. DISTINCT from the entra block above: that one points at APP-ONLY Graph credentials used by Return to Service cleanup; this one configures the INTERACTIVE user OAuth flow against a separate PUBLIC-client Entra app registration — a public client has NO client secret, so no secret exists for it anywhere, by design. FAIL-CLOSED: when method is entra but tenantId/clientId are missing or blank, the app blocks sign-in with a configuration-error state — it NEVER silently falls back to the weaker email flow.",
+      "description": "How users sign into Helios — identity only; it grants no capabilities (those live in the access domain's roles block). Omit to keep the built-in email sign-in flow. Distinct from the entra block above, which is app-only Graph cleanup credentials. FAIL-CLOSED: method=entra with missing tenant/client ids blocks sign-in rather than falling back to email.",
       "properties": {
         "method": {
           "type": "string",
           "title": "Sign-In Method",
-          "description": "email = the built-in email sign-in flow (default); the user's role name then comes from the ACCESS domain's `role` key. entra = Microsoft Entra ID interactive sign-in — the email form is replaced entirely, and the user's role names come from the token's roles claim instead (the access `role` key is ignored). Matched case-insensitively. Note the fail-closed rule: delivering entra with missing tenant/client ids blocks sign-in with a configuration error rather than reverting to email.",
+          "description": "email = built-in email sign-in (role name from the access domain's `role` key). entra = Microsoft Entra ID interactive sign-in (role names from the token's roles claim; the `role` key is ignored).",
           "enum": [
             "email",
             "entra"
@@ -214,17 +214,17 @@
         "entra": {
           "type": "object",
           "title": "Entra ID Sign-In",
-          "description": "Microsoft Entra ID interactive sign-in settings. Create a SEPARATE PUBLIC-client app registration for this (desktop/mobile platform redirect; do NOT create a client secret — none is needed and Helios never uses one). ROLE NAMES ARE NOT CONFIGURED HERE: the app reads the token's roles claim and looks each value up against the `name` of an entry in the ACCESS domain's `roles` array — an app-role VALUE must equal a role entry's `name` exactly (case-sensitive). A user matching several entries gets the UNION of those roles' capabilities; a user whose roles match NO entry is REFUSED sign-in (fail-closed). Define the capability sets in schemas/Helios_Access_SCHEMA.json, not here. IMPORTANT: also enforce the sign-in restriction Entra-side — enable 'Assignment required' on the enterprise application and assign only the intended users/groups. The client-side checks configured here are a UX gate, not a security boundary on their own.",
+          "description": "Entra ID interactive sign-in settings. Use a separate PUBLIC-client app registration (no client secret — none is needed or used). Role capabilities are defined in the access domain, not here; a user whose token roles match no access-domain entry is refused sign-in (fail-closed). Also enable 'Assignment required' on the enterprise application Entra-side — client-side checks are a UX gate, not a security boundary.",
           "properties": {
             "tenantId": {
               "type": "string",
               "title": "Tenant ID",
-              "description": "Entra tenant id — MUST be the directory (tenant) ID GUID. Required when method is entra. The multi-tenant authority aliases 'common' and 'organizations' are NOT supported: id_token issuer validation is an exact match against the tenant-specific issuer, so sign-in fails with an issuer-mismatch validation error. Set the real value in Jamf — never commit a real tenant id to a repo. This key identifies the DIRECTORY only; it grants nothing — the role names carried by that directory's tokens resolve against the access domain's `roles` block."
+              "description": "Directory (tenant) ID GUID. Required when method=entra. The aliases 'common' and 'organizations' are NOT supported — issuer validation is tenant-specific. Set the real value in Jamf; never commit it to a repo."
             },
             "clientId": {
               "type": "string",
               "title": "Client ID (public client)",
-              "description": "Application (client) id of the PUBLIC-client app registration. Not secret — and no secret is ever paired with it. Required when method is entra."
+              "description": "Application (client) id of the public-client app registration. Not secret. Required when method=entra."
             },
             "cloudInstance": {
               "type": "string",
@@ -240,7 +240,7 @@
             "allowedGroupIds": {
               "type": "array",
               "title": "Allowed Group IDs (optional)",
-              "description": "OPTIONAL extra client-side check: Entra group OBJECT ids (GUIDs) — the signed-in user must be a member of at least one, verified via the token's groups claim. Empty/absent = no group check. CAVEAT: the groups claim is subject to Entra's overage limit — users who belong to many groups receive an overage token with NO groups listed, and this check will then fail them. Prefer app roles (whose values match a `name` in the access domain's `roles` array) over group ids; the roles claim is never subject to overage.",
+              "description": "Optional extra check: the signed-in user must belong to at least one of these Entra group object ids (GUIDs), via the token's groups claim. Empty = no check. Caveat: users in many groups get an overage token with no groups listed and will fail this check — prefer app roles, which never overage.",
               "items": {
                 "type": "string"
               },
@@ -249,7 +249,7 @@
             "provisionJamfCredentials": {
               "type": "boolean",
               "title": "Provision Jamf Credentials After Sign-In",
-              "description": "After a successful Entra sign-in, still provision the per-user Jamf API client from the verified email address (the same provisioning the email flow performs). Disable only if per-user Jamf API clients are not wanted.",
+              "description": "After Entra sign-in, provision the per-user Jamf API client from the verified email address. Disable only if per-user Jamf API clients are not wanted.",
               "default": true
             }
           },
@@ -260,21 +260,35 @@
         }
       }
     },
-    "localAdministration": {
+    "authentication": {
       "type": "object",
-      "title": "Local Administration",
-      "description": "Local administrator account settings used by the LAPS password lookup in DeviceView.",
+      "title": "Authentication",
+      "description": "Sign-in behavior preferences, enforced in the sign-in and session views. Moved here from the ui domain — a ui profile still delivering this block is honored until you re-push, but core wins when both are present.",
       "properties": {
-        "enabled": {
+        "requireBiometric": {
           "type": "boolean",
-          "title": "Enabled",
+          "title": "Require Biometric",
+          "description": "Require Touch ID / biometric authentication to use the app.",
+          "default": false
+        },
+        "allowBiometricSetup": {
+          "type": "boolean",
+          "title": "Allow Biometric Setup",
+          "description": "Allow users to enable biometric unlock in-app.",
           "default": true
         },
-        "username": {
-          "type": "string",
-          "title": "Local Admin Username",
-          "description": "Short name of the managed local administrator account whose LAPS password Helios looks up.",
-          "default": "macadmin"
+        "sessionTimeout": {
+          "type": "integer",
+          "title": "Session Timeout (min, 0 = none)",
+          "description": "Idle session timeout in minutes. 0 disables the timeout.",
+          "minimum": 0,
+          "default": 0
+        },
+        "allowRememberMe": {
+          "type": "boolean",
+          "title": "Allow Remember Me",
+          "description": "Allow the sign-in screen to remember the last operator.",
+          "default": true
         }
       }
     }

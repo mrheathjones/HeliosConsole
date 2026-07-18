@@ -29,6 +29,27 @@
 
 import Foundation
 
+/// The `authentication` dictionary: sign-in behavior preferences.
+///
+/// Lives in the CORE domain — this is sign-in policy, so it belongs beside
+/// the `signIn` block rather than with branding in ui, where it used to sit.
+struct AuthenticationSettings: Codable {
+    var requireBiometric: Bool?
+    var allowBiometricSetup: Bool?
+    var sessionTimeout: Int?
+    var allowRememberMe: Bool?
+
+    var effectiveRequireBiometric: Bool { requireBiometric ?? false }
+
+    var effectiveAllowBiometricSetup: Bool { allowBiometricSetup ?? true }
+
+    /// Idle session timeout in minutes; 0 = no timeout. Negative values from
+    /// a malformed profile are clamped to 0 (disabled) rather than trusted.
+    var effectiveSessionTimeoutMinutes: Int { max(0, sessionTimeout ?? 0) }
+
+    var effectiveAllowRememberMe: Bool { allowRememberMe ?? true }
+}
+
 /// Managed connection & integration settings for Helios Console, delivered
 /// by the `com.herojoneslabs.helios.console.core` configuration profile.
 ///
@@ -72,8 +93,11 @@ struct CoreConfiguration: Codable {
     /// credentials. An absent block keeps the email flow unchanged.
     var signIn: SignInSettings?
 
-    /// Local administrator account settings (LAPS lookup in DeviceView).
-    var localAdministration: LocalAdminSettings?
+    /// Sign-in behavior preferences: biometric requirement, idle session
+    /// timeout, Remember Me. Lives here rather than in the ui domain because
+    /// it is sign-in POLICY — it belongs beside the `signIn` block that
+    /// decides how sign-in happens at all, not with branding.
+    var authentication: AuthenticationSettings?
 
     // MARK: - Effective accessors (defaults live here, never in decode)
 
@@ -452,25 +476,4 @@ struct CoreConfiguration: Codable {
         }
     }
 
-    // MARK: - Local administration
-
-    /// `localAdministration` block: the managed local admin account whose
-    /// LAPS password Helios looks up (DeviceView).
-    struct LocalAdminSettings: Codable {
-
-        /// Whether local administration features are enabled.
-        var enabled: Bool?
-
-        /// Short name of the managed local administrator account.
-        var username: String?
-
-        /// Enabled flag with the documented default applied (default true).
-        var effectiveEnabled: Bool { enabled ?? true }
-
-        /// Local admin username with the documented default applied.
-        var effectiveUsername: String {
-            let name = username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return name.isEmpty ? "macadmin" : name
-        }
-    }
 }

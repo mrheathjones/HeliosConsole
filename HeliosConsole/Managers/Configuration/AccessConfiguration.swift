@@ -65,31 +65,25 @@ struct AccessConfiguration: Codable {
     /// resolves to `UserCapabilities.none`. There is no built-in fallback role.
     var roles: [RoleDefinition]?
 
-    /// Defaults for the Cleanup (stale device) feature.
-    var cleanup: CleanupSettings?
-
     // MARK: - Effective accessors
 
     var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
     var effectiveRoles: [RoleDefinition] { roles ?? [] }
-    var effectiveCleanup: CleanupSettings { cleanup ?? CleanupSettings() }
 
     // MARK: - Domain decode (resilient by key)
 
     enum CodingKeys: String, CodingKey {
-        case configurationVersion, role, roles, cleanup
+        case configurationVersion, role, roles
     }
 
     init(
         configurationVersion: String? = nil,
         role: String? = nil,
-        roles: [RoleDefinition]? = nil,
-        cleanup: CleanupSettings? = nil
+        roles: [RoleDefinition]? = nil
     ) {
         self.configurationVersion = configurationVersion
         self.role = role
         self.roles = roles
-        self.cleanup = cleanup
     }
 
     /// Per-key resilient decode. ManagedDomainLoader catches a thrown decode
@@ -103,7 +97,6 @@ struct AccessConfiguration: Codable {
         configurationVersion = try? container.decode(String.self, forKey: .configurationVersion)
         role = try? container.decode(String.self, forKey: .role)
         roles = Self.decodeRoles(from: container)
-        cleanup = try? container.decode(CleanupSettings.self, forKey: .cleanup)
     }
 
     /// Lenient `roles` decode over the array shape. Each element is decoded
@@ -303,56 +296,6 @@ struct AccessConfiguration: Codable {
             (values ?? [])
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-        }
-    }
-
-    // MARK: - Cleanup settings (managed payload)
-
-    /// The managed `cleanup` dictionary. Distinct from the app-local
-    /// `CleanupSettings` service class (Cleanup/Services/CleanupSettings.swift);
-    /// this nested type only carries the profile-delivered defaults.
-    struct CleanupSettings: Codable {
-        /// Stale threshold (days without check-in). Optional; see
-        /// `effectiveStaleDays` for the default.
-        var staleDays: Int?
-        /// Jamf static group ID (string in the profile; parsed to Int downstream).
-        var defaultStaticGroupID: String?
-        /// Jamf site ID (string in the profile; parsed to Int downstream).
-        var defaultSiteID: String?
-
-        /// Stale threshold with the schema default applied.
-        var effectiveStaleDays: Int { staleDays ?? 90 }
-
-        enum CodingKeys: String, CodingKey {
-            case staleDays
-            case defaultStaticGroupID
-            case defaultSiteID
-        }
-
-        init(
-            staleDays: Int? = nil,
-            defaultStaticGroupID: String? = nil,
-            defaultSiteID: String? = nil
-        ) {
-            self.staleDays = staleDays
-            self.defaultStaticGroupID = defaultStaticGroupID
-            self.defaultSiteID = defaultSiteID
-        }
-
-        /// Custom decode: deployed profiles deliver `staleDays` as either an
-        /// integer or a string ("90"). Accept both — and never let a
-        /// malformed value fail the whole domain decode.
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            if let intValue = try? container.decode(Int.self, forKey: .staleDays) {
-                staleDays = intValue
-            } else if let stringValue = try? container.decode(String.self, forKey: .staleDays) {
-                staleDays = Int(stringValue)
-            } else {
-                staleDays = nil
-            }
-            defaultStaticGroupID = try container.decodeIfPresent(String.self, forKey: .defaultStaticGroupID)
-            defaultSiteID = try container.decodeIfPresent(String.self, forKey: .defaultSiteID)
         }
     }
 

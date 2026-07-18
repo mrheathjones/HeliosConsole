@@ -357,9 +357,31 @@ if [[ "$BUMP" == "true" ]]; then
     /usr/bin/sed -i '' -E "s/(CURRENT_PROJECT_VERSION = )[0-9]+;/\1${NEXT_BUILD};/g" "$PROJECT/project.pbxproj"
 fi
 
+# ---------------------------------------------------------------------------
+# Mirror the repo itself to the iCloud redundancy copy
+# ---------------------------------------------------------------------------
+# Runs AFTER the counter bump so the mirror captures the bumped pbxproj too.
+# Deliberately NON-FATAL: a pkg that built fine must not report failure just
+# because iCloud was unreachable — shipping the pkg is this script's job.
+REPO_MIRROR_STATUS=""
+MIRROR_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/helios-mirror.sh"
+if [[ -x "$MIRROR_SCRIPT" ]]; then
+    info "Mirroring repo → iCloud redundancy copy"
+    if "$MIRROR_SCRIPT" >/dev/null 2>&1; then
+        REPO_MIRROR_STATUS="ok"
+    else
+        REPO_MIRROR_STATUS="failed"
+        printf '⚠️  Repo mirror FAILED (the pkg itself is fine).\n'
+        printf '    Run scripts/helios-mirror.sh to see why.\n'
+    fi
+fi
+
 printf '\n✅ Created: %s\n' "$PKG_PATH"
 if [[ -n "$MIRRORED_PATH" ]]; then
     printf '   mirrored to: %s\n' "$MIRRORED_PATH"
+fi
+if [[ "$REPO_MIRROR_STATUS" == "ok" ]]; then
+    printf '   repo mirrored to iCloud (incl. .git + restore bundle)\n'
 fi
 if [[ "$SIGN_PKG" == "true" && -n "$PKG_IDENTITY" ]]; then
     printf '   pkg signed: %s\n' "$PKG_IDENTITY"

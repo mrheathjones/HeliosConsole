@@ -46,22 +46,23 @@ enum ManagedDomainLoader {
     /// matching schema in schemas/.
     static let coreKeys = [
         "configurationVersion", "jamfPro", "appleBusinessManager",
-        "jamfProtect", "entra", "signIn", "localAdministration"
+        "jamfProtect", "entra", "signIn", "authentication"
     ]
     static let credentialsKeys = [
         "configurationVersion", "jamfProClientSecret", "abmPrivateKey",
         "jamfProtectPassword"
     ]
     static let accessKeys = [
-        "configurationVersion", "role", "roles", "cleanup"
+        "configurationVersion", "role", "roles"
     ]
     static let featuresKeys = [
         "configurationVersion", "computers", "mobileDevices",
-        "healthScorecard", "deviceHealth", "reports", "actionLog"
+        "healthScorecard", "deviceHealth", "reports", "actionLog",
+        "userExperience", "cleanup", "localAdministration"
     ]
     static let uiKeys = [
         "configurationVersion", "userInterface", "sidebarItems",
-        "deviceTabs", "deviceActionLabels", "authentication"
+        "deviceTabs", "deviceActionLabels"
     ]
 
     /// Reads `domain` via UserDefaults(suiteName:), assembles the known

@@ -141,8 +141,19 @@ struct MDMConfiguration: Codable {
     /// Feature modules & tuning (features domain, whole model).
     let features: FeaturesConfiguration?
 
-    /// Sign-in behavior preferences (ui domain).
+    /// Sign-in behavior preferences (core domain `authentication`; the ui
+    /// domain's legacy copy is honored as a fallback).
     let authentication: AuthenticationSettings?
+
+    /// Whether the Announcements area may render (features domain
+    /// `userExperience.showAnnouncements`; ui domain legacy fallback).
+    /// INTERSECTED with the role grant — never a substitute for it.
+    let showAnnouncements: Bool
+
+    /// Whether the Settings area may render (features domain
+    /// `userExperience.showSettings`; ui domain legacy fallback).
+    /// INTERSECTED with the role grant — never a substitute for it.
+    let showSettings: Bool
 
     /// Full branding/UX section (ui domain) — companyName, logoURL,
     /// accentColor, defaultColorScheme, show* switches beyond the flattened
@@ -461,6 +472,8 @@ struct MDMConfiguration: Codable {
         entraCertPEM: String? = nil,
         features: FeaturesConfiguration? = nil,
         authentication: AuthenticationSettings? = nil,
+        showAnnouncements: Bool = true,
+        showSettings: Bool = true,
         userInterfaceExtras: UserInterfaceSettings? = nil,
         uiDeviceTabs: [DeviceTabLabelSetting] = [],
         uiDeviceActionLabels: [DeviceActionLabelSetting] = [],
@@ -510,6 +523,8 @@ struct MDMConfiguration: Codable {
         self.entraCertPEM = entraCertPEM
         self.features = features
         self.authentication = authentication
+        self.showAnnouncements = showAnnouncements
+        self.showSettings = showSettings
         self.userInterfaceExtras = userInterfaceExtras
         self.uiDeviceTabs = uiDeviceTabs
         self.uiDeviceActionLabels = uiDeviceActionLabels
@@ -596,6 +611,22 @@ struct MDMConfiguration: Codable {
             ? MDMConfiguration.defaultSidebarItems
             : managedSidebar
 
+        // Each of these five settings moved domains in the schema cleanup and
+        // is now read ONLY from its current home — the transitional reads of
+        // the old locations were removed once every deployed profile carried
+        // the new layout. An undelivered key falls to its documented default,
+        // exactly like any other key in its domain.
+        //
+        //   core.authentication              (was ui.authentication)
+        //   features.userExperience.show*    (was ui.userInterface.show*)
+        //   features.cleanup                 (was access.cleanup)
+        //   features.localAdministration     (was core.localAdministration)
+
+        let resolvedShowAnnouncements = features?.effectiveUserExperience.effectiveShowAnnouncements ?? true
+        let resolvedShowSettings = features?.effectiveUserExperience.effectiveShowSettings ?? true
+        let resolvedCleanup = features?.effectiveCleanup ?? ManagedCleanupSettings()
+        let resolvedLocalAdmin = features?.effectiveLocalAdministration ?? ManagedLocalAdminSettings()
+
         self.init(
             jamfURL: jamfPro?.serverURL ?? "",
             masterClientID: jamfPro?.masterClientID ?? "",
@@ -605,7 +636,7 @@ struct MDMConfiguration: Codable {
             sidebarItems: sidebarItems,
             requiredRoleName: jamfPro?.effectiveRequiredRoleName ?? "HeliosConsoleAPIRole",
             supportURL: uiSettings?.effectiveSupportURL,
-            localAdminUsername: core?.localAdministration?.effectiveUsername ?? "macadmin",
+            localAdminUsername: resolvedLocalAdmin.effectiveUsername,
             connectionTimeoutSeconds: jamfPro?.effectiveConnectionTimeout ?? 30,
             requestTimeoutSeconds: jamfPro?.effectiveRequestTimeout ?? 60,
             eraseAckTimeoutSeconds: jamfPro?.effectiveEraseAckTimeoutSeconds ?? 180,
@@ -628,9 +659,9 @@ struct MDMConfiguration: Codable {
             // Passed as the DELIVERED ARRAY, not a pre-built index: profile
             // order is load-bearing (module order = sidebar order).
             roles: access?.effectiveRoles ?? [],
-            cleanupStaleDays: access?.effectiveCleanup.effectiveStaleDays ?? 90,
-            cleanupDefaultStaticGroupID: access?.cleanup?.defaultStaticGroupID,
-            cleanupDefaultSiteID: access?.cleanup?.defaultSiteID,
+            cleanupStaleDays: resolvedCleanup.effectiveStaleDays,
+            cleanupDefaultStaticGroupID: resolvedCleanup.defaultStaticGroupID,
+            cleanupDefaultSiteID: resolvedCleanup.defaultSiteID,
             protectEnabled: core?.jamfProtect?.effectiveEnabled ?? false,
             protectURL: core?.jamfProtect?.url,
             protectClientID: core?.jamfProtect?.clientID,
@@ -641,7 +672,9 @@ struct MDMConfiguration: Codable {
             entraClientSecret: resolvedEntra.clientSecret,
             entraCertPEM: resolvedEntra.certPEM,
             features: features,
-            authentication: ui?.authentication,
+            authentication: core?.authentication,
+            showAnnouncements: resolvedShowAnnouncements,
+            showSettings: resolvedShowSettings,
             userInterfaceExtras: uiSettings,
             uiDeviceTabs: ui?.deviceTabs ?? [],
             uiDeviceActionLabels: ui?.deviceActionLabels ?? [],

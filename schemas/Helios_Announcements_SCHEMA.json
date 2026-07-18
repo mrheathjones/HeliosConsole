@@ -1,89 +1,78 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.announcements",
-  "title": "Helios Console Announcements",
-  "description": "MDM configuration schema for Helios Console announcements - deployed as a separate configuration profile",
+  "title": "Helios Console — Announcements",
+  "description": "Announcement feed and behavior settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.announcements — deploy as its own Jamf Pro Application & Custom Settings profile. Visibility of the Announcements module itself is gated by the access domain's roles; the ui domain's showAnnouncements switch can hide it further.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
-      "description": "Schema version for compatibility checking",
-      "default": "1.0"
+      "title": "Configuration Version",
+      "description": "Schema/profile version stamp (informational — logged, nothing else reads it).",
+      "default": "1.1"
     },
     "announcementsEnabled": {
       "type": "boolean",
-      "description": "Master switch to enable/disable announcements feature",
+      "title": "Announcements Enabled",
+      "description": "Master switch for the announcements feature. False hides and empties it.",
       "default": true
     },
     "refreshInterval": {
       "type": "integer",
-      "description": "How often to check for announcement updates (in minutes, 0 = manual only)",
+      "title": "Refresh Interval (min)",
+      "description": "How often to check for announcement updates, in minutes. 0 = manual refresh only.",
       "default": 60,
       "minimum": 0,
       "maximum": 1440
     },
     "allowLocalFile": {
       "type": "boolean",
-      "description": "Allow loading announcements from local JSON file (for testing)",
+      "title": "Allow Local File Source",
+      "description": "Allow loading announcements from the machine-wide local JSON file. Testing convenience only — keep false in production.",
       "default": false
     },
     "allowUserDismiss": {
       "type": "boolean",
-      "description": "Allow users to dismiss announcements globally",
+      "title": "Allow User Dismiss",
+      "description": "Allow users to dismiss dismissible announcements.",
       "default": true
     },
     "showUnreadBadge": {
       "type": "boolean",
-      "description": "Show unread count badge in sidebar",
+      "title": "Show Unread Badge",
+      "description": "Show the unread-count badge on the sidebar row.",
       "default": true
-    },
-    "notificationSettings": {
-      "type": "object",
-      "description": "System notification settings for announcements",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Send system notifications for new announcements",
-          "default": false
-        },
-        "criticalOnly": {
-          "type": "boolean",
-          "description": "Only send notifications for critical announcements",
-          "default": true
-        },
-        "sound": {
-          "type": "boolean",
-          "description": "Play sound with notification",
-          "default": false
-        }
-      }
     },
     "announcements": {
       "type": "array",
-      "description": "List of announcements to display",
+      "title": "Announcements",
+      "description": "The list of announcements to display.",
       "items": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "description": "Unique identifier for the announcement",
+            "title": "ID",
+            "description": "Unique identifier. Read/dismissed state is tracked per id, so reusing an id resurfaces old state.",
             "minLength": 1
           },
           "title": {
             "type": "string",
-            "description": "Announcement title",
+            "title": "Title",
             "minLength": 1,
             "maxLength": 200
           },
           "message": {
             "type": "string",
-            "description": "Announcement message body (supports basic markdown)",
+            "title": "Message",
+            "description": "Body text. Supports basic markdown.",
             "minLength": 1,
             "maxLength": 5000
           },
           "type": {
             "type": "string",
-            "description": "Announcement type/category",
+            "title": "Type",
+            "description": "Category — sets the icon and color. Default: info.",
             "enum": [
               "info",
               "warning",
@@ -96,7 +85,8 @@
           },
           "priority": {
             "type": "string",
-            "description": "Announcement priority level",
+            "title": "Priority",
+            "description": "Sort priority. Default: normal.",
             "enum": [
               "low",
               "normal",
@@ -108,311 +98,59 @@
           "createdAt": {
             "type": "string",
             "format": "date-time",
-            "description": "Announcement creation/publish date (ISO 8601)"
+            "title": "Created At",
+            "description": "Publish date, ISO 8601. Absent = now."
           },
           "expiresAt": {
             "type": "string",
             "format": "date-time",
-            "description": "Announcement expiration date (ISO 8601, optional)"
-          },
-          "startsAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When to start showing the announcement (ISO 8601, optional)"
+            "title": "Expires At",
+            "description": "Expiration date, ISO 8601. Absent = never expires."
           },
           "dismissible": {
             "type": "boolean",
-            "description": "Allow users to dismiss this announcement",
+            "title": "Dismissible",
+            "description": "Whether users may dismiss this announcement (also requires allowUserDismiss).",
             "default": true
           },
           "requiredReading": {
             "type": "boolean",
-            "description": "Mark as required reading (prevents dismissal until acknowledged)",
-            "default": false
-          },
-          "requiresAcknowledgment": {
-            "type": "boolean",
-            "description": "Require explicit acknowledgment from user",
+            "title": "Required Reading",
+            "description": "Mark as required reading — cannot be dismissed until acknowledged.",
             "default": false
           },
           "actionURL": {
             "type": "string",
             "format": "uri",
-            "description": "URL to open when action button is clicked"
+            "title": "Action URL",
+            "description": "URL opened by the action button. Absent = no button."
           },
           "actionLabel": {
             "type": "string",
-            "description": "Label for action button",
+            "title": "Action Label",
+            "description": "Action button label.",
             "default": "Learn More",
             "maxLength": 50
           },
-          "actionType": {
-            "type": "string",
-            "description": "How to handle the action URL",
-            "enum": [
-              "openURL",
-              "openInApp",
-              "downloadFile"
-            ],
-            "default": "openURL"
-          },
-          "targetAudience": {
-            "type": "object",
-            "description": "Target audience filters (optional)",
-            "properties": {
-              "departments": {
-                "type": "array",
-                "description": "List of department names to target",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "buildings": {
-                "type": "array",
-                "description": "List of building names to target",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "userGroups": {
-                "type": "array",
-                "description": "List of Jamf user group names to target",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "deviceGroups": {
-                "type": "array",
-                "description": "List of Jamf smart/static group names to target",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "platforms": {
-                "type": "array",
-                "description": "Target specific platforms",
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "macOS",
-                    "iOS",
-                    "iPadOS",
-                    "visionOS"
-                  ]
-                }
-              }
-            }
-          },
-          "displayOptions": {
-            "type": "object",
-            "description": "Display customization options",
-            "properties": {
-              "showOnDashboard": {
-                "type": "boolean",
-                "description": "Show as banner on dashboard",
-                "default": false
-              },
-              "modalOnStartup": {
-                "type": "boolean",
-                "description": "Show as modal when app starts",
-                "default": false
-              },
-              "pinToTop": {
-                "type": "boolean",
-                "description": "Pin to top of announcements list",
-                "default": false
-              },
-              "backgroundColor": {
-                "type": "string",
-                "description": "Custom background color (hex)",
-                "pattern": "^#[0-9A-Fa-f]{6}$"
-              },
-              "iconName": {
-                "type": "string",
-                "description": "Custom SF Symbol icon name"
-              }
-            }
-          },
-          "attachments": {
+          "targetPlatforms": {
             "type": "array",
-            "description": "File attachments (URLs)",
+            "title": "Target Platforms",
+            "description": "Limit this announcement to specific platforms. Absent = all platforms.",
             "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "description": "Display name for attachment"
-                },
-                "url": {
-                  "type": "string",
-                  "format": "uri",
-                  "description": "URL to attachment"
-                },
-                "type": {
-                  "type": "string",
-                  "description": "MIME type or file type",
-                  "enum": [
-                    "pdf",
-                    "image",
-                    "video",
-                    "document",
-                    "other"
-                  ]
-                },
-                "size": {
-                  "type": "string",
-                  "description": "Human-readable file size"
-                }
-              },
-              "required": [
-                "name",
-                "url"
+              "type": "string",
+              "enum": [
+                "macOS",
+                "iOS",
+                "iPadOS",
+                "visionOS"
               ]
             }
-          },
-          "metadata": {
-            "type": "object",
-            "description": "Custom metadata for tracking/filtering",
-            "additionalProperties": true
           }
         },
         "required": [
           "id",
           "title",
           "message"
-        ]
-      }
-    },
-    "scheduledMaintenanceWindows": {
-      "type": "array",
-      "description": "Pre-defined maintenance windows that generate automatic announcements",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Unique identifier"
-          },
-          "title": {
-            "type": "string",
-            "description": "Maintenance window title"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description of maintenance activities"
-          },
-          "startTime": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Maintenance start time (ISO 8601)"
-          },
-          "endTime": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Maintenance end time (ISO 8601)"
-          },
-          "affectedServices": {
-            "type": "array",
-            "description": "List of affected services",
-            "items": {
-              "type": "string"
-            }
-          },
-          "notifyBefore": {
-            "type": "integer",
-            "description": "Minutes before start to show announcement",
-            "default": 60
-          },
-          "recurring": {
-            "type": "object",
-            "description": "Recurring schedule (optional)",
-            "properties": {
-              "frequency": {
-                "type": "string",
-                "enum": [
-                  "daily",
-                  "weekly",
-                  "monthly"
-                ]
-              },
-              "daysOfWeek": {
-                "type": "array",
-                "description": "For weekly: days of week (0=Sunday)",
-                "items": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 6
-                }
-              },
-              "dayOfMonth": {
-                "type": "integer",
-                "description": "For monthly: day of month",
-                "minimum": 1,
-                "maximum": 31
-              }
-            }
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "startTime",
-          "endTime"
-        ]
-      }
-    },
-    "templates": {
-      "type": "array",
-      "description": "Reusable announcement templates",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Template identifier"
-          },
-          "name": {
-            "type": "string",
-            "description": "Template display name"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "info",
-              "warning",
-              "critical",
-              "success",
-              "maintenance",
-              "update"
-            ]
-          },
-          "titleTemplate": {
-            "type": "string",
-            "description": "Title template with {{placeholders}}"
-          },
-          "messageTemplate": {
-            "type": "string",
-            "description": "Message template with {{placeholders}}"
-          },
-          "defaultPriority": {
-            "type": "string",
-            "enum": [
-              "low",
-              "normal",
-              "high",
-              "urgent"
-            ]
-          },
-          "defaultDuration": {
-            "type": "integer",
-            "description": "Default duration in hours before expiration"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "titleTemplate",
-          "messageTemplate"
         ]
       }
     }

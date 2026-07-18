@@ -63,14 +63,6 @@
 				<false/>
 			</dict>
 
-			<!-- Local admin (LAPS lookup) account. -->
-			<key>localAdministration</key>
-			<dict>
-				<key>enabled</key>
-				<true/>
-				<key>username</key>
-				<string>macadmin</string>
-			</dict>
 
 			<!-- Optional Apple Business Manager connection. The PEM
 			     private key goes in the credentials payload (abmPrivateKey). -->
@@ -152,6 +144,21 @@
 				</dict>
 			</dict>
 			-->
+
+			<!-- Sign-in behavior: biometric requirement, idle lock,
+			     Remember Me. Sign-in POLICY, so it lives beside signIn. -->
+			<key>authentication</key>
+			<dict>
+				<key>requireBiometric</key>
+				<false/>
+				<key>allowBiometricSetup</key>
+				<true/>
+				<!-- Idle lock, minutes; 0 disables. -->
+				<key>sessionTimeout</key>
+				<integer>0</integer>
+				<key>allowRememberMe</key>
+				<true/>
+			</dict>
 		</dict>
 
 		<!-- ============================================================
@@ -418,17 +425,10 @@
 				-->
 			</array>
 
-			<!-- Cleanup TUNABLES only — this block grants nothing. The
-			     module is shown by "cleanup" in a role's modules list, and
-			     its sub-actions by that role's cleanupActions list. -->
-			<key>cleanup</key>
-			<dict>
-				<key>staleDays</key>
-				<integer>90</integer>
-				<!-- Optional action-picker defaults: -->
-				<!-- <key>defaultStaticGroupID</key><string>123</string> -->
-				<!-- <key>defaultSiteID</key><string>1</string> -->
-			</dict>
+			<!-- The Cleanup MODULE is granted here: "cleanup" in a role's
+			     modules list, plus that role's cleanupActions. Its TUNABLES
+			     (staleDays etc.) live in the features payload — this domain
+			     is for grants only. -->
 
 			<!-- Device Actions allow-list — LAYER 1 OF 2, STRICT FAIL-CLOSED.
 			     This block says which actions EXIST on THIS Mac; the
@@ -562,6 +562,37 @@
 			<dict>
 				<key>inventoryRefreshInterval</key>
 				<integer>15</integer>
+			</dict>
+
+			<!-- Top-level area switches. These only HIDE an area the
+			     signed-in role already grants — never reveal one it
+			     withholds. -->
+			<key>userExperience</key>
+			<dict>
+				<key>showAnnouncements</key>
+				<true/>
+				<key>showSettings</key>
+				<true/>
+			</dict>
+
+			<!-- Local admin account for the LAPS lookup in the device view. -->
+			<key>localAdministration</key>
+			<dict>
+				<key>enabled</key>
+				<true/>
+				<key>username</key>
+				<string>macadmin</string>
+			</dict>
+
+			<!-- Cleanup TUNABLES. Grants nothing — the Cleanup module and
+			     its sub-actions are role-gated in the access payload. -->
+			<key>cleanup</key>
+			<dict>
+				<key>staleDays</key>
+				<integer>90</integer>
+				<!-- Optional action-picker defaults: -->
+				<!-- <key>defaultStaticGroupID</key><string>123</string> -->
+				<!-- <key>defaultSiteID</key><string>1</string> -->
 			</dict>
 		</dict>
 
