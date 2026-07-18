@@ -75,6 +75,15 @@ struct WelcomeLoginView: View {
                 launchState.resetForNewLogin()
             }
         }
+        // Warm the ABM inventory as early as the login screen — ABM auth is
+        // app-level (ES256 client-credentials from the config profile), not
+        // tied to the user's sign-in, so the 26k-device sweep can run while
+        // the user is authenticating instead of starting cold at the tab.
+        // No-op when ABM isn't configured or the cache is already valid; the
+        // DashboardView .task remains as a post-login fallback (idempotent).
+        .task {
+            await ABMDeviceCache.shared.preloadIfNeeded()
+        }
     }
     
     private var entraRestoreProgressView: some View {

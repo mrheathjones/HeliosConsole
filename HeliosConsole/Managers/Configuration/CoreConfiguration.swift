@@ -214,8 +214,24 @@ struct CoreConfiguration: Codable {
         /// tokens — different host.
         var serviceType: String?
 
+        /// Default filter state for the ABM Lookup tab — a STARTING POINT the
+        /// operator can still change or clear, not an enforced lock.
+        ///   • defaultMdmServerName: preselect the server filter by NAME (as
+        ///     shown in ABM), resolved to its id once the server list loads.
+        ///     No match (or absent) → "Any Server".
+        ///   • defaultDeviceType: one of all|mac|iphone|ipad|appletv|watch|
+        ///     vision; anything else → all (see ABMDeviceType.from).
+        var defaultMdmServerName: String?
+        var defaultDeviceType: String?
+
         /// Enabled flag — absent key means disabled.
         var effectiveEnabled: Bool { enabled ?? false }
+
+        /// Trimmed default server name, nil when blank.
+        var effectiveDefaultMdmServerName: String? {
+            let name = defaultMdmServerName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (name?.isEmpty ?? true) ? nil : name
+        }
 
         enum ServiceType: String {
             case business

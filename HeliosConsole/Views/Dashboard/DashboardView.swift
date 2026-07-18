@@ -54,6 +54,13 @@ struct DashboardView: View {
                 handleDeepLinkNavigation()
             }
         }
+        // Warm the ABM inventory in the background right after sign-in so the
+        // ABM Lookup tab opens already populated. No-op when ABM isn't
+        // configured or the cache is already valid; failures stay silent and
+        // the tab falls back to its own on-demand load.
+        .task {
+            await ABMDeviceCache.shared.preloadIfNeeded()
+        }
         .onChange(of: session.capabilities) { _, _ in
             landOnAvailableDestination(config: configManager.configuration)
         }

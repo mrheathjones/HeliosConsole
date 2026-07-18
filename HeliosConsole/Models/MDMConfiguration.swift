@@ -67,6 +67,13 @@ struct MDMConfiguration: Codable {
     let abmKeyId: String?
     let abmPrivateKey: String?
 
+    /// ABM Lookup default filters (core appleBusinessManager.defaultMdmServerName
+    /// / defaultDeviceType). Starting-point filter state, operator-overridable.
+    /// Server is named (resolved to id in the view); device type is a raw token
+    /// parsed via ABMDeviceType.from (fail-safe to all).
+    let abmDefaultMdmServerName: String?
+    let abmDefaultDeviceType: String?
+
     // MARK: - Role-based access + Cleanup feature (Jamf stale-device cleanup)
     /// This Mac's role name, delivered by MDM in the access domain's `role`
     /// key. A FREE-FORM string naming a key in `roleDefinitions` — the app
@@ -436,6 +443,8 @@ struct MDMConfiguration: Codable {
         abmClientId: String?,
         abmKeyId: String?,
         abmPrivateKey: String?,
+        abmDefaultMdmServerName: String? = nil,
+        abmDefaultDeviceType: String? = nil,
         role: String? = nil,
         roles: [AccessConfiguration.RoleDefinition] = [],
         cleanupStaleDays: Int = 90,
@@ -480,6 +489,8 @@ struct MDMConfiguration: Codable {
         self.abmClientId = abmClientId
         self.abmKeyId = abmKeyId
         self.abmPrivateKey = abmPrivateKey
+        self.abmDefaultMdmServerName = abmDefaultMdmServerName
+        self.abmDefaultDeviceType = abmDefaultDeviceType
         self.role = role
         // The index is DERIVED here rather than passed in, so the ordered
         // array and its name index cannot drift apart at any call site.
@@ -609,6 +620,8 @@ struct MDMConfiguration: Codable {
             abmClientId: abmClientId,
             abmKeyId: abmKeyId,
             abmPrivateKey: abmPrivateKey,
+            abmDefaultMdmServerName: core?.appleBusinessManager?.effectiveDefaultMdmServerName,
+            abmDefaultDeviceType: core?.appleBusinessManager?.defaultDeviceType,
             // Fail-closed: absent access domain → nil role name and no role
             // definitions → every user resolves to UserCapabilities.none.
             role: access?.role,

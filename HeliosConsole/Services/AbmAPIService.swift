@@ -173,6 +173,76 @@ struct ABMMdmServer: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - Device Type Filter
+
+/// Product-family filter for the ABM Lookup list. `rawValue` is the token the
+/// config profile carries (appleBusinessManager.defaultDeviceType) and the
+/// matcher key. Membership is decided by ABMOrgDevice.productFamily so it
+/// tracks whatever families ABM reports without a per-model table.
+enum ABMDeviceType: String, CaseIterable, Identifiable, Codable {
+    case all
+    case mac
+    case iphone
+    case ipad
+    case appletv
+    case watch
+    case vision
+
+    var id: String { rawValue }
+
+    /// Fail-safe parse for the config value — unrecognized/empty → .all.
+    static func from(_ raw: String?) -> ABMDeviceType {
+        let key = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        return ABMDeviceType(rawValue: key) ?? .all
+    }
+
+    var title: String {
+        switch self {
+        case .all: return "All Types"
+        case .mac: return "Mac"
+        case .iphone: return "iPhone"
+        case .ipad: return "iPad"
+        case .appletv: return "Apple TV"
+        case .watch: return "Apple Watch"
+        case .vision: return "Apple Vision"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "square.grid.2x2"
+        case .mac: return "laptopcomputer"
+        case .iphone: return "iphone"
+        case .ipad: return "ipad"
+        case .appletv: return "appletv"
+        case .watch: return "applewatch"
+        case .vision: return "visionpro"
+        }
+    }
+
+    /// The productFamily substrings that count as this type (lowercased).
+    /// ABM reports e.g. "Mac", "iPhone", "iPad", "Apple TV", "Watch", "Vision".
+    private var familyNeedles: [String] {
+        switch self {
+        case .all: return []
+        case .mac: return ["mac"]
+        case .iphone: return ["iphone"]
+        case .ipad: return ["ipad"]
+        case .appletv: return ["tv"]
+        case .watch: return ["watch"]
+        case .vision: return ["vision"]
+        }
+    }
+
+    /// Whether a device's productFamily belongs to this type. `.all` matches
+    /// everything; an unknown/nil family matches only `.all`.
+    func matches(productFamily: String?) -> Bool {
+        guard self != .all else { return true }
+        let family = (productFamily ?? "").lowercased()
+        return familyNeedles.contains { family.contains($0) }
+    }
+}
+
 // MARK: - Org Device Model
 
 struct ABMOrgDevice: Codable, Identifiable, Hashable {
@@ -357,7 +427,32 @@ class ABMAPIService: ObservableObject {
         MDMConfigurationManager.shared.configuration.abmAPIBaseURL
     }
     private let tokenURL = "https://account.apple.com/auth/oauth2/token"
-    
+
+    /// Dedicated session for ALL ABM/AxM + auth traffic. Deliberately NOT
+    /// URLSession.shared: its own connection pool, isolated from the rest of
+    /// the app, so an ABM sweep's bursty large transfers don't poison (or get
+    /// poisoned by) shared connections, plus a per-host connection cap and
+    /// waits-for-connectivity. HTTP/3 is suppressed per-request (see
+    /// makeRequest) rather than here — there is no session-level toggle.
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.httpMaximumConnectionsPerHost = 4
+        return URLSession(configuration: config)
+    }()
+
+    /// Builds a request with HTTP/3 suppressed. Enterprise SSL-inspection
+    /// proxies (Zscaler/Netskope/…) and flaky links mangle QUIC/HTTP3 far more
+    /// than HTTP/2-over-TCP; opting out keeps ABM on h2 like the curl path that
+    /// works. (Apple still requires these endpoints bypass TLS inspection
+    /// entirely — this reduces, not eliminates, proxy-induced failures.)
+    private func makeRequest(url: URL, timeout: TimeInterval) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
+        request.assumesHTTP3Capable = false
+        return request
+    }
+
     @Published var isConfigured: Bool = false
     @Published var isAuthenticated: Bool = false
     @Published var lastError: String?
@@ -582,10 +677,10 @@ class ABMAPIService: ObservableObject {
             throw ABMError.invalidURL
         }
         
-        var request = URLRequest(url: url)
+        var request = makeRequest(url: url, timeout: NetworkTuning.connectionTimeout)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        
+
         let body = [
             "grant_type": "client_credentials",
             "client_id": clientId,
@@ -598,8 +693,8 @@ class ABMAPIService: ObservableObject {
         request.httpBody = bodyString.data(using: .utf8)
         
         NSLog("📤 ABM: Requesting access token...")
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
+
+        let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ABMError.invalidResponse
@@ -708,7 +803,27 @@ class ABMAPIService: ObservableObject {
     }
 
     private static let maxRateLimitRetries = 3
+    private static let maxTransientRetries = 4
     private static let maxPages = 200
+
+    /// Transport failures worth retrying: the request either never reached
+    /// the server or was cut off before a complete response, so re-sending is
+    /// safe for idempotent GETs. -1005 (networkConnectionLost) is the common
+    /// one — a pooled keep-alive connection that an SSL-inspecting proxy (or
+    /// Apple's edge, after a burst of large sweep requests) silently reset
+    /// surfaces as "The network connection was lost." -1200 covers the TLS
+    /// teardown a MITM proxy produces. A retry forces a fresh connection.
+    /// Deliberately NOT retried on POST (assign/unassign): a lost connection
+    /// can't prove Apple didn't already accept the activity, so a blind resend
+    /// risks a double submission.
+    private static let transientURLErrorCodes: Set<URLError.Code> = [
+        .networkConnectionLost,     // -1005
+        .timedOut,                  // -1001
+        .cannotConnectToHost,       // -1004
+        .cannotFindHost,            // -1003
+        .dnsLookupFailed,           // -1006
+        .secureConnectionFailed,    // -1200 (TLS teardown, e.g. inspection proxy)
+    ]
 
     /// Every authenticated ABM API call funnels through here (the presigned
     /// activity-log download is the deliberate exception — it must not carry
@@ -724,14 +839,14 @@ class ABMAPIService: ObservableObject {
         guard let url = URL(string: urlString) else { throw ABMError.invalidURL }
 
         var rateLimitRetries = 0
+        var transientRetries = 0
         var refreshedToken = false
 
         while true {
             let token = try await getAccessToken()
 
-            var request = URLRequest(url: url)
+            var request = makeRequest(url: url, timeout: timeout)
             request.httpMethod = method
-            request.timeoutInterval = timeout
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             if let body {
@@ -739,7 +854,26 @@ class ABMAPIService: ObservableObject {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             }
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch let urlError as URLError where
+                method == "GET"
+                && transientRetries < Self.maxTransientRetries
+                && Self.transientURLErrorCodes.contains(urlError.code) {
+                transientRetries += 1
+                // Exponential base (1, 2, 4, 8 s, capped at 10) + up to 1 s of
+                // jitter. When Apple's edge tarpits after a burst of large sweep
+                // requests, recovery takes several seconds — the earlier sub-2 s
+                // schedule burned every retry inside that window. This bridges it.
+                let base = min(pow(2.0, Double(transientRetries - 1)), 10)
+                let delay = base + Double.random(in: 0...1)
+                log("Transient \(urlError.code) on \(url.path) — retry \(transientRetries)/\(Self.maxTransientRetries) in \(String(format: "%.1f", delay))s (\(urlError.localizedDescription))")
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                continue
+            }
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw ABMError.invalidResponse
             }
@@ -908,7 +1042,15 @@ class ABMAPIService: ObservableObject {
     /// linkage calls instead of one relationships call per device.
     func buildAssignmentMap(servers: [ABMMdmServer]) async throws -> [String: String] {
         var map: [String: String] = [:]
-        for server in servers {
+        for (index, server) in servers.enumerated() {
+            // Gentle pacing: each server's linkage sweep pulls large paged
+            // responses back-to-back, and firing them with no gap is what
+            // preceded Apple's edge dropping the reused connection mid-sweep.
+            // A short breather between servers keeps the burst under that
+            // threshold. Skipped before the first request.
+            if index > 0 {
+                try await Task.sleep(nanoseconds: 250_000_000)  // 250 ms
+            }
             let deviceIds = try await fetchDeviceIds(assignedToMdmServer: server.id)
             for deviceId in deviceIds {
                 if let existing = map[deviceId], existing != server.id {
@@ -1084,10 +1226,9 @@ class ABMAPIService: ObservableObject {
             throw ABMError.invalidURL
         }
 
-        var request = URLRequest(url: url)
-        request.timeoutInterval = NetworkTuning.requestTimeout
+        let request = makeRequest(url: url, timeout: NetworkTuning.requestTimeout)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ABMError.invalidResponse
         }
@@ -1148,11 +1289,20 @@ enum ABMError: LocalizedError {
 
 // MARK: - ABM Device Cache
 
-/// Session-scoped, in-memory cache of the org's ABM inventory: the device
-/// sweep, the MDM server list, and the deviceId → mdmServerId assignment
-/// map. Deliberately does NOT persist to disk: cached data is only valid
-/// within the session that fetched it, so a disk copy could never be
-/// legitimately reloaded — it would always belong to a previous launch.
+/// Cache of the org's ABM inventory: the device sweep, the MDM server list,
+/// and the deviceId → mdmServerId assignment map.
+///
+/// Persists to disk (Application Support) so a large org — tens of thousands
+/// of devices — doesn't re-sweep on every launch. The disk copy is loaded at
+/// the login screen and shown as-is; a network sweep runs ONLY when there is
+/// no usable cache, or when the user hits Refresh. Because that means the UI
+/// can show data from a previous launch (possibly days old), two guards keep
+/// a stale copy from ever being wrong rather than merely old:
+///   • schemaVersion — a model change invalidates every older file.
+///   • orgFingerprint — a snapshot written for one ABM org/credential set is
+///     discarded if the current config points at a different one.
+/// The ABM Lookup header always renders lastFetchDate (date + time) so the
+/// operator can see how old the shown inventory is.
 @MainActor
 final class ABMDeviceCache: ObservableObject {
 
@@ -1168,10 +1318,197 @@ final class ABMDeviceCache: ObservableObject {
 
     private init() {}
 
+    // MARK: - Disk Persistence
+
+    /// Bump when the persisted shape changes (any Codable field of the models
+    /// below, or Snapshot itself) so older files are discarded, not misread.
+    private static let cacheSchemaVersion = 1
+
+    private struct Snapshot: Codable {
+        let schemaVersion: Int
+        let orgFingerprint: String
+        let fetchedAt: Date
+        let devices: [ABMOrgDevice]
+        let mdmServers: [ABMMdmServer]
+        let assignmentMap: [String: String]
+    }
+
+    private var cacheFileURL: URL? {
+        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.herojoneslabs.helios.console"
+        return dir
+            .appendingPathComponent(bundleId, isDirectory: true)
+            .appendingPathComponent("abm-inventory-cache.json")
+    }
+
+    /// Identifies the ABM org+endpoint a snapshot belongs to, so a cache from
+    /// a different tenant/credential set is never shown. Hashed so the client
+    /// id isn't written to the cache file in the clear.
+    private func currentOrgFingerprint() -> String {
+        let config = MDMConfigurationManager.shared.configuration
+        let material = "\(config.abmClientId ?? "none")|\(config.abmAPIBaseURL)"
+        return SHA256.hash(data: Data(material.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    /// Loads the persisted snapshot into memory if one exists AND passes both
+    /// guards (schema + org fingerprint). A file that fails either guard is
+    /// deleted, not shown. Returns true when the cache was populated from disk.
+    @discardableResult
+    func loadFromDisk() -> Bool {
+        guard let url = cacheFileURL, let data = try? Data(contentsOf: url) else { return false }
+
+        guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data),
+              snapshot.schemaVersion == Self.cacheSchemaVersion else {
+            NSLog("ABM: Discarding disk cache (unreadable or old schema)")
+            try? FileManager.default.removeItem(at: url)
+            return false
+        }
+
+        guard snapshot.orgFingerprint == currentOrgFingerprint() else {
+            NSLog("ABM: Discarding disk cache — ABM org/credentials changed since it was written")
+            try? FileManager.default.removeItem(at: url)
+            return false
+        }
+
+        devices = snapshot.devices
+        mdmServers = snapshot.mdmServers
+        assignmentMap = snapshot.assignmentMap
+        lastFetchDate = snapshot.fetchedAt
+        isCacheValid = true
+        NSLog("ABM: Loaded inventory from disk cache — %d device(s), %d server(s)",
+              snapshot.devices.count, snapshot.mdmServers.count)
+        return true
+    }
+
+    /// Writes the current in-memory state to disk. Encode+write run off the
+    /// main actor (a 26k-device snapshot is several MB); the models are value
+    /// types, so the copy captured here is safe. Called after a completed
+    /// network load and after a local assignment change.
+    private func persistToDisk() {
+        guard let url = cacheFileURL else { return }
+        let snapshot = Snapshot(
+            schemaVersion: Self.cacheSchemaVersion,
+            orgFingerprint: currentOrgFingerprint(),
+            fetchedAt: lastFetchDate ?? Date(),
+            devices: devices,
+            mdmServers: mdmServers,
+            assignmentMap: assignmentMap
+        )
+        Task.detached(priority: .utility) {
+            do {
+                let data = try JSONEncoder().encode(snapshot)
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: url, options: [.atomic])
+                NSLog("ABM: Persisted inventory cache (%d device(s), %d bytes)", snapshot.devices.count, data.count)
+            } catch {
+                NSLog("ABM: Failed to persist inventory cache: %@", error.localizedDescription)
+            }
+        }
+    }
+
     // MARK: - Public Methods
 
     var hasCachedData: Bool {
         isCacheValid && !devices.isEmpty
+    }
+
+    /// De-dupes overlapping sweeps: the background preload and a fast tab-open
+    /// can both call loadFromNetwork() before either commits — they coalesce
+    /// onto this one in-flight task instead of hitting the API twice.
+    private var inFlightLoad: Task<Void, Error>?
+
+    /// Full network sweep → one atomic cache update: MDM server list → org
+    /// device sweep → deviceId→serverId assignment map. Shared by the ABM
+    /// Lookup view's on-demand load and the post-login background preload, so
+    /// both take the identical path (and the same transient-retry protection
+    /// in ABMAPIService.abmRequest). Concurrent callers share a single
+    /// in-flight sweep.
+    ///
+    /// Graceful degradation: the device list is the primary content; the
+    /// server list and the assignment map are enrichment. The device sweep
+    /// failing throws (there's nothing to show), but if the org devices came
+    /// back and only the server-list or assignment-map legs fail — the exact
+    /// case seen in the field, where Apple's edge dropped a connection during
+    /// the map build after every device page had already arrived — the
+    /// inventory is cached WITHOUT assignment tags rather than thrown away.
+    /// The tab renders devices; server/assignment columns just show as
+    /// unassigned until the next successful refresh.
+    func loadFromNetwork() async throws {
+        if let existing = inFlightLoad {
+            try await existing.value
+            return
+        }
+        let task = Task { () throws -> Void in
+            let service = ABMAPIService.shared
+
+            // Primary content — a failure here has nothing to fall back to.
+            let devices = try await service.fetchAllOrgDevices()
+
+            // Commit the device list IMMEDIATELY (unassigned), so a large org's
+            // inventory renders as soon as the page sweep finishes instead of
+            // blocking on the assignment map too. At ~26k devices the map is
+            // many more requests; making the list wait on it is the bulk of the
+            // perceived load time. isCacheValid flips true here, so the tab
+            // stops spinning now and the enrichment fills in a moment later.
+            updateCache(devices: devices, mdmServers: [], assignmentMap: [:])
+
+            // Enrichment — server names + per-device assignment. On failure the
+            // devices-only commit above stands (graceful degradation).
+            do {
+                let servers = try await service.fetchMdmServers()
+                let assignmentMap = try await service.buildAssignmentMap(servers: servers)
+                updateCache(devices: devices, mdmServers: servers, assignmentMap: assignmentMap)
+            } catch {
+                NSLog("ABM: Loaded %d device(s) but server/assignment enrichment failed — showing inventory without assignment info: %@",
+                      devices.count, error.localizedDescription)
+            }
+
+            // Persist the final state (enriched, or devices-only if enrichment
+            // failed) so the next launch loads instantly from disk.
+            persistToDisk()
+        }
+        inFlightLoad = task
+        defer { inFlightLoad = nil }
+        try await task.value
+    }
+
+    /// Warm-up run at the login screen so the ABM Lookup tab opens populated.
+    /// Cache-first: a valid disk snapshot is loaded and shown as-is — NO
+    /// network sweep — because a large org shouldn't re-fetch every launch.
+    /// Only when there's no usable cache on disk do we sweep once. After that,
+    /// fresh data comes solely from the Refresh button. No-op if ABM isn't
+    /// configured or the in-memory cache is already valid; silent on failure
+    /// (the tab falls back to its own on-demand load).
+    func preloadIfNeeded() async {
+        let config = MDMConfigurationManager.shared.configuration
+        NSLog("ABM: preloadIfNeeded — configured=%@ cacheValid=%@ defaults(server=%@, deviceType=%@)",
+              ABMAPIService.shared.isConfigured ? "true" : "false",
+              isCacheValid ? "true" : "false",
+              config.abmDefaultMdmServerName ?? "nil",
+              config.abmDefaultDeviceType ?? "nil")
+
+        guard ABMAPIService.shared.isConfigured else {
+            NSLog("ABM: preload skipped — ABM not configured")
+            return
+        }
+        guard !isCacheValid else { return }  // already loaded this session
+
+        if loadFromDisk() {
+            NSLog("ABM: preload served from disk cache — no network fetch (use Refresh for fresh data)")
+            return
+        }
+
+        NSLog("ABM: preload — no disk cache, starting network sweep")
+        do {
+            try await loadFromNetwork()
+        } catch {
+            NSLog("ABM: Background inventory preload failed (tab will load on demand): %@", error.localizedDescription)
+        }
     }
 
     func updateCache(
@@ -1195,7 +1532,10 @@ final class ABMDeviceCache: ObservableObject {
         assignmentMap = [:]
         lastFetchDate = nil
         isCacheValid = false
-        NSLog("🗑️ ABMDeviceCache: Cache cleared")
+        if let url = cacheFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        NSLog("🗑️ ABMDeviceCache: Cache cleared (memory + disk)")
     }
 
     func invalidateCache() {
@@ -1242,6 +1582,9 @@ final class ABMDeviceCache: ObservableObject {
                 assignedServerId: serverId
             )
         }
+        // Keep the disk cache consistent with the local assignment change so a
+        // relaunch doesn't show the device back on its old server.
+        persistToDisk()
     }
 }
 
