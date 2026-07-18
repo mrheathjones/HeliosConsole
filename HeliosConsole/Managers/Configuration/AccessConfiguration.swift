@@ -306,55 +306,16 @@ struct AccessConfiguration: Codable {
         }
     }
 
-    // MARK: - Cleanup settings (managed payload)
+    // MARK: - Cleanup settings (managed payload — legacy location)
 
-    /// The managed `cleanup` dictionary. Distinct from the app-local
-    /// `CleanupSettings` service class (Cleanup/Services/CleanupSettings.swift);
-    /// this nested type only carries the profile-delivered defaults.
-    struct CleanupSettings: Codable {
-        /// Stale threshold (days without check-in). Optional; see
-        /// `effectiveStaleDays` for the default.
-        var staleDays: Int?
-        /// Jamf static group ID (string in the profile; parsed to Int downstream).
-        var defaultStaticGroupID: String?
-        /// Jamf site ID (string in the profile; parsed to Int downstream).
-        var defaultSiteID: String?
-
-        /// Stale threshold with the schema default applied.
-        var effectiveStaleDays: Int { staleDays ?? 90 }
-
-        enum CodingKeys: String, CodingKey {
-            case staleDays
-            case defaultStaticGroupID
-            case defaultSiteID
-        }
-
-        init(
-            staleDays: Int? = nil,
-            defaultStaticGroupID: String? = nil,
-            defaultSiteID: String? = nil
-        ) {
-            self.staleDays = staleDays
-            self.defaultStaticGroupID = defaultStaticGroupID
-            self.defaultSiteID = defaultSiteID
-        }
-
-        /// Custom decode: deployed profiles deliver `staleDays` as either an
-        /// integer or a string ("90"). Accept both — and never let a
-        /// malformed value fail the whole domain decode.
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            if let intValue = try? container.decode(Int.self, forKey: .staleDays) {
-                staleDays = intValue
-            } else if let stringValue = try? container.decode(String.self, forKey: .staleDays) {
-                staleDays = Int(stringValue)
-            } else {
-                staleDays = nil
-            }
-            defaultStaticGroupID = try container.decodeIfPresent(String.self, forKey: .defaultStaticGroupID)
-            defaultSiteID = try container.decodeIfPresent(String.self, forKey: .defaultSiteID)
-        }
-    }
+    /// The managed `cleanup` dictionary, as delivered by the ACCESS domain.
+    ///
+    /// LEGACY LOCATION: these tunables now belong to the FEATURES domain
+    /// (`features.cleanup`) — access is for grants, and these grant nothing.
+    /// The key is still decoded here so already-deployed access profiles keep
+    /// working; the composition layer prefers the features copy and falls
+    /// back to this one. See `ManagedCleanupSettings`.
+    typealias CleanupSettings = ManagedCleanupSettings
 
     // MARK: - Return to Service cleanup options (role-scoped)
 

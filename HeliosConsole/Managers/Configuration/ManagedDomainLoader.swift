@@ -46,19 +46,27 @@ enum ManagedDomainLoader {
     /// matching schema in schemas/.
     static let coreKeys = [
         "configurationVersion", "jamfPro", "appleBusinessManager",
-        "jamfProtect", "entra", "signIn", "localAdministration"
+        "jamfProtect", "entra", "signIn", "localAdministration",
+        // Moved here from the ui domain: sign-in policy belongs beside signIn.
+        "authentication"
     ]
     static let credentialsKeys = [
         "configurationVersion", "jamfProClientSecret", "abmPrivateKey",
         "jamfProtectPassword"
     ]
+    // `cleanup` stays listed (legacy location) so deployed access profiles
+    // keep decoding; the composition layer prefers the features copy.
     static let accessKeys = [
         "configurationVersion", "role", "roles", "cleanup"
     ]
     static let featuresKeys = [
         "configurationVersion", "computers", "mobileDevices",
-        "healthScorecard", "deviceHealth", "reports", "actionLog"
+        "healthScorecard", "deviceHealth", "reports", "actionLog",
+        // Moved here: area switches from ui, cleanup tunables from access.
+        "userExperience", "cleanup"
     ]
+    // `authentication` stays listed (legacy location) so deployed ui profiles
+    // keep decoding; the composition layer prefers the core copy.
     static let uiKeys = [
         "configurationVersion", "userInterface", "sidebarItems",
         "deviceTabs", "deviceActionLabels", "authentication"

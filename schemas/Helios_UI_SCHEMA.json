@@ -2,14 +2,14 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.ui",
   "title": "Helios Console — Branding & UX",
-  "description": "Managed configuration for Helios Console branding and user-experience settings. Preference domain MUST be com.herojoneslabs.helios.console.ui — deploy via Jamf Pro > Configuration Profiles > Application & Custom Settings (External Applications / Custom Schema) scoped to ALL managed Macs running Helios. This domain carries NO secrets and no destructive capability; it is safe to scope broadly. Values are FORCED and take effect at the next app relaunch. NOTE: sidebarItems, deviceTabs, and deviceActionLabels are COSMETIC label/icon overrides only — they never grant or gate anything (all gating is role-only in the access domain); authentication is enforced in the sign-in/session views. See docs/ConfigProfileMigration.md for the per-key enforcement-status table.",
+  "description": "Branding and user-experience settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.ui — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). The override lists here are cosmetic only — all gating is role-based in the access domain. Values take effect at app relaunch.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
-      "default": "2.3"
+      "default": "2.4"
     },
     "userInterface": {
       "type": "object",
@@ -64,18 +64,6 @@
           ],
           "default": "system"
         },
-        "showAnnouncements": {
-          "type": "boolean",
-          "title": "Show Announcements",
-          "description": "Show the Announcements area in the app.",
-          "default": true
-        },
-        "showSettings": {
-          "type": "boolean",
-          "title": "Show Settings",
-          "description": "Show the Settings area in the app.",
-          "default": true
-        },
         "tagline": {
           "type": "string",
           "title": "Tagline",
@@ -105,7 +93,7 @@
     "sidebarItems": {
       "type": "array",
       "title": "Sidebar Item Overrides (optional)",
-      "description": "Optional per-row LABEL and ICON overrides for the sidebar — COSMETIC ONLY. A row appears because the signed-in user's role grants its module (access roles[].modules), and its order is that module's array position there; this list never controls presence or order. Pick a known row id from the dropdown and set displayName and/or icon; leave a field blank to keep the app's built-in. An id absent from this list uses the built-in label and icon; unknown ids are skipped. (`title` is still accepted as an alias for `displayName` so existing profiles keep their labels.)",
+      "description": "Optional label/icon overrides for sidebar rows — cosmetic only. Row presence and order come from the access domain's role modules. Blank field = built-in value; unknown ids are skipped. (`title` is accepted as an alias for `displayName`.)",
       "items": {
         "type": "object",
         "properties": {
@@ -143,7 +131,7 @@
     "deviceTabs": {
       "type": "array",
       "title": "Devices-Tab Label Overrides (optional)",
-      "description": "Optional per-tab LABEL renames for the tabs inside the Devices module. RENAME ONLY — Devices tabs carry no icon override. COSMETIC ONLY: a tab appears because the signed-in user's role grants it (access domain roles[].deviceTabs); this list only relabels one already granted. Pick a known tab id from the dropdown and set displayName; an id absent from this list keeps the tab's built-in title.",
+      "description": "Optional label renames for tabs inside the Devices module — cosmetic only, no icon override. Tab presence comes from the access domain's role deviceTabs. An id absent here keeps its built-in title.",
       "items": {
         "type": "object",
         "properties": {
@@ -171,7 +159,7 @@
     "deviceActionLabels": {
       "type": "array",
       "title": "Device-Action Label Overrides (optional)",
-      "description": "Optional per-action LABEL and ICON overrides for the device Actions menu. COSMETIC ONLY: an action's AVAILABILITY is gated ROLE-ONLY by the access domain (roles[].computerActions / roles[].mobileDeviceActions) — this list only relabels/re-icons an action a role already grants and never makes one appear. Pick a known action id from the dropdown and set displayName and/or icon; leave a field blank to keep the built-in. Confirmation-dialog safety copy is app-built-in and is NEVER overridable here.",
+      "description": "Optional label/icon overrides for the device Actions menu — cosmetic only. Action availability is gated by the access domain roles; this list never makes an action appear. Blank field = built-in. Confirmation-dialog safety copy is never overridable.",
       "items": {
         "type": "object",
         "properties": {
@@ -215,38 +203,6 @@
         "additionalProperties": false
       },
       "default": []
-    },
-    "authentication": {
-      "type": "object",
-      "title": "Authentication",
-      "description": "Sign-in behavior preferences. ENFORCED in the sign-in and session views — requireBiometric, allowBiometricSetup, sessionTimeout, and allowRememberMe are all acted on by the app; see docs/ConfigProfileMigration.md.",
-      "properties": {
-        "requireBiometric": {
-          "type": "boolean",
-          "title": "Require Biometric",
-          "description": "Require Touch ID / biometric authentication to use the app.",
-          "default": false
-        },
-        "allowBiometricSetup": {
-          "type": "boolean",
-          "title": "Allow Biometric Setup",
-          "description": "Allow users to enable biometric unlock in-app.",
-          "default": true
-        },
-        "sessionTimeout": {
-          "type": "integer",
-          "title": "Session Timeout (min, 0 = none)",
-          "description": "Idle session timeout in minutes. 0 disables the timeout.",
-          "minimum": 0,
-          "default": 0
-        },
-        "allowRememberMe": {
-          "type": "boolean",
-          "title": "Allow Remember Me",
-          "description": "Allow the sign-in screen to remember the last operator.",
-          "default": true
-        }
-      }
     }
   }
 }

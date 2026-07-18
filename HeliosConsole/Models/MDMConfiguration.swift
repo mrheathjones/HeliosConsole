@@ -141,8 +141,19 @@ struct MDMConfiguration: Codable {
     /// Feature modules & tuning (features domain, whole model).
     let features: FeaturesConfiguration?
 
-    /// Sign-in behavior preferences (ui domain).
+    /// Sign-in behavior preferences (core domain `authentication`; the ui
+    /// domain's legacy copy is honored as a fallback).
     let authentication: AuthenticationSettings?
+
+    /// Whether the Announcements area may render (features domain
+    /// `userExperience.showAnnouncements`; ui domain legacy fallback).
+    /// INTERSECTED with the role grant — never a substitute for it.
+    let showAnnouncements: Bool
+
+    /// Whether the Settings area may render (features domain
+    /// `userExperience.showSettings`; ui domain legacy fallback).
+    /// INTERSECTED with the role grant — never a substitute for it.
+    let showSettings: Bool
 
     /// Full branding/UX section (ui domain) — companyName, logoURL,
     /// accentColor, defaultColorScheme, show* switches beyond the flattened
@@ -461,6 +472,8 @@ struct MDMConfiguration: Codable {
         entraCertPEM: String? = nil,
         features: FeaturesConfiguration? = nil,
         authentication: AuthenticationSettings? = nil,
+        showAnnouncements: Bool = true,
+        showSettings: Bool = true,
         userInterfaceExtras: UserInterfaceSettings? = nil,
         uiDeviceTabs: [DeviceTabLabelSetting] = [],
         uiDeviceActionLabels: [DeviceActionLabelSetting] = [],
@@ -510,6 +523,8 @@ struct MDMConfiguration: Codable {
         self.entraCertPEM = entraCertPEM
         self.features = features
         self.authentication = authentication
+        self.showAnnouncements = showAnnouncements
+        self.showSettings = showSettings
         self.userInterfaceExtras = userInterfaceExtras
         self.uiDeviceTabs = uiDeviceTabs
         self.uiDeviceActionLabels = uiDeviceActionLabels
@@ -524,6 +539,22 @@ struct MDMConfiguration: Codable {
     /// whole mechanism — `_ = MDMConfiguration.legacyOrderKeyWarning`.
     private static let legacyOrderKeyWarning: Void = {
         print("⚠️ ui.sidebarItems: 'order' is ignored — sidebar order now comes from each role's modules list order (access domain).")
+    }()
+
+    /// Same once-per-launch mechanism for the three relocated blocks. These
+    /// are NOT errors — the legacy value is being honored — but an admin
+    /// editing the new domain while an old profile still wins needs to know
+    /// which copy is in effect.
+    private static let legacyAuthenticationDomainWarning: Void = {
+        print("ℹ️ authentication: read from the LEGACY ui domain — it now belongs in core. Re-push the core profile with an `authentication` block; the ui copy is honored until you do.")
+    }()
+
+    private static let legacyUserExperienceDomainWarning: Void = {
+        print("ℹ️ showAnnouncements/showSettings: read from the LEGACY ui domain — they now belong in features.userExperience. Re-push the features profile; the ui copies are honored until you do.")
+    }()
+
+    private static let legacyCleanupDomainWarning: Void = {
+        print("ℹ️ cleanup tunables: read from the LEGACY access domain — they now belong in features.cleanup. Re-push the features profile; the access copy is honored until you do.")
     }()
 
     /// Resolved Entra Graph credentials (pointer domain → values), produced
@@ -596,6 +627,47 @@ struct MDMConfiguration: Codable {
             ? MDMConfiguration.defaultSidebarItems
             : managedSidebar
 
+        // MARK: Relocated keys — new domain preferred, legacy domain honored
+        //
+        // Four blocks moved domains in the schema cleanup. Each is read from
+        // its NEW home first and falls back to its LEGACY home, so a Mac that
+        // has not yet received re-pushed profiles keeps its current behavior
+        // and there is no flag day. The legacy read can be dropped once every
+        // deployed profile has been re-pushed.
+        //
+        //   authentication:  ui     → core
+        //   showAnnouncements/showSettings: ui → features.userExperience
+        //   cleanup tunables: access → features.cleanup
+
+        let resolvedAuthentication = core?.authentication ?? ui?.authentication
+        if core?.authentication == nil, ui?.authentication != nil {
+            _ = MDMConfiguration.legacyAuthenticationDomainWarning
+        }
+
+        // Only the delivered switch wins; an undelivered one falls through to
+        // ui, then to the schema default (true) at the accessor.
+        let featuresUX = features?.userExperience
+        let resolvedShowAnnouncements = featuresUX?.showAnnouncements
+            ?? uiSettings?.showAnnouncements ?? true
+        let resolvedShowSettings = featuresUX?.showSettings
+            ?? uiSettings?.showSettings ?? true
+        if featuresUX == nil,
+           uiSettings?.showAnnouncements != nil || uiSettings?.showSettings != nil {
+            _ = MDMConfiguration.legacyUserExperienceDomainWarning
+        }
+
+        // features.cleanup wins whole-block only when it delivered something;
+        // an empty/absent block falls back to the legacy access copy.
+        let featuresCleanup = features?.cleanup
+        let legacyCleanup = access?.cleanup
+        let resolvedCleanup: ManagedCleanupSettings = {
+            if let featuresCleanup, !featuresCleanup.isEmpty { return featuresCleanup }
+            return legacyCleanup ?? ManagedCleanupSettings()
+        }()
+        if (featuresCleanup?.isEmpty ?? true), legacyCleanup != nil {
+            _ = MDMConfiguration.legacyCleanupDomainWarning
+        }
+
         self.init(
             jamfURL: jamfPro?.serverURL ?? "",
             masterClientID: jamfPro?.masterClientID ?? "",
@@ -628,9 +700,9 @@ struct MDMConfiguration: Codable {
             // Passed as the DELIVERED ARRAY, not a pre-built index: profile
             // order is load-bearing (module order = sidebar order).
             roles: access?.effectiveRoles ?? [],
-            cleanupStaleDays: access?.effectiveCleanup.effectiveStaleDays ?? 90,
-            cleanupDefaultStaticGroupID: access?.cleanup?.defaultStaticGroupID,
-            cleanupDefaultSiteID: access?.cleanup?.defaultSiteID,
+            cleanupStaleDays: resolvedCleanup.effectiveStaleDays,
+            cleanupDefaultStaticGroupID: resolvedCleanup.defaultStaticGroupID,
+            cleanupDefaultSiteID: resolvedCleanup.defaultSiteID,
             protectEnabled: core?.jamfProtect?.effectiveEnabled ?? false,
             protectURL: core?.jamfProtect?.url,
             protectClientID: core?.jamfProtect?.clientID,
@@ -641,7 +713,9 @@ struct MDMConfiguration: Codable {
             entraClientSecret: resolvedEntra.clientSecret,
             entraCertPEM: resolvedEntra.certPEM,
             features: features,
-            authentication: ui?.authentication,
+            authentication: resolvedAuthentication,
+            showAnnouncements: resolvedShowAnnouncements,
+            showSettings: resolvedShowSettings,
             userInterfaceExtras: uiSettings,
             uiDeviceTabs: ui?.deviceTabs ?? [],
             uiDeviceActionLabels: ui?.deviceActionLabels ?? [],

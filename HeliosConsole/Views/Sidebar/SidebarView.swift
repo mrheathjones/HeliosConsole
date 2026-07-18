@@ -231,6 +231,11 @@ struct SidebarView: View {
     /// for the pinned Settings row). Says nothing about the USER layer —
     /// intersect it with `capabilities.canAccess(module:)`.
     ///
+    /// The show* switches come from `features.userExperience` now (with the
+    /// legacy ui-domain copies honored as a fallback); both are resolved
+    /// upstream in MDMConfiguration, so this reads the flattened values and
+    /// never has to know which domain won.
+    ///
     /// The ui domain's sidebarItems NO LONGER gates presence: a module the
     /// role grants shows even when no sidebarItems entry exists for it
     /// (sidebarItems supplies label/icon overrides only). Presence is the
@@ -241,11 +246,10 @@ struct SidebarView: View {
     /// never stay reachable through a route that skipped one of the
     /// conditions (deep links set the destination directly).
     static func machineAllows(_ destination: NavigationDestination, config: MDMConfiguration) -> Bool {
-        let ui = config.userInterfaceExtras
         switch destination {
         case .settings:
-            return ui?.effectiveShowSettings ?? true
-        case .announcements where ui?.effectiveShowAnnouncements == false:
+            return config.showSettings
+        case .announcements where !config.showAnnouncements:
             return false
         case .reports where config.features?.effectiveReports.effectiveEnabled == false:
             return false // features domain: reports module disabled
@@ -301,7 +305,7 @@ struct SidebarView: View {
         return entries
     }
 
-    /// ui domain showSettings switch (default true) INTERSECTED with the
+    /// The resolved showSettings switch (default true) INTERSECTED with the
     /// user's `settings` module grant. Log Out lives outside this gate — it
     /// must stay reachable for a user with no modules at all.
     private var showSettingsItem: Bool {

@@ -2,19 +2,19 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.access",
   "title": "Helios Console — Access",
-  "description": "Role-capability configuration for the Helios Console macOS app. Preference domain MUST be com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile. NOTHING IS HARDCODED IN THE APP: every capability a user has — which sidebar modules render, which device actions they may run, which cleanup sub-actions they may run, whether they may export data out of the app — is defined by the `roles` block below. Roles are ARBITRARY, ADMIN-NAMED capability sets; the app ships no built-in role names, no built-in tiers, and no built-in capability defaults. IDENTITY: when the core domain sets signIn.method=entra, the signed-in user's role names come from the Entra token's roles claim; otherwise the machine-scoped `role` key below names a single role. A user matching several roles receives the UNION of their capabilities. FAIL-CLOSED GUARANTEE: no `roles` block — or a role name matching no entry's `name` field — grants NOTHING; a Mac that never receives this profile runs Helios as an EMPTY app (no modules, no actions), so under-scoping is safe, over-scoping is not. GATING IS ROLE-ONLY: the `roles` block carries every capability — which modules render, which device actions run, ABM/PreStage targets, Return-to-Service cleanup, export. There is no machine-scoped second layer. Menu labels and icons are cosmetic and live in the ui domain (deviceActionLabels), not here. SCOPING: because the `roles` block now carries every capability, it must reach every Mac whose users need one — scope this profile (with the `role` appropriate to each population) to ALL Macs running Helios, not admin Macs only. PAIRED SCOPING: any variant whose roles grant destructive computerActions (e.g. wipe, returnToService) must be scoped to the same Macs as any write-capable variant of the com.herojoneslabs.helios.console.credentials profile (see docs/ConfigProfileMigration.md). SECURITY: managed-preference plists are world-readable on disk — every value delivered here is visible to any local user of the Mac.",
+  "description": "Role-capability configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios. Every capability (modules, device actions, cleanup, export) is defined by the `roles` block — nothing is hardcoded in the app. FAIL-CLOSED: no roles block, or an unmatched role name, grants nothing. Role names come from the Entra token's roles claim (Entra sign-in) or the `role` key (MDM mode); matching multiple roles grants the union. Scope variants granting destructive actions to the same Macs as write-capable credentials profiles. Note: managed-preference plists are world-readable on disk.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the app logs it, nothing else reads it).",
-      "default": "2.6"
+      "default": "2.7"
     },
     "role": {
       "type": "string",
       "title": "Role Name (MDM sign-in mode only)",
-      "description": "FREE-FORM role name, consulted ONLY when Entra sign-in is NOT configured (the core domain's signIn block is absent, or signIn.method=email). The value must EXACTLY match the `name` field of an entry in the `roles` list below — matching is case-sensitive and literal; there is no fuzzy match and no aliasing. When signIn.method=entra this key is IGNORED ENTIRELY: role names then come from the Entra token's roles claim. Deliberately NO default and NO enum — the app knows no role names, so nothing can be assumed. Absent, blank, or unmatched → the user still signs in but sees an EMPTY app: no modules, no device actions, no cleanup, no export (fail-closed; a missing or broken profile must not hard-lock an org out of the app entirely). MDM mode resolves exactly ONE role — union semantics apply only to Entra mode, where a token can carry several role values. Deliver one profile variant per Mac population (e.g. role=Helios.Support on support Macs, role=Helios.Admin on admin Macs).",
+      "description": "Role name used only when Entra sign-in is not configured. Must exactly match (case-sensitive) the `name` of one entry in `roles` below. Ignored entirely when signIn.method=entra. Absent, blank, or unmatched = user signs in to an empty app (fail-closed). Deliver one profile variant per Mac population.",
       "examples": [
         "Helios.Support"
       ]
@@ -22,21 +22,21 @@
     "roles": {
       "type": "array",
       "title": "Role Definitions (capability sets)",
-      "description": "THE capability source of truth — a LIST of arbitrary, ADMIN-NAMED capability sets. Each entry carries its role name in the `name` field (e.g. Helios.Admin, Helios.Support, HelpDesk.Tier1); the app ships no built-in names and no defaults, so whatever you define here is exactly what exists. NAME MATCHING IS EXACT AND CASE-SENSITIVE: in Entra sign-in mode a `name` must equal an app-role VALUE on the sign-in app registration character-for-character; in MDM mode it must equal the `role` key above. MULTI-ROLE = UNION: a user matching several entries receives the union of every matched role's lists, and allowExport is OR'd across them. A cleanup-only role (modules = [cleanup]) is a supported pattern — assign it alongside another role and the union applies. FAIL-CLOSED: an absent `roles` block, or a role name matching no entry, grants NOTHING — in Entra mode such a user is REFUSED sign-in; in MDM mode the user signs in to an empty app. There is deliberately NO default for this block: a default would be a hardcoded capability, which is precisely what this model removes. Unknown ids inside a role's lists are IGNORED (logged once) so newer profiles deploy safely to older app builds. EDGE CASES: an entry with a missing or blank `name` is SKIPPED (it is unreachable — no role name could match it); two entries sharing a `name` are UNIONED (later entries add to, never replace, earlier ones), so a duplicate can only ever widen that name's grants. JAMF EDITOR NOTE: this block is a LIST OF OBJECTS precisely so Jamf Pro's Application & Custom Settings form generator can render it — a dictionary keyed by admin-chosen role names could only be expressed as `additionalProperties`, which that editor cannot render, forcing raw XML editing. See Deployment/sample.mobileconfig for a working example.",
+      "description": "The capability source of truth — a list of admin-named capability sets. Name matching is exact and case-sensitive: in Entra mode against the token's app-role values, in MDM mode against the `role` key. A user matching several entries gets the union of their capabilities. FAIL-CLOSED: an absent block or unmatched name grants nothing (Entra mode refuses sign-in; MDM mode shows an empty app). Unknown ids in a role's lists are ignored, so newer profiles deploy safely to older builds. Entries sharing a name are unioned; entries without a name are skipped. See Deployment/sample.mobileconfig for a working example.",
       "items": {
         "type": "object",
         "title": "Role Definition",
-        "description": "The complete capability set granted by one role name. Every list is additive within a role and unioned across a user's matched roles. Omitted list = that role grants nothing of that kind.",
+        "description": "The capability set granted by one role name. Lists are unioned across a user's matched roles; an omitted list grants nothing of that kind.",
         "properties": {
           "name": {
             "type": "string",
             "title": "Role Name",
-            "description": "Admin-chosen role name — REQUIRED; an entry without one is skipped as unreachable. Must match an Entra app-role Value (Entra sign-in mode) or the `role` key above (MDM mode), exactly and case-sensitively. Reusing a name across entries unions their capabilities rather than replacing them."
+            "description": "Admin-chosen role name — required. Must exactly match (case-sensitive) an Entra app-role value or the `role` key above."
           },
           "modules": {
             "type": "array",
             "title": "Modules (sidebar / route ids)",
-            "description": "Sidebar/route ids this role may see and open. ROLE-DRIVEN ONLY — there is no machine-scoped second layer for modules. Absent or empty = no modules at all. ARRAY ORDER IS THE SIDEBAR ORDER for this role: the first id is the TOPMOST row and the rest follow in listed order, so arranging this list arranges that role's sidebar — enabling a module and placing it are the same edit, and two roles may order the same modules differently. There is no `order` key anywhere: the ui domain's sidebarItems carries label and icon overrides only (it no longer controls presence), and the position of an entry in it means nothing. `settings` is PINNED below the sidebar divider no matter where you place it here — listing it grants it, its position is ignored. Omitting `settings` does NOT strand the user: Sign Out lives in the sidebar, not inside Settings. The `cleanup` module is no longer special-cased — it is simply the `cleanup` id in this list (pair it with cleanupActions below, which is what makes the module useful). Ids the app does not implement are ACCEPTED but render nothing and are skipped without error, so newer profiles deploy safely to older builds. MULTI-ROLE UNION ORDER: a user matching several roles gets ONE merged list, built by walking the `roles` array IN THE ORDER IT IS AUTHORED HERE — never the order the Entra token's roles claim happens to list them, which is Entra's to choose and may change between sign-ins — appending each matched role's modules in listed order, FIRST APPEARANCE WINS: a module already contributed by an earlier role keeps its earlier position, and a later role listing it again is ignored (never re-ordered, never duplicated).",
+            "description": "Sidebar module ids this role may see and open. Absent or empty = none. Array order IS the sidebar order (except `settings`, which is pinned below the divider). Multi-role users get one merged list, walked in the order roles are authored here, first appearance wins. Unknown ids are skipped, so newer profiles deploy safely to older builds. Pair `cleanup` with cleanupActions below to make that module useful.",
             "items": {
               "type": "string",
               "title": "Module ID",
@@ -55,7 +55,7 @@
           "deviceTabs": {
             "type": "array",
             "title": "Devices-View Tabs (for this role)",
-            "description": "Tab ids this role may open INSIDE the Devices module (requires `devices` in modules — without it this list is unreachable). ROLE-DRIVEN ONLY, like modules. Absent or empty = the base device list only, no extra tabs. ARRAY ORDER IS THE TAB ORDER after the app-defined base tab, with the same multi-role union rule as modules (roles walked in authored order, first appearance wins). `abmLookup` is the Apple Business Manager inventory/lookup tab (requires the core domain's appleBusinessManager block or it renders an unconfigured notice); `prestage` is the Jamf PreStage registration tab (pair it with the role's allowedPrestages list below, which is what makes the tab useful). Unknown ids are accepted and skipped without error, so newer profiles deploy safely to older builds.",
+            "description": "Extra tab ids this role may open inside the Devices module (requires `devices` in modules). Absent or empty = base device list only. Array order is the tab order; same multi-role union rule as modules. `abmLookup` needs the core domain's appleBusinessManager block; `prestage` pairs with allowedPrestages below. Unknown ids are skipped.",
             "items": {
               "type": "string",
               "title": "Tab ID",
@@ -69,7 +69,7 @@
           "computerActions": {
             "type": "array",
             "title": "Allowed Computer Actions — usable by THIS ROLE",
-            "description": "Computer DeviceAction ids this role may see and run — the single gating layer. An action renders and executes exactly when a matched role lists its id here, and is hidden AND blocked otherwise. UNIONED across a user's matched roles. Absent or empty = no computer actions for this role. Menu label and icon are cosmetic and live in the ui domain's deviceActionLabels list, not here. Ids the app does not implement are accepted but never render, so newer profiles deploy safely to older builds.",
+            "description": "Computer device-action ids this role may see and run. An action not listed here is hidden and blocked. Unioned across matched roles; absent or empty = none. Labels/icons are cosmetic and live in the ui domain. Unknown ids are skipped.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -98,7 +98,7 @@
           "mobileDeviceActions": {
             "type": "array",
             "title": "Allowed Mobile Device Actions — usable by THIS ROLE",
-            "description": "Mobile-device DeviceAction ids this role may run — role-only gating, like computerActions. UNIONED across matched roles. Forward-looking: the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
+            "description": "Mobile-device action ids this role may run. Forward-looking — the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -114,7 +114,7 @@
           "cleanupActions": {
             "type": "array",
             "title": "Allowed Cleanup Sub-Actions (for this role)",
-            "description": "Cleanup sub-actions this role may run. ROLE-DRIVEN ONLY — like every capability in this domain, cleanup sub-actions are gated solely by the role. Absent or empty = none, even when the role's modules include `cleanup`: the module then renders with nothing runnable in it. Grant `cleanup` in modules AND the sub-actions here to make the module useful. deleteFromProtect requires the core domain's jamfProtect block to be configured; deleteRecord and unmanage are destructive — pair them with write-capable credentials scoping.",
+            "description": "Cleanup sub-actions this role may run. Absent or empty = none, even when modules includes `cleanup` — grant both to make the module useful. deleteFromProtect requires the core domain's jamfProtect block; deleteRecord and unmanage are destructive — pair with write-capable credentials scoping.",
             "items": {
               "type": "string",
               "title": "Cleanup Action ID",
@@ -131,7 +131,7 @@
           "allowedMdmServers": {
             "type": "array",
             "title": "Allowed MDM Servers (ABM assign / unassign)",
-            "description": "ABM MDM server names this role may target — assign devices TO (abmAssign) and unassign FROM (abmUnassign). GATING IS ROLE-ONLY. Each entry must match the server's ABM serverName EXACTLY (case-sensitive), with ONE exception: the RESERVED literal `all` (any letter case) grants EVERY server in the tenant. Because `all` is interpreted before any name matching, an ABM server actually named \"all\" can never be individually granted — rename it in ABM if you have one. Absent or empty = the abmAssign/abmUnassign actions may still be granted via computerActions but have nothing to target, so they are inert (fail-closed; there is no safe default target). UNIONED across a user's matched roles. Typical support role: [\"Jamf Cloud_Prod\"]. Typical admin role: [\"all\"].",
+            "description": "ABM MDM server names this role may target with abmAssign/abmUnassign. Each entry must match the ABM serverName exactly (case-sensitive); the reserved literal `all` grants every server. Absent or empty = those actions are inert (fail-closed). Unioned across matched roles. Typical admin role: [\"all\"].",
             "items": {
               "type": "string",
               "title": "ABM Server Name (or `all`)"
@@ -141,7 +141,7 @@
           "allowedPrestages": {
             "type": "array",
             "title": "Allowed PreStages (Pre-Stage tab + prestage-on-assign + Assign to PreStage action)",
-            "description": "Jamf Computer PreStage Enrollment displayNames this role may select — in the Devices module's Pre-Stage tab (grant the tab itself via deviceTabs: prestage), in the optional prestage-on-assign step after abmAssign (see allowPrestageOnAssign), AND in the `assignPreStage` computer device action (grant the action itself via computerActions: assignPreStage). Each entry must match a PreStage displayName EXACTLY (case-sensitive), except the RESERVED literal `all` (any letter case), which grants every PreStage — a PreStage actually named \"all\" can never be individually granted; rename it in Jamf if one exists. Absent or empty = no PreStage offered even when the tab, the assign step, or the assignPreStage action is granted (fail-closed). UNIONED across a user's matched roles. Typical support role: a curated list of names. Typical admin role: [\"all\"].",
+            "description": "Jamf PreStage displayNames this role may select — in the Pre-Stage tab, the prestage-on-assign step, and the assignPreStage action. Each entry must match a displayName exactly (case-sensitive); the reserved literal `all` grants every PreStage. Absent or empty = none offered (fail-closed). Unioned across matched roles.",
             "items": {
               "type": "string",
               "title": "PreStage Display Name (or `all`)"
@@ -151,13 +151,13 @@
           "allowPrestageOnAssign": {
             "type": "boolean",
             "title": "Offer PreStage Registration After ABM Assign",
-            "description": "Whether abmAssign may offer the optional Jamf PreStage registration step after a successful ABM assignment. GATING IS ROLE-ONLY. The step is always operator-optional; this toggle controls whether it is offered at all, and the PreStages it may offer come from this role's allowedPrestages list. Absent = false (fail-closed). OR'd across a user's matched roles.",
+            "description": "Whether abmAssign may offer the optional PreStage registration step after a successful assignment. Offered PreStages come from allowedPrestages. Absent = false (fail-closed). OR'd across matched roles.",
             "default": false
           },
           "returnToServiceOptions": {
             "type": "object",
             "title": "Return to Service — post-erase cleanup (for this role)",
-            "description": "Post-erase cleanup steps the returnToService action performs, scoped to THIS role. GATING IS ROLE-ONLY. The erase ALWAYS runs first and ALWAYS waits for the device to acknowledge ERASE_DEVICE; only these cleanup steps are configurable. Both toggles default true (full decommission), so omitting this object preserves the original behavior. Multi-role: each toggle is OR'd across a user's matched roles — any granting role enabling a step enables it.",
+            "description": "Post-erase cleanup steps for the returnToService action. The erase always runs first and always waits for ERASE_DEVICE acknowledgment; only the cleanup steps are configurable. Both default true (full decommission). OR'd across matched roles.",
             "properties": {
               "deleteJamfRecord": {
                 "type": "boolean",
@@ -177,7 +177,7 @@
           "allowExport": {
             "type": "boolean",
             "title": "Allow Export / Download",
-            "description": "Whether this role may extract data out of the app. Gates EVERY export surface, not Reports alone: the Reports export menu (CSV / Excel / PDF / Markdown), BOTH Cleanup export menus (the stale-device and protected-device lists), and the Logs module's Export CSV button (which copies the whole audit trail to the pasteboard). Without this flag those controls do not render at all. OR'd across a user's matched roles — one role granting it is enough. Absent = false (fail-closed). Only meaningful alongside the modules that host those surfaces (`reports`, `cleanup`, `logs`): e.g. a role granting `cleanup` but omitting allowExport gets the Cleanup module with no export control.",
+            "description": "Whether this role may extract data out of the app. Gates every export surface: the Reports export menu, both Cleanup export menus, and the Logs Export CSV button. Absent = false (fail-closed). OR'd across matched roles.",
             "default": false
           }
         },
@@ -189,8 +189,8 @@
     },
     "cleanup": {
       "type": "object",
-      "title": "Cleanup (Stale Device) Settings",
-      "description": "TUNABLES ONLY for the Cleanup module — this block grants NOTHING. Visibility of the module comes from `cleanup` in a role's modules list, and which sub-actions run comes from that role's cleanupActions list. staleDays is the DEFAULT stale threshold; users can change it in-app unless you re-deliver this profile to reset it.",
+      "title": "Cleanup Settings (DEPRECATED — moved to the features domain)",
+      "description": "DEPRECATED: these tunables now live in the features domain (features.cleanup). Still read here so deployed profiles keep working, but features wins when both are present — set them there and remove this block. Module visibility and sub-actions remain role-based, above.",
       "properties": {
         "staleDays": {
           "type": "integer",

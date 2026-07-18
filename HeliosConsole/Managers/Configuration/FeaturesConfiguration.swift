@@ -23,6 +23,66 @@
 
 import Foundation
 
+/// The managed `cleanup` dictionary: profile-delivered defaults for the
+/// Cleanup module. Distinct from the app-local `CleanupSettings` service
+/// class (Cleanup/Services/CleanupSettings.swift).
+///
+/// HOME DOMAIN: `features.cleanup`. It is still decoded from `access.cleanup`
+/// for backward compatibility (aliased as `AccessConfiguration.CleanupSettings`)
+/// because deployed access profiles carry it; the composition layer prefers
+/// the features copy. These values GRANT NOTHING — which roles may see the
+/// Cleanup module and which sub-actions they may run stay in the access
+/// domain.
+struct ManagedCleanupSettings: Codable {
+    /// Stale threshold (days without check-in). See `effectiveStaleDays`.
+    var staleDays: Int?
+    /// Jamf static group ID (string in the profile; parsed to Int downstream).
+    var defaultStaticGroupID: String?
+    /// Jamf site ID (string in the profile; parsed to Int downstream).
+    var defaultSiteID: String?
+
+    /// Stale threshold with the schema default applied.
+    var effectiveStaleDays: Int { staleDays ?? 90 }
+
+    enum CodingKeys: String, CodingKey {
+        case staleDays
+        case defaultStaticGroupID
+        case defaultSiteID
+    }
+
+    init(
+        staleDays: Int? = nil,
+        defaultStaticGroupID: String? = nil,
+        defaultSiteID: String? = nil
+    ) {
+        self.staleDays = staleDays
+        self.defaultStaticGroupID = defaultStaticGroupID
+        self.defaultSiteID = defaultSiteID
+    }
+
+    /// Custom decode: deployed profiles deliver `staleDays` as either an
+    /// integer or a string ("90"). Accept both — and never let a malformed
+    /// value fail the whole domain decode.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let intValue = try? container.decode(Int.self, forKey: .staleDays) {
+            staleDays = intValue
+        } else if let stringValue = try? container.decode(String.self, forKey: .staleDays) {
+            staleDays = Int(stringValue)
+        } else {
+            staleDays = nil
+        }
+        defaultStaticGroupID = try container.decodeIfPresent(String.self, forKey: .defaultStaticGroupID)
+        defaultSiteID = try container.decodeIfPresent(String.self, forKey: .defaultSiteID)
+    }
+
+    /// True when the profile delivered no cleanup values at all — the signal
+    /// the composition layer uses to fall back to the legacy access copy.
+    var isEmpty: Bool {
+        staleDays == nil && defaultStaticGroupID == nil && defaultSiteID == nil
+    }
+}
+
 /// Feature modules & tuning for Helios Console — delivered via the
 /// `com.herojoneslabs.helios.console.features` managed-preferences domain (all managed Macs).
 struct FeaturesConfiguration: Codable {
@@ -41,6 +101,22 @@ struct FeaturesConfiguration: Codable {
     let reports: ReportsSettings?
     let actionLog: ActionLogSettings?
 
+    /// Top-level UI area visibility switches (`showAnnouncements`,
+    /// `showSettings`). MOVED HERE from the ui domain during the domain
+    /// cleanup: these turn FEATURES on and off — they are not branding. The
+    /// ui domain still decodes its legacy copies; the composition layer
+    /// (MDMConfiguration.build) prefers these and falls back, so already-
+    /// deployed ui profiles keep working untouched.
+    let userExperience: UserExperienceSettings?
+
+    /// Cleanup module tunables (stale threshold, default static group and
+    /// site). MOVED HERE from the access domain during the domain cleanup:
+    /// the access domain is for GRANTS, and these grant nothing — they tune a
+    /// feature. Which roles may SEE Cleanup and which sub-actions they may run
+    /// stay in access. The access domain still decodes its legacy block; the
+    /// composition layer prefers this one and falls back.
+    let cleanup: ManagedCleanupSettings?
+
     // MARK: - Effective accessors (defaults per schemas/Helios_Features_SCHEMA.json)
 
     var effectiveConfigurationVersion: String { configurationVersion ?? "2.0" }
@@ -50,6 +126,8 @@ struct FeaturesConfiguration: Codable {
     var effectiveDeviceHealth: DeviceHealthSettings { deviceHealth ?? .empty }
     var effectiveReports: ReportsSettings { reports ?? .empty }
     var effectiveActionLog: ActionLogSettings { actionLog ?? .empty }
+    var effectiveUserExperience: UserExperienceSettings { userExperience ?? .empty }
+    var effectiveCleanup: ManagedCleanupSettings { cleanup ?? ManagedCleanupSettings() }
 
     /// Normalizes and validates a configured section list for a Jamf
     /// inventory endpoint: upper-cases + trims each entry, keeps only the
@@ -89,8 +167,32 @@ struct FeaturesConfiguration: Codable {
         healthScorecard: nil,
         deviceHealth: nil,
         reports: nil,
-        actionLog: nil
+        actionLog: nil,
+        userExperience: nil,
+        cleanup: nil
     )
+
+    // MARK: - User experience (top-level area switches)
+
+    /// The `userExperience` dictionary: kill switches for whole app areas.
+    ///
+    /// These are INTERSECTED with the role grant, never a substitute for it:
+    /// a false here hides an area the role would otherwise show, but a true
+    /// never reveals one the role withholds (fail-closed preserved).
+    struct UserExperienceSettings: Codable {
+        /// Show the Announcements area. Default true.
+        let showAnnouncements: Bool?
+        /// Show the Settings area. Default true.
+        let showSettings: Bool?
+
+        var effectiveShowAnnouncements: Bool { showAnnouncements ?? true }
+        var effectiveShowSettings: Bool { showSettings ?? true }
+
+        static let empty = UserExperienceSettings(
+            showAnnouncements: nil,
+            showSettings: nil
+        )
+    }
 
     // MARK: - Action Log
 

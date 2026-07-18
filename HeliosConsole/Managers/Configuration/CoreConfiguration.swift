@@ -75,6 +75,15 @@ struct CoreConfiguration: Codable {
     /// Local administrator account settings (LAPS lookup in DeviceView).
     var localAdministration: LocalAdminSettings?
 
+    /// Sign-in behavior preferences: biometric requirement, idle session
+    /// timeout, Remember Me. MOVED HERE from the ui domain, which owned it
+    /// before the domain cleanup — this is sign-in policy and belongs beside
+    /// the `signIn` block that decides how sign-in happens at all, not with
+    /// branding. The ui domain still decodes its legacy copy; the composition
+    /// layer (MDMConfiguration.build) prefers this one and falls back to it,
+    /// so already-deployed ui profiles keep working untouched.
+    var authentication: AuthenticationSettings?
+
     // MARK: - Effective accessors (defaults live here, never in decode)
 
     /// Schema version with the documented default applied.

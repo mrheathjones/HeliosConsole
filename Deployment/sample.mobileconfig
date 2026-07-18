@@ -152,6 +152,24 @@
 				</dict>
 			</dict>
 			-->
+
+			<!-- Sign-in behavior (MOVED here from the ui domain — this is
+			     sign-in policy, so it belongs beside signIn above). A ui
+			     profile still delivering `authentication` keeps working
+			     (the app falls back to it and logs a notice), but this copy
+			     wins when both are present. -->
+			<key>authentication</key>
+			<dict>
+				<key>requireBiometric</key>
+				<false/>
+				<key>allowBiometricSetup</key>
+				<true/>
+				<!-- Idle lock, minutes; 0 disables. -->
+				<key>sessionTimeout</key>
+				<integer>0</integer>
+				<key>allowRememberMe</key>
+				<true/>
+			</dict>
 		</dict>
 
 		<!-- ============================================================
@@ -418,17 +436,15 @@
 				-->
 			</array>
 
-			<!-- Cleanup TUNABLES only — this block grants nothing. The
-			     module is shown by "cleanup" in a role's modules list, and
-			     its sub-actions by that role's cleanupActions list. -->
-			<key>cleanup</key>
-			<dict>
-				<key>staleDays</key>
-				<integer>90</integer>
-				<!-- Optional action-picker defaults: -->
-				<!-- <key>defaultStaticGroupID</key><string>123</string> -->
-				<!-- <key>defaultSiteID</key><string>1</string> -->
-			</dict>
+			<!-- Cleanup TUNABLES have MOVED to the features domain
+			     (features > cleanup) — see payload 4/5 below. This domain
+			     is for GRANTS, and those tunables grant nothing. A profile
+			     still delivering `cleanup` here keeps working (the app
+			     falls back to it and logs a notice), but the features copy
+			     wins when both are present. Set it there and drop it here.
+
+			     The Cleanup MODULE is still granted here: "cleanup" in a
+			     role's modules list, plus that role's cleanupActions. -->
 
 			<!-- Device Actions allow-list — LAYER 1 OF 2, STRICT FAIL-CLOSED.
 			     This block says which actions EXIST on THIS Mac; the
@@ -562,6 +578,29 @@
 			<dict>
 				<key>inventoryRefreshInterval</key>
 				<integer>15</integer>
+			</dict>
+
+			<!-- Top-level area switches (MOVED here from the ui domain).
+			     These only HIDE an area the signed-in role already grants —
+			     they never reveal one it withholds. -->
+			<key>userExperience</key>
+			<dict>
+				<key>showAnnouncements</key>
+				<true/>
+				<key>showSettings</key>
+				<true/>
+			</dict>
+
+			<!-- Cleanup TUNABLES (MOVED here from the access domain).
+			     Grants nothing — the Cleanup module and its sub-actions are
+			     still role-gated in the access payload above. -->
+			<key>cleanup</key>
+			<dict>
+				<key>staleDays</key>
+				<integer>90</integer>
+				<!-- Optional action-picker defaults: -->
+				<!-- <key>defaultStaticGroupID</key><string>123</string> -->
+				<!-- <key>defaultSiteID</key><string>1</string> -->
 			</dict>
 		</dict>
 

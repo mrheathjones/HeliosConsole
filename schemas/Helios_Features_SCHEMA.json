@@ -2,14 +2,58 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.features",
   "title": "Helios Console — Features",
-  "description": "Feature-module and tuning configuration for the Helios Console macOS apps (main console + menu bar). Preference domain: com.herojoneslabs.helios.console.features. Deploy as a Jamf Pro 'Application & Custom Settings' payload scoped to ALL managed Macs. This tier carries no secrets and no destructive capability, so broad scoping is safe. NOTE: these keys are parsed and exposed by the app's config layer; per-view enforcement status is tracked in docs/ConfigProfileMigration.md. Values take effect at app relaunch.",
+  "description": "Feature-module and tuning configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.features — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). Values take effect at app relaunch.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
       "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
-      "default": "2.1"
+      "default": "2.2"
+    },
+    "userExperience": {
+      "type": "object",
+      "title": "User Experience",
+      "description": "Visibility switches for top-level app areas. Moved here from the ui domain — a ui profile still delivering these keys is honored until you re-push, but features wins when both are present. These only hide an area a role already grants; they never reveal one it withholds.",
+      "properties": {
+        "showAnnouncements": {
+          "type": "boolean",
+          "title": "Show Announcements",
+          "description": "Show the Announcements area in the app.",
+          "default": true
+        },
+        "showSettings": {
+          "type": "boolean",
+          "title": "Show Settings",
+          "description": "Show the Settings area in the app.",
+          "default": true
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "title": "Cleanup (Stale Device) Settings",
+      "description": "Tunables for the Cleanup module — this block grants nothing. Which roles see the module and which sub-actions they may run stay in the access domain. Moved here from access — an access profile still delivering this block is honored until you re-push, but features wins when both are present.",
+      "properties": {
+        "staleDays": {
+          "type": "integer",
+          "title": "Stale Threshold (days)",
+          "description": "Days without check-in before a device counts as stale. Users can change this in-app. Delivered as an integer; a string value is also tolerated.",
+          "default": 90
+        },
+        "defaultStaticGroupID": {
+          "type": "string",
+          "title": "Default Static Group ID",
+          "description": "Jamf static group ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
+          "default": ""
+        },
+        "defaultSiteID": {
+          "type": "string",
+          "title": "Default Site ID",
+          "description": "Jamf site ID pre-selected for Cleanup runs. Delivered as a string; parsed to an integer downstream.",
+          "default": ""
+        }
+      }
     },
     "computers": {
       "type": "object",
@@ -58,7 +102,7 @@
             "PURCHASING",
             "GROUP_MEMBERSHIPS"
           ],
-          "description": " Default = the sections the detail views render; removing sections blanks the matching UI. Empty list = default list."
+          "description": "Inventory sections fetched and rendered by the detail views. Removing a section blanks the matching UI. Empty list = default list."
         }
       }
     },
@@ -123,7 +167,7 @@
             "GROUPS",
             "EXTENSION_ATTRIBUTES"
           ],
-          "description": " Default = the sections the detail views render; removing sections blanks the matching UI. Empty list = default list."
+          "description": "Inventory sections fetched and rendered by the detail views. Removing a section blanks the matching UI. Empty list = default list."
         }
       }
     },
