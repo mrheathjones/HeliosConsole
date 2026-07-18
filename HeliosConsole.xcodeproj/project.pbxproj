@@ -62,6 +62,7 @@
 		FABM1 /* DevicesHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM1 /* DevicesHomeView.swift */; };
 		FABM2 /* ABMLookupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM2 /* ABMLookupView.swift */; };
 		FABM3 /* ABMAssignmentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM3 /* ABMAssignmentSheet.swift */; };
+		FPS1 /* PreStageAssignmentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPS1 /* PreStageAssignmentSheet.swift */; };
 		FABM4 /* PreStageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM4 /* PreStageView.swift */; };
 		FABM5 /* JamfPreStageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM5 /* JamfPreStageService.swift */; };
 		FABM6 /* ActionBranding.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM6 /* ActionBranding.swift */; };
@@ -204,6 +205,7 @@
 		SABM1 /* DevicesHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesHomeView.swift; sourceTree = "<group>"; };
 		SABM2 /* ABMLookupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMLookupView.swift; sourceTree = "<group>"; };
 		SABM3 /* ABMAssignmentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMAssignmentSheet.swift; sourceTree = "<group>"; };
+		SPS1 /* PreStageAssignmentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreStageAssignmentSheet.swift; sourceTree = "<group>"; };
 		SABM4 /* PreStageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreStageView.swift; sourceTree = "<group>"; };
 		SABM5 /* JamfPreStageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfPreStageService.swift; sourceTree = "<group>"; };
 		SABM6 /* ActionBranding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBranding.swift; sourceTree = "<group>"; };
@@ -463,6 +465,7 @@
 				SABM1 /* DevicesHomeView.swift */,
 				SABM2 /* ABMLookupView.swift */,
 				SABM3 /* ABMAssignmentSheet.swift */,
+				SPS1 /* PreStageAssignmentSheet.swift */,
 				SABM4 /* PreStageView.swift */,
 				S046 /* MobileDeviceView.swift */,
 			);
@@ -808,6 +811,7 @@
 				FABM1 /* DevicesHomeView.swift in Sources */,
 				FABM2 /* ABMLookupView.swift in Sources */,
 				FABM3 /* ABMAssignmentSheet.swift in Sources */,
+				FPS1 /* PreStageAssignmentSheet.swift in Sources */,
 				FABM4 /* PreStageView.swift in Sources */,
 				FABM5 /* JamfPreStageService.swift in Sources */,
 				FABM6 /* ActionBranding.swift in Sources */,
@@ -962,7 +966,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 47;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -990,7 +994,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 47;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1018,7 +1022,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 47;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1048,7 +1052,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 47;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;

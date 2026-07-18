@@ -39,6 +39,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
     // Apple Business Manager
     case abmAssign
     case abmUnassign
+    // Pre-Stage
+    case assignPreStage
 
     var id: String { rawValue }
 
@@ -51,6 +53,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case userManagement = "User Management"
         case inventory = "Inventory"
         case appleBusinessManager = "Apple Business Manager"
+        case preStage = "Pre-Stage"
 
         var title: String { rawValue }
     }
@@ -69,6 +72,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
             return .inventory
         case .abmAssign, .abmUnassign:
             return .appleBusinessManager
+        case .assignPreStage:
+            return .preStage
         }
     }
 
@@ -92,6 +97,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .sendBlankPush: return "Send Blank Push"
         case .abmAssign: return "Assign to MDM Server"
         case .abmUnassign: return "Unassign from MDM Server"
+        case .assignPreStage: return "Assign to PreStage"
         }
     }
 
@@ -125,6 +131,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .unlockUserAccount: return "Unlock User Account?"
         case .abmAssign: return "Assign to MDM Server?"
         case .abmUnassign: return "Unassign from MDM Server?"
+        case .assignPreStage: return "Assign to PreStage?"
         }
     }
 
@@ -146,6 +153,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .unlockUserAccount: return "This will unlock a local user account on the device. This action is logged for security auditing."
         case .abmAssign: return "This will assign the device's serial number to the selected MDM server in Apple Business Manager. Nothing changes on the device now — the assignment determines which MDM the device enrolls with at its next Automated Device Enrollment. If the device is currently assigned to a different MDM server, it will be reassigned."
         case .abmUnassign: return "This will remove the device's MDM server assignment in Apple Business Manager. Nothing changes on the device now — but until it is reassigned, the device cannot enroll via Automated Device Enrollment."
+        case .assignPreStage: return "This will register the device's serial number to the selected Jamf Pro PreStage Enrollment. If you enter an asset tag, an Inventory Preload record is saved first. Nothing changes on the device now — the PreStage applies at the device's next Automated Device Enrollment."
         }
     }
 
@@ -166,6 +174,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .unlockUserAccount: return "person.badge.key"
         case .abmAssign: return "externaldrive.badge.plus"
         case .abmUnassign: return "externaldrive.badge.minus"
+        case .assignPreStage: return "shippingbox"
         }
     }
 
@@ -184,6 +193,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .unlockUserAccount: return .blue
         case .abmAssign: return .blue
         case .abmUnassign: return .orange
+        case .assignPreStage: return .purple
         }
     }
 
@@ -204,6 +214,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .unlockUserAccount: return "Unlock"
         case .abmAssign: return "Assign"
         case .abmUnassign: return "Unassign"
+        case .assignPreStage: return "Assign"
         }
     }
 
@@ -239,6 +250,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .unlockUserAccount: return "Unlock User Account"
         case .abmAssign: return "ABM Assign to MDM"
         case .abmUnassign: return "ABM Unassign from MDM"
+        case .assignPreStage: return "Assign to PreStage"
         }
     }
 
@@ -256,6 +268,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
             return "Inventory"
         case .abmAssign, .abmUnassign:
             return "Apple Business Manager"
+        case .assignPreStage:
+            return "Pre-Stage"
         }
     }
 }
