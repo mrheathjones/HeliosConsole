@@ -20,6 +20,11 @@ final class HealthMetricsCalculator: ObservableObject {
     @Published private(set) var healthMetrics: [HealthMetricData] = []
     @Published private(set) var isCalculating: Bool = false
     @Published private(set) var lastCalculationDate: Date?
+
+    /// Distinct Jamf site names seen in the last calculation that matched no
+    /// Protected/Secured site rule. Those devices score Unknown, so surfacing
+    /// the site names tells an admin exactly which rules are missing.
+    @Published private(set) var unmatchedSiteNames: [String] = []
     
     // Individual metrics for easy access
     @Published private(set) var checkedInMetric: HealthMetricData?
@@ -53,6 +58,10 @@ final class HealthMetricsCalculator: ObservableObject {
     // MARK: - Private Properties
     
     private var cancellables = Set<AnyCancellable>()
+
+    /// Accumulates unmatched site names across a single recalculation pass.
+    /// Reset at the start of each pass; published to `unmatchedSiteNames` at the end.
+    private var unmatchedSitesAccumulator: Set<String> = []
     
     // MARK: - Initialization
     
@@ -66,7 +75,8 @@ final class HealthMetricsCalculator: ObservableObject {
     /// Recalculate all health metrics from current cache data
     func recalculateMetrics() {
         isCalculating = true
-        
+        unmatchedSitesAccumulator.removeAll()
+
         let computerCache = ComputerInventoryCache.shared
         let mobileCache = MobileDeviceInventoryCache.shared
         
@@ -105,10 +115,24 @@ final class HealthMetricsCalculator: ObservableObject {
         
         healthMetrics = [checkedIn, protected, encrypted, secured, upToDate]
         lastCalculationDate = Date()
+        unmatchedSiteNames = unmatchedSitesAccumulator.sorted()
         isCalculating = false
-        
+
         NSLog("📊 HealthMetricsCalculator: Recalculated metrics - Checked-In: %d/%d (%.1f%%)",
               checkedIn.compliantCount, checkedIn.totalCount, checkedIn.percentage)
+
+        if !unmatchedSiteNames.isEmpty {
+            NSLog("⚠️ HealthMetricsCalculator: %d site(s) matched no Protected/Secured rule and scored Unknown: %@",
+                  unmatchedSiteNames.count, unmatchedSiteNames.joined(separator: ", "))
+        }
+    }
+
+    /// Records a site that fell through the Protected/Secured site cascade.
+    /// Empty site names are normalised so "device has no site" is distinguishable
+    /// from a real site in the diagnostic.
+    private func noteUnmatchedSite(_ siteName: String) {
+        let trimmed = siteName.trimmingCharacters(in: .whitespacesAndNewlines)
+        unmatchedSitesAccumulator.insert(trimmed.isEmpty ? "(no site assigned)" : trimmed)
     }
     
     /// Get a specific metric by type
@@ -247,8 +271,11 @@ final class HealthMetricsCalculator: ObservableObject {
                     nonCompliantCount += 1
                 }
             } else {
-                // All other sites (including Enterprise_NextVer, etc.) - mark as Protected by default
-                compliantCount += 1
+                // No site rule matched. Scored Unknown, never Compliant: passing an
+                // unevaluated device reports a compliance verdict we have no evidence
+                // for, which inflates the metric and hides the gap from the admin.
+                noteUnmatchedSite(siteName)
+                unknownCount += 1
             }
         }
         
@@ -414,8 +441,9 @@ final class HealthMetricsCalculator: ObservableObject {
                     nonCompliantCount += 1
                 }
             } else {
-                // All other sites (including Enterprise_NextVer, etc.) - mark as Secured by default
-                compliantCount += 1
+                // No site rule matched — see calculateProtectedMetric. Unknown, not Compliant.
+                noteUnmatchedSite(siteName)
+                unknownCount += 1
             }
         }
         
@@ -691,8 +719,8 @@ final class HealthMetricsCalculator: ObservableObject {
                 
                 status = hasFalcon ? .compliant : .nonCompliant
             } else {
-                // All other sites (including Enterprise_NextVer, etc.) - mark as Protected by default
-                status = .compliant
+                // No site rule matched — mirrors calculateProtectedMetric. Unknown, not Compliant.
+                status = .unknown
             }
             
             if status == segment {
@@ -810,8 +838,8 @@ final class HealthMetricsCalculator: ObservableObject {
                 
                 status = (firewallEnabled && sipEnabled && isManaged && isSupervised && bootstrapEscrowed && ddmEnabled) ? .compliant : .nonCompliant
             } else {
-                // All other sites (including Enterprise_NextVer, etc.) - mark as Secured by default
-                status = .compliant
+                // No site rule matched — mirrors calculateSecuredMetric. Unknown, not Compliant.
+                status = .unknown
             }
             
             if status == segment {

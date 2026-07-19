@@ -451,6 +451,8 @@ struct DashboardContentView: View {
                 .cornerRadius(8)
             }
             
+            unmatchedSitesBanner
+
             // Responsive health cards grid — self-sizing via preference key
             ResponsiveHealthGrid(
                 metrics: healthMetrics,
@@ -466,6 +468,44 @@ struct DashboardContentView: View {
         }
     }
     
+    /// Names the Jamf sites that matched no Protected/Secured rule. Those devices
+    /// score Unknown rather than silently passing, so the admin needs to see which
+    /// sites are missing rules — this list is the exact input for configuring them.
+    /// Rendered in-app deliberately: managed Macs often ship a logging profile that
+    /// drops third-party NSLog, so a Console-only diagnostic is not dependable.
+    @ViewBuilder
+    private var unmatchedSitesBanner: some View {
+        let sites = healthCalculator.unmatchedSiteNames
+        if !sites.isEmpty {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(.yellow)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(sites.count) site\(sites.count == 1 ? "" : "s") have no Protected or Secured requirements defined")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+
+                    Text("Devices in \(sites.joined(separator: ", ")) are scored Unknown for those metrics because there is nothing to evaluate them against.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.yellow.opacity(0.08))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
+            )
+            .cornerRadius(8)
+        }
+    }
+
     private func calculateOverallHealth() -> Double {
         guard !healthMetrics.isEmpty else { return 0 }
         let totalPercentage = healthMetrics.reduce(0.0) { $0 + $1.percentage }
