@@ -41,13 +41,23 @@ enum HealthParityCheck {
     }
 
     /// Runs the comparison and writes a report. Called after `recalculateMetrics`.
+    ///
+    /// Two oracles, because they expire at different points in the migration:
+    ///
+    /// - `oldVerdicts` is per-device and comes from the drill-down. It is the
+    ///   sharpest check but stops being independent the moment the drill-down
+    ///   itself is migrated (step 1) — from then on it compares the evaluator
+    ///   against itself and passes vacuously. Pass nil once that happens.
+    /// - `liveTallies` is the aggregate count from `calculate*Metric` and stays
+    ///   independent until the percentage path migrates (step 2).
     static func run(
         computers: [ComputerInventoryItem],
         mobileDevices: [MobileDeviceInventoryItem],
         policy: HealthPolicy,
         computerSections: [String],
         mobileSections: [String],
-        oldVerdicts: (HealthMetricType) -> [String: String]
+        oldVerdicts: ((HealthMetricType) -> [String: String])?,
+        liveTallies: [HealthMetricType: (compliant: Int, nonCompliant: Int, unknown: Int)] = [:]
     ) {
         guard isEnabled else { return }
 
@@ -58,23 +68,34 @@ enum HealthParityCheck {
         let computerAvailability = SectionAvailability.computers(computerSections)
         let mobileAvailability = SectionAvailability.mobileDevices(mobileSections)
 
+        var tallies: [HealthMetricType: (compliant: Int, nonCompliant: Int, unknown: Int)] = [:]
+
         for metric in HealthMetricType.allCases {
-            let old = oldVerdicts(metric)
+            let old = oldVerdicts?(metric)
+            var tally = (compliant: 0, nonCompliant: 0, unknown: 0)
 
             for computer in computers {
                 let input = computer.healthInput(availability: computerAvailability)
                 let evaluation = HealthEvaluator.evaluate(metric, computer: input, policy: policy)
                 let newVerdict = evaluation.verdict.rawValue
+                switch evaluation.verdict {
+                case .compliant: tally.compliant += 1
+                case .nonCompliant: tally.nonCompliant += 1
+                case .unknown: tally.unknown += 1
+                case .excluded: break
+                }
                 // Devices in no segment are absent from the old map; the new
                 // evaluator calls that `excluded`.
-                let oldVerdict = old[computer.id] ?? HealthVerdict.excluded.rawValue
-                if oldVerdict != newVerdict {
-                    mismatches.append(Mismatch(
-                        metric: metric, deviceID: computer.id,
-                        site: computer.siteName ?? "(none)",
-                        old: oldVerdict, new: newVerdict,
-                        cause: evaluation.causes.first.map { "\($0)" } ?? "-"
-                    ))
+                if let old {
+                    let oldVerdict = old[computer.id] ?? HealthVerdict.excluded.rawValue
+                    if oldVerdict != newVerdict {
+                        mismatches.append(Mismatch(
+                            metric: metric, deviceID: computer.id,
+                            site: computer.siteName ?? "(none)",
+                            old: oldVerdict, new: newVerdict,
+                            cause: evaluation.causes.first.map { "\($0)" } ?? "-"
+                        ))
+                    }
                 }
             }
 
@@ -82,15 +103,25 @@ enum HealthParityCheck {
                 let input = device.healthInput(availability: mobileAvailability)
                 let evaluation = HealthEvaluator.evaluate(metric, mobile: input, policy: policy)
                 let newVerdict = evaluation.verdict.rawValue
-                let oldVerdict = old[device.id] ?? HealthVerdict.excluded.rawValue
-                if oldVerdict != newVerdict {
-                    mismatches.append(Mismatch(
-                        metric: metric, deviceID: device.id, site: "(mobile)",
-                        old: oldVerdict, new: newVerdict,
-                        cause: evaluation.causes.first.map { "\($0)" } ?? "-"
-                    ))
+                switch evaluation.verdict {
+                case .compliant: tally.compliant += 1
+                case .nonCompliant: tally.nonCompliant += 1
+                case .unknown: tally.unknown += 1
+                case .excluded: break
+                }
+                if let old {
+                    let oldVerdict = old[device.id] ?? HealthVerdict.excluded.rawValue
+                    if oldVerdict != newVerdict {
+                        mismatches.append(Mismatch(
+                            metric: metric, deviceID: device.id, site: "(mobile)",
+                            old: oldVerdict, new: newVerdict,
+                            cause: evaluation.causes.first.map { "\($0)" } ?? "-"
+                        ))
+                    }
                 }
             }
+
+            tallies[metric] = tally
         }
 
         // The question PR 3 needs answered with data rather than assumption: how
@@ -127,6 +158,28 @@ enum HealthParityCheck {
         lines.append("--- app matcher comparison ---")
         lines.append(contentsOf: matcherDelta)
         lines.append("")
+        if liveTallies.isEmpty {
+            lines.append("--- aggregate tallies: (live counts not supplied) ---")
+        } else {
+            var tallyMismatch = 0
+            lines.append("--- aggregate tally vs live card ---")
+            for metric in HealthMetricType.allCases {
+                guard let mine = tallies[metric], let live = liveTallies[metric] else { continue }
+                let agree = mine == live
+                if !agree { tallyMismatch += 1 }
+                lines.append("  \(agree ? "OK  " : "DIFF")  \(metric.rawValue): "
+                    + "new \(mine.compliant)/\(mine.nonCompliant)/\(mine.unknown)  "
+                    + "live \(live.compliant)/\(live.nonCompliant)/\(live.unknown)   (compliant/non/unknown)")
+            }
+            lines.append(tallyMismatch == 0
+                ? "  all metrics agree with the live card"
+                : "  \(tallyMismatch) metric(s) DISAGREE — investigate before migrating further")
+        }
+
+        lines.append("")
+        if oldVerdicts == nil {
+            lines.append("--- per-device comparison skipped (drill-down already migrated) ---")
+        }
         lines.append("--- verdict mismatches: \(mismatches.count) ---")
         if mismatches.isEmpty {
             lines.append("none — unified evaluator agrees with live logic on every device")

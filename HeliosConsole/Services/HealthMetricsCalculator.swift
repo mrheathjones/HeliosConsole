@@ -260,24 +260,16 @@ final class HealthMetricsCalculator: ObservableObject {
             policy: .current(checkedInDays: checkInThresholdDays, minimums: minimumOSVersions),
             computerSections: configuredComputerSections,
             mobileSections: configuredMobileSections,
-            oldVerdicts: { [weak self] metric in
-                guard let self else { return [:] }
-                // Derive the CURRENT per-device verdict from the existing
-                // drill-down rather than reimplementing it — a second copy of the
-                // logic here would compare the new evaluator against itself.
-                var map: [String: String] = [:]
-                let segments: [(HealthSegmentType, HealthVerdict)] = [
-                    (.compliant, .compliant),
-                    (.nonCompliant, .nonCompliant),
-                    (.unknown, .unknown)
-                ]
-                for (segment, verdict) in segments {
-                    for item in self.getFilteredDevices(for: metric, segment: segment) {
-                        map[item.originalId] = verdict.rawValue
-                    }
-                }
-                return map
-            }
+            // Per-device oracle retired: the drill-down now routes through the
+            // evaluator, so comparing against it would check the evaluator
+            // against itself. The aggregate tally below is the live oracle until
+            // the percentage path migrates too.
+            oldVerdicts: nil,
+            liveTallies: Dictionary(uniqueKeysWithValues: healthMetrics.map {
+                ($0.type, (compliant: $0.compliantCount,
+                           nonCompliant: $0.nonCompliantCount,
+                           unknown: $0.unknownCount))
+            })
         )
     }
 
@@ -799,382 +791,59 @@ final class HealthMetricsCalculator: ObservableObject {
         let computerCache = ComputerInventoryCache.shared
         let mobileCache = MobileDeviceInventoryCache.shared
 
-        // When a metric's inventory sections were never fetched the percentage path
-        // scores every affected device Unknown. Withhold those devices from
-        // evaluation here too, then re-add them as Unknown below — otherwise the
-        // drill-down would contradict the card that opened it.
-        let computerBlocked = !missingComputerSections(for: metricType).isEmpty
-        let mobileBlocked = !missingMobileSections(for: metricType).isEmpty
-        let evaluableComputers = computerBlocked ? [] : computerCache.computers
-        let evaluableMobile = mobileBlocked ? [] : mobileCache.devices
+        // Routed through the shared evaluator. The five per-metric get*Devices
+        // functions this replaced duplicated the pass/fail logic of the
+        // calculate*Metric functions line for line, and had already drifted from
+        // them in four places.
+        let policy = HealthPolicy.current(checkedInDays: checkInThresholdDays,
+                                          minimums: minimumOSVersions)
+        let computerAvailability = SectionAvailability.computers(configuredComputerSections)
+        let mobileAvailability = SectionAvailability.mobileDevices(configuredMobileSections)
 
         var devices: [DeviceListItem] = []
 
-        switch metricType {
-        case .checkedIn:
-            devices = getCheckedInDevices(
-                computers: evaluableComputers,
-                mobileDevices: evaluableMobile,
-                segment: segment
+        for computer in computerCache.computers {
+            let evaluation = HealthEvaluator.evaluate(
+                metricType,
+                computer: computer.healthInput(availability: computerAvailability),
+                policy: policy
             )
-        case .protected:
-            devices = getProtectedDevices(
-                computers: evaluableComputers,
-                mobileDevices: evaluableMobile,
-                segment: segment
-            )
-        case .encrypted:
-            devices = getEncryptedDevices(
-                computers: evaluableComputers,
-                mobileDevices: evaluableMobile,
-                segment: segment
-            )
-        case .secured:
-            devices = getSecuredDevices(
-                computers: evaluableComputers,
-                mobileDevices: evaluableMobile,
-                segment: segment
-            )
-        case .upToDate:
-            devices = getUpToDateDevices(
-                computers: evaluableComputers,
-                mobileDevices: evaluableMobile,
-                segment: segment
-            )
+            if Self.segment(for: evaluation.verdict) == segment {
+                devices.append(computerToDeviceListItem(computer))
+            }
         }
 
-        if segment == .unknown {
-            if computerBlocked {
-                devices += inScopeComputers(computerCache.computers, for: metricType)
-                    .map { computerToDeviceListItem($0) }
-            }
-            if mobileBlocked {
-                devices += mobileCache.devices.map { mobileDeviceToDeviceListItem($0) }
+        for device in mobileCache.devices {
+            let evaluation = HealthEvaluator.evaluate(
+                metricType,
+                mobile: device.healthInput(availability: mobileAvailability),
+                policy: policy
+            )
+            if Self.segment(for: evaluation.verdict) == segment {
+                devices.append(mobileDeviceToDeviceListItem(device))
             }
         }
 
         return devices
     }
 
-    /// Computers a metric evaluates at all. Encrypted deliberately excludes the
-    /// GroundControl site, so devices withheld for a data gap must be filtered the
-    /// same way — otherwise the drill-down lists devices the card never counted.
-    private func inScopeComputers(
-        _ computers: [ComputerInventoryItem],
-        for metric: HealthMetricType
-    ) -> [ComputerInventoryItem] {
-        guard metric == .encrypted else { return computers }
-        return computers.filter { ($0.siteName ?? "").lowercased() != "groundcontrol" }
+    /// `excluded` maps to no segment — those devices are out of scope for the
+    /// metric and belong in neither the numerator, the denominator, nor any list.
+    private static func segment(for verdict: HealthVerdict) -> HealthSegmentType? {
+        switch verdict {
+        case .compliant: return .compliant
+        case .nonCompliant: return .nonCompliant
+        case .unknown: return .unknown
+        case .excluded: return nil
+        }
     }
-    
+
     // MARK: - Checked-In Device Filtering
     
-    private func getCheckedInDevices(
-        computers: [ComputerInventoryItem],
-        mobileDevices: [MobileDeviceInventoryItem],
-        segment: HealthSegmentType
-    ) -> [DeviceListItem] {
-        var devices: [DeviceListItem] = []
-        let now = Date()
-        let threshold = Calendar.current.date(byAdding: .day, value: -checkInThresholdDays, to: now)!
-        
-        // Process computers
-        for computer in computers {
-            let checkInStatus = getComputerCheckInStatus(computer, threshold: threshold)
-            
-            if checkInStatus == segment {
-                devices.append(computerToDeviceListItem(computer))
-            }
-        }
-        
-        // Process mobile devices
-        for device in mobileDevices {
-            let checkInStatus = getMobileCheckInStatus(device, threshold: threshold)
-            
-            if checkInStatus == segment {
-                devices.append(mobileDeviceToDeviceListItem(device))
-            }
-        }
-        
-        return devices
-    }
-    
-    private func getComputerCheckInStatus(_ computer: ComputerInventoryItem, threshold: Date) -> HealthSegmentType {
-        // Try lastContactTime first, then reportDate
-        if let lastContactStr = computer.general?.lastContactTime,
-           let lastContact = parseISO8601Date(lastContactStr) {
-            return lastContact >= threshold ? .compliant : .nonCompliant
-        }
-        
-        if let reportDateStr = computer.general?.reportDate,
-           let reportDate = parseISO8601Date(reportDateStr) {
-            return reportDate >= threshold ? .compliant : .nonCompliant
-        }
-        
-        return .unknown
-    }
-    
-    private func getMobileCheckInStatus(_ device: MobileDeviceInventoryItem, threshold: Date) -> HealthSegmentType {
-        if let lastUpdate = device.lastInventoryUpdate {
-            return lastUpdate >= threshold ? .compliant : .nonCompliant
-        }
-        return .unknown
-    }
-    
-    // MARK: - Protected Device Filtering
-    
-    private func getProtectedDevices(
-        computers: [ComputerInventoryItem],
-        mobileDevices: [MobileDeviceInventoryItem],
-        segment: HealthSegmentType
-    ) -> [DeviceListItem] {
-        var devices: [DeviceListItem] = []
-        
-        // Process computers - site-based protection requirements
-        for computer in computers {
-            let siteName = computer.siteName ?? ""
-            let status: HealthSegmentType
-            
-            if siteName.lowercased() == "enterprise" {
-                // Enterprise site (exact match) requires all protection apps
-                let hasCiscoSecureClient = computer.hasAppInstalled("Cisco Secure Client")
-                let hasZscaler = computer.hasAppInstalled("Zscaler")
-                let hasQualys = computer.hasAppInstalled("QualysCloudAgent")
-                let hasFalcon = computer.hasAppInstalled("Falcon")
-                let hasJamfProtect = computer.hasAppInstalled("JamfProtect")
-                
-                status = (hasCiscoSecureClient && hasZscaler && hasQualys && hasFalcon && hasJamfProtect) ? .compliant : .nonCompliant
-            } else if siteName.lowercased() == "groundcontrol" {
-                // GroundControl site (exact match) requires only Falcon
-                let hasFalcon = computer.hasAppInstalled("Falcon")
-                
-                status = hasFalcon ? .compliant : .nonCompliant
-            } else {
-                // No site rule matched — mirrors calculateProtectedMetric. Unknown, not Compliant.
-                status = .unknown
-            }
-            
-            if status == segment {
-                devices.append(computerToDeviceListItem(computer))
-            }
-        }
-        
-        // Process mobile devices - Managed + Supervised = Protected
-        for device in mobileDevices {
-            let status: HealthSegmentType = (device.isManaged && device.isSupervised) ? .compliant : .nonCompliant
-            if status == segment {
-                devices.append(mobileDeviceToDeviceListItem(device))
-            }
-        }
-        
-        return devices
-    }
-    
-    // MARK: - Encrypted Device Filtering
-    
-    private func getEncryptedDevices(
-        computers: [ComputerInventoryItem],
-        mobileDevices: [MobileDeviceInventoryItem],
-        segment: HealthSegmentType
-    ) -> [DeviceListItem] {
-        var devices: [DeviceListItem] = []
-        
-        // Process computers - check boot partition FileVault state
-        // Exclude GroundControl site
-        for computer in computers {
-            let siteName = computer.siteName ?? ""
-            
-            // Skip GroundControl site devices
-            if siteName.lowercased() == "groundcontrol" {
-                continue
-            }
-            
-            let status: HealthSegmentType
-            if let diskEncryption = computer.diskEncryption {
-                // Check boot partition encryption state
-                if let bootState = diskEncryption.bootPartitionEncryptionDetails?.partitionFileVault2State?.uppercased() {
-                    switch bootState {
-                    case "ENCRYPTED", "ENCRYPTING", "ENCRYPTING_PAUSED":
-                        status = .compliant
-                    default:
-                        status = .nonCompliant
-                    }
-                } else {
-                    // No boot partition details - fall back to fileVault2Enabled
-                    status = (diskEncryption.fileVault2Enabled == true) ? .compliant : .nonCompliant
-                }
-            } else {
-                status = .unknown
-            }
-            
-            if status == segment {
-                devices.append(computerToDeviceListItem(computer))
-            }
-        }
-        
-        // Process mobile devices - check hardware encryption == 3 (full encryption)
-        for device in mobileDevices {
-            let status: HealthSegmentType
-            if let security = device.security {
-                // Hardware encryption value of 3 = both block-level and file-level encryption
-                let hasFullEncryption = security.hardwareEncryption == 3
-                status = hasFullEncryption ? .compliant : .nonCompliant
-            } else {
-                status = .unknown
-            }
-            
-            if status == segment {
-                devices.append(mobileDeviceToDeviceListItem(device))
-            }
-        }
-        
-        return devices
-    }
-    
-    // MARK: - Secured Device Filtering
-    
-    private func getSecuredDevices(
-        computers: [ComputerInventoryItem],
-        mobileDevices: [MobileDeviceInventoryItem],
-        segment: HealthSegmentType
-    ) -> [DeviceListItem] {
-        var devices: [DeviceListItem] = []
-        
-        // Process computers - site-based security requirements
-        for computer in computers {
-            let siteName = computer.siteName ?? ""
-            let status: HealthSegmentType
-            
-            if siteName.lowercased() == "enterprise" {
-                // Enterprise site (exact match) - full security requirements
-                let firewallEnabled = computer.security?.firewallEnabled ?? false
-                let sipEnabled = computer.security?.sipStatus?.uppercased() == "ENABLED"
-                let gatekeeperOK = computer.security?.gatekeeperStatus?.uppercased() == "APP_STORE_AND_IDENTIFIED_DEVELOPERS" ||
-                                   computer.security?.gatekeeperStatus?.uppercased() == "APP_STORE"
-                let isManaged = computer.isManaged
-                let isSupervised = computer.isSupervised
-                let isEncrypted = computer.diskEncryption?.isBootPartitionEncrypted ?? false
-                let bootstrapEscrowed = computer.security?.bootstrapTokenEscrowedStatus?.uppercased() == "ESCROWED"
-                let ddmEnabled = computer.general?.declarativeDeviceManagementEnabled ?? false
-                
-                status = (firewallEnabled && sipEnabled && gatekeeperOK && isManaged && isSupervised && isEncrypted && bootstrapEscrowed && ddmEnabled) ? .compliant : .nonCompliant
-            } else if siteName.lowercased() == "groundcontrol" {
-                // GroundControl site (exact match) - reduced security requirements
-                let firewallEnabled = computer.security?.firewallEnabled ?? false
-                let sipEnabled = computer.security?.sipStatus?.uppercased() == "ENABLED"
-                let isManaged = computer.isManaged
-                let isSupervised = computer.isSupervised
-                let bootstrapEscrowed = computer.security?.bootstrapTokenEscrowedStatus?.uppercased() == "ESCROWED"
-                let ddmEnabled = computer.general?.declarativeDeviceManagementEnabled ?? false
-                
-                status = (firewallEnabled && sipEnabled && isManaged && isSupervised && bootstrapEscrowed && ddmEnabled) ? .compliant : .nonCompliant
-            } else {
-                // No site rule matched — mirrors calculateSecuredMetric. Unknown, not Compliant.
-                status = .unknown
-            }
-            
-            if status == segment {
-                devices.append(computerToDeviceListItem(computer))
-            }
-        }
-        
-        // Process mobile devices
-        for device in mobileDevices {
-            let isManaged = device.isManaged
-            let isSupervised = device.isSupervised
-            // Mirrors calculateSecuredMetric: absent security data is Unknown, not
-            // "not jailbroken". Without this the card and this list disagree for
-            // any device Jamf returns a null security object for.
-            guard let security = device.security else {
-                if segment == .unknown { devices.append(mobileDeviceToDeviceListItem(device)) }
-                continue
-            }
-            let notJailbroken = !(security.jailBreakDetected ?? false)
-            let ddmEnabled = device.general?.declarativeDeviceManagementEnabled ?? false
+    // The five per-metric get*Devices functions that lived here were removed:
+    // getFilteredDevices now routes every metric through HealthEvaluator, so
+    // the drill-down and the percentage can no longer disagree by drifting.
 
-            let platform = device.platformType
-            let status: HealthSegmentType
-
-            if platform == .visionOS {
-                // visionOS: Managed, Supervised, Not Jailbroken, DDM Enabled
-                status = (isManaged && isSupervised && notJailbroken && ddmEnabled) ? .compliant : .nonCompliant
-            } else {
-                // iOS/iPadOS: Also requires successful attestation
-                let successfulAttestation = security.attestationStatus?.uppercased() == "SUCCESS"
-                status = (isManaged && isSupervised && notJailbroken && successfulAttestation && ddmEnabled) ? .compliant : .nonCompliant
-            }
-            
-            if status == segment {
-                devices.append(mobileDeviceToDeviceListItem(device))
-            }
-        }
-        
-        return devices
-    }
-    
-    // MARK: - Up To Date Device Filtering
-    
-    private func getUpToDateDevices(
-        computers: [ComputerInventoryItem],
-        mobileDevices: [MobileDeviceInventoryItem],
-        segment: HealthSegmentType
-    ) -> [DeviceListItem] {
-        var devices: [DeviceListItem] = []
-        
-        // Minimum "up to date" OS versions per platform (config-driven;
-        // shared with calculateUpToDateMetric so both always agree)
-        let minimumMacOSVersion = minimumOSVersions.effectiveMacOS
-        let minimumIOSVersion = minimumOSVersions.effectiveIOS
-        let minimumIPadOSVersion = minimumOSVersions.effectiveIPadOS
-        let minimumVisionOSVersion = minimumOSVersions.effectiveVisionOS
-        
-        for computer in computers {
-            let status: HealthSegmentType
-            if let osVersion = computer.operatingSystem?.version,
-               let majorVersion = extractMajorVersion(from: osVersion) {
-                status = majorVersion >= minimumMacOSVersion ? .compliant : .nonCompliant
-            } else {
-                status = .unknown
-            }
-            
-            if status == segment {
-                devices.append(computerToDeviceListItem(computer))
-            }
-        }
-        
-        for device in mobileDevices {
-            let status: HealthSegmentType
-            if let osVersion = device.osVersion,
-               let majorVersion = extractMajorVersion(from: osVersion) {
-                // Determine minimum version based on platform
-                let minimumVersion: Int
-                switch device.platformType {
-                case .iOS:
-                    minimumVersion = minimumIOSVersion
-                case .iPadOS:
-                    minimumVersion = minimumIPadOSVersion
-                case .visionOS:
-                    minimumVersion = minimumVisionOSVersion
-                case .macOS, .all:
-                    // These shouldn't appear for mobile devices, use iOS as fallback
-                    minimumVersion = minimumIOSVersion
-                }
-                
-                status = majorVersion >= minimumVersion ? .compliant : .nonCompliant
-            } else {
-                status = .unknown
-            }
-            
-            if status == segment {
-                devices.append(mobileDeviceToDeviceListItem(device))
-            }
-        }
-        
-        return devices
-    }
-    
-    // MARK: - Device Conversion Helpers
-    
     private func computerToDeviceListItem(_ computer: ComputerInventoryItem) -> DeviceListItem {
         var lastCheckIn: Date? = nil
         if let lastContactStr = computer.general?.lastContactTime {
