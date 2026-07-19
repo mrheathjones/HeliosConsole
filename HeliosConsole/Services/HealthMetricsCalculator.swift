@@ -25,6 +25,33 @@ final class HealthMetricsCalculator: ObservableObject {
     /// Protected/Secured site rule. Those devices score Unknown, so surfacing
     /// the site names tells an admin exactly which rules are missing.
     @Published private(set) var unmatchedSiteNames: [String] = []
+
+    /// Device count per unmatched site, largest first. Distinguishes a site that
+    /// needs a rule written from one that should be excluded outright.
+    @Published private(set) var unmatchedSiteCounts: [(site: String, count: Int)] = []
+
+    /// Metrics that could not be evaluated because the Jamf inventory sections
+    /// they depend on were never requested. Surfaced so a missing section reads
+    /// as "cannot evaluate" instead of silently scoring every device as failing.
+    @Published private(set) var metricDataGaps: [MetricDataGap] = []
+
+    struct MetricDataGap: Identifiable {
+        let metric: HealthMetricType
+        let platform: Platform
+        let missingSections: [String]
+
+        enum Platform: String { case computers = "Macs", mobileDevices = "mobile devices" }
+
+        var id: String { "\(metric.rawValue)-\(platform.rawValue)" }
+        /// The profile key an admin edits to fix this. Names the managed domain
+        /// plus the top-level key as delivered — there is no wrapping `features`
+        /// dictionary in the plist, so a `features.computers.…` path would send
+        /// the admin looking for a key that does not exist.
+        var configKey: String {
+            let key = platform == .computers ? "computers" : "mobileDevices"
+            return "com.herojoneslabs.helios.console.features → \(key).inventorySections"
+        }
+    }
     
     // Individual metrics for easy access
     @Published private(set) var checkedInMetric: HealthMetricData?
@@ -55,13 +82,89 @@ final class HealthMetricsCalculator: ObservableObject {
             .effectiveMinimumOSVersions ?? .empty
     }
     
+    // MARK: - Inventory Section Requirements
+
+    /// Jamf inventory sections each metric's evaluation depends on.
+    ///
+    /// A section that was never requested comes back nil on the model, and the
+    /// evaluation code reads nil as failure (`?? false`, `guard … else { return
+    /// false }`) — so an admin who trims `inventorySections` gets a confidently
+    /// wrong percentage with no error. These tables let a metric report Unknown
+    /// and name the missing section instead.
+    ///
+    /// Deliberately keyed off the REQUESTED section list rather than model
+    /// nil-ness: Jamf may return an empty array for a device that genuinely has
+    /// no applications, which is indistinguishable at the model level from a
+    /// section that was never asked for.
+    private enum SectionRequirement {
+        static func computers(_ metric: HealthMetricType) -> [String] {
+            switch metric {
+            case .checkedIn: return ["GENERAL"]
+            case .protected: return ["GENERAL", "APPLICATIONS"]
+            // GENERAL because the GroundControl site exclusion reads siteName —
+            // without it that skip silently never fires and excluded Macs are
+            // folded into the numerator.
+            case .encrypted: return ["GENERAL", "DISK_ENCRYPTION"]
+            // DISK_ENCRYPTION is only read by the Enterprise branch, so a
+            // GroundControl-only fleet is blanked slightly conservatively. Left
+            // deliberately coarse until PR 3 makes the site requirements
+            // configurable and the dependency can be derived per rule.
+            case .secured:   return ["GENERAL", "SECURITY", "DISK_ENCRYPTION"]
+            case .upToDate:  return ["OPERATING_SYSTEM"]
+            }
+        }
+
+        /// Mobile section names are a different set from the computer ones —
+        /// there is no mobile OPERATING_SYSTEM section, for instance; mobile
+        /// osVersion lives in GENERAL.
+        static func mobileDevices(_ metric: HealthMetricType) -> [String] {
+            switch metric {
+            case .checkedIn: return ["GENERAL"]
+            case .protected: return ["GENERAL"]
+            case .encrypted: return ["SECURITY"]
+            // NOT HARDWARE: platformType resolves from the top-level deviceType
+            // field, and HARDWARE only refines iOS into iPadOS — a distinction
+            // Secured never branches on (its only split is visionOS vs the rest).
+            case .secured:   return ["GENERAL", "SECURITY"]
+            // HARDWARE here genuinely matters: it selects the iOS vs iPadOS
+            // baseline, so without it iPads are graded against the wrong minimum
+            // with no Unknowns and no other signal.
+            case .upToDate:  return ["GENERAL", "HARDWARE"]
+            }
+        }
+    }
+
+    /// Sections this metric needs that the profile is not requesting.
+    private func missingComputerSections(for metric: HealthMetricType) -> [String] {
+        let configured = Set((MDMConfigurationManager.shared.configuration.features?
+            .effectiveComputers ?? .empty).validatedInventorySections)
+        return SectionRequirement.computers(metric).filter { !configured.contains($0) }
+    }
+
+    private func missingMobileSections(for metric: HealthMetricType) -> [String] {
+        let configured = Set((MDMConfigurationManager.shared.configuration.features?
+            .effectiveMobileDevices ?? .empty).validatedInventorySections)
+        return SectionRequirement.mobileDevices(metric).filter { !configured.contains($0) }
+    }
+
+    /// Records a gap once per metric+platform so the banner can name it.
+    private func noteDataGap(_ metric: HealthMetricType, _ platform: MetricDataGap.Platform, _ missing: [String]) {
+        guard !missing.isEmpty else { return }
+        dataGapAccumulator.append(MetricDataGap(metric: metric, platform: platform, missingSections: missing))
+    }
+
     // MARK: - Private Properties
-    
+
     private var cancellables = Set<AnyCancellable>()
 
-    /// Accumulates unmatched site names across a single recalculation pass.
-    /// Reset at the start of each pass; published to `unmatchedSiteNames` at the end.
-    private var unmatchedSitesAccumulator: Set<String> = []
+    /// Accumulates data gaps across a single recalculation pass.
+    private var dataGapAccumulator: [MetricDataGap] = []
+
+    /// Accumulates unmatched sites across a single recalculation pass, keyed by
+    /// site name to the set of device ids seen there. Device ids rather than a
+    /// running tally because Protected and Secured each walk the same computer
+    /// list — a plain counter would double every device.
+    private var unmatchedSitesAccumulator: [String: Set<String>] = [:]
     
     // MARK: - Initialization
     
@@ -76,6 +179,7 @@ final class HealthMetricsCalculator: ObservableObject {
     func recalculateMetrics() {
         isCalculating = true
         unmatchedSitesAccumulator.removeAll()
+        dataGapAccumulator.removeAll()
 
         let computerCache = ComputerInventoryCache.shared
         let mobileCache = MobileDeviceInventoryCache.shared
@@ -115,7 +219,11 @@ final class HealthMetricsCalculator: ObservableObject {
         
         healthMetrics = [checkedIn, protected, encrypted, secured, upToDate]
         lastCalculationDate = Date()
-        unmatchedSiteNames = unmatchedSitesAccumulator.sorted()
+        unmatchedSiteCounts = unmatchedSitesAccumulator
+            .map { (site: $0.key, count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.site < $1.site }
+        unmatchedSiteNames = unmatchedSiteCounts.map(\.site)
+        metricDataGaps = dataGapAccumulator
         isCalculating = false
 
         NSLog("📊 HealthMetricsCalculator: Recalculated metrics - Checked-In: %d/%d (%.1f%%)",
@@ -127,12 +235,13 @@ final class HealthMetricsCalculator: ObservableObject {
         }
     }
 
-    /// Records a site that fell through the Protected/Secured site cascade.
+    /// Records a device whose site fell through the Protected/Secured site cascade.
     /// Empty site names are normalised so "device has no site" is distinguishable
     /// from a real site in the diagnostic.
-    private func noteUnmatchedSite(_ siteName: String) {
+    private func noteUnmatchedSite(_ siteName: String, deviceID: String) {
         let trimmed = siteName.trimmingCharacters(in: .whitespacesAndNewlines)
-        unmatchedSitesAccumulator.insert(trimmed.isEmpty ? "(no site assigned)" : trimmed)
+        let key = trimmed.isEmpty ? "(no site assigned)" : trimmed
+        unmatchedSitesAccumulator[key, default: []].insert(deviceID)
     }
     
     /// Get a specific metric by type
@@ -186,8 +295,14 @@ final class HealthMetricsCalculator: ObservableObject {
         var nonCompliantCount = 0
         var unknownCount = 0
         
+        let computerGaps = missingComputerSections(for: .checkedIn)
+        noteDataGap(.checkedIn, .computers, computerGaps)
+        let mobileGaps = missingMobileSections(for: .checkedIn)
+        noteDataGap(.checkedIn, .mobileDevices, mobileGaps)
+
         // Process computers
         for computer in computers {
+            guard computerGaps.isEmpty else { unknownCount += 1; continue }
             if let lastContactTime = computer.lastContactTime {
                 if lastContactTime >= thresholdDate {
                     compliantCount += 1
@@ -210,6 +325,7 @@ final class HealthMetricsCalculator: ObservableObject {
         
         // Process mobile devices using lastInventoryUpdate from the detail endpoint
         for device in mobileDevices {
+            guard mobileGaps.isEmpty else { unknownCount += 1; continue }
             if let lastInventoryUpdate = device.lastInventoryUpdate {
                 if lastInventoryUpdate >= thresholdDate {
                     compliantCount += 1
@@ -243,9 +359,17 @@ final class HealthMetricsCalculator: ObservableObject {
         var compliantCount = 0
         var nonCompliantCount = 0
         var unknownCount = 0
-        
+
+        // Without APPLICATIONS the app checks all read false and every Mac would
+        // report Not Protected. Score Unknown instead — we have no evidence either way.
+        let computerGaps = missingComputerSections(for: .protected)
+        noteDataGap(.protected, .computers, computerGaps)
+        let mobileGaps = missingMobileSections(for: .protected)
+        noteDataGap(.protected, .mobileDevices, mobileGaps)
+
         // Process computers - site-based protection requirements
         for computer in computers {
+            guard computerGaps.isEmpty else { unknownCount += 1; continue }
             let siteName = computer.siteName ?? ""
             
             if siteName.lowercased() == "enterprise" {
@@ -274,13 +398,14 @@ final class HealthMetricsCalculator: ObservableObject {
                 // No site rule matched. Scored Unknown, never Compliant: passing an
                 // unevaluated device reports a compliance verdict we have no evidence
                 // for, which inflates the metric and hides the gap from the admin.
-                noteUnmatchedSite(siteName)
+                noteUnmatchedSite(siteName, deviceID: computer.id)
                 unknownCount += 1
             }
         }
         
         // Process mobile devices - Managed + Supervised = Protected
         for device in mobileDevices {
+            guard mobileGaps.isEmpty else { unknownCount += 1; continue }
             if device.isManaged && device.isSupervised {
                 compliantCount += 1
             } else {
@@ -316,16 +441,27 @@ final class HealthMetricsCalculator: ObservableObject {
         var encryptingCount = 0
         var unencryptedCount = 0  // Includes decrypting and other non-compliant states
         // unknownCount is shared
-        
+
+        let computerGaps = missingComputerSections(for: .encrypted)
+        noteDataGap(.encrypted, .computers, computerGaps)
+        let mobileGaps = missingMobileSections(for: .encrypted)
+        noteDataGap(.encrypted, .mobileDevices, mobileGaps)
+
         // Process computers - check boot partition FileVault state
         // Exclude GroundControl site
         for computer in computers {
+            // Site exclusion is evaluated BEFORE the data-gap guard: an excluded
+            // Mac belongs in no bucket at all, so letting the guard reach it first
+            // would inflate the denominator by the excluded population whenever a
+            // section is missing.
             let siteName = computer.siteName ?? ""
-            
+
             // Skip GroundControl site devices
             if siteName.lowercased() == "groundcontrol" {
                 continue
             }
+
+            guard computerGaps.isEmpty else { unknownCount += 1; continue }
             
             if let diskEncryption = computer.diskEncryption {
                 // Check boot partition encryption state
@@ -361,6 +497,7 @@ final class HealthMetricsCalculator: ObservableObject {
         // Process mobile devices - check hardware encryption == 3 (full encryption)
         // Note: Mobile devices don't have site association in the same way, include all
         for device in mobileDevices {
+            guard mobileGaps.isEmpty else { unknownCount += 1; continue }
             if let security = device.security {
                 // Hardware encryption value of 3 = both block-level and file-level encryption
                 let hasFullEncryption = security.hardwareEncryption == 3
@@ -405,10 +542,16 @@ final class HealthMetricsCalculator: ObservableObject {
         var nonCompliantCount = 0
         var unknownCount = 0
         
+        let computerGaps = missingComputerSections(for: .secured)
+        noteDataGap(.secured, .computers, computerGaps)
+        let mobileGaps = missingMobileSections(for: .secured)
+        noteDataGap(.secured, .mobileDevices, mobileGaps)
+
         // Process computers - site-based security requirements
         for computer in computers {
+            guard computerGaps.isEmpty else { unknownCount += 1; continue }
             let siteName = computer.siteName ?? ""
-            
+
             if siteName.lowercased() == "enterprise" {
                 // Enterprise site (exact match) - full security requirements
                 let firewallEnabled = computer.security?.firewallEnabled ?? false
@@ -442,21 +585,26 @@ final class HealthMetricsCalculator: ObservableObject {
                 }
             } else {
                 // No site rule matched — see calculateProtectedMetric. Unknown, not Compliant.
-                noteUnmatchedSite(siteName)
+                noteUnmatchedSite(siteName, deviceID: computer.id)
                 unknownCount += 1
             }
         }
         
         // Process mobile devices
         for device in mobileDevices {
+            guard mobileGaps.isEmpty else { unknownCount += 1; continue }
             let isManaged = device.isManaged
             let isSupervised = device.isSupervised
-            let notJailbroken = !(device.security?.jailBreakDetected ?? false)
+            // Absent security data must not read as "not jailbroken". The double
+            // negative below would otherwise pass the check on no evidence — and
+            // visionOS skips attestation, so nothing else would catch it.
+            guard let security = device.security else { unknownCount += 1; continue }
+            let notJailbroken = !(security.jailBreakDetected ?? false)
             let ddmEnabled = device.general?.declarativeDeviceManagementEnabled ?? false
-            
+
             // Check platform for attestation requirement
             let platform = device.platformType
-            
+
             if platform == .visionOS {
                 // visionOS: Managed, Supervised, Not Jailbroken, DDM Enabled
                 if isManaged && isSupervised && notJailbroken && ddmEnabled {
@@ -505,8 +653,14 @@ final class HealthMetricsCalculator: ObservableObject {
         let minimumIPadOSVersion = minimumOSVersions.effectiveIPadOS
         let minimumVisionOSVersion = minimumOSVersions.effectiveVisionOS
         
+        let computerGaps = missingComputerSections(for: .upToDate)
+        noteDataGap(.upToDate, .computers, computerGaps)
+        let mobileGaps = missingMobileSections(for: .upToDate)
+        noteDataGap(.upToDate, .mobileDevices, mobileGaps)
+
         // Process computers (macOS)
         for computer in computers {
+            guard computerGaps.isEmpty else { unknownCount += 1; continue }
             if let osVersion = computer.operatingSystem?.version {
                 if let majorVersion = extractMajorVersion(from: osVersion) {
                     if majorVersion >= minimumMacOSVersion {
@@ -524,6 +678,7 @@ final class HealthMetricsCalculator: ObservableObject {
         
         // Process mobile devices using osVersion from detail endpoint
         for device in mobileDevices {
+            guard mobileGaps.isEmpty else { unknownCount += 1; continue }
             if let osVersion = device.osVersion {
                 if let majorVersion = extractMajorVersion(from: osVersion) {
                     // Determine minimum version based on platform
@@ -597,43 +752,73 @@ final class HealthMetricsCalculator: ObservableObject {
     ) -> [DeviceListItem] {
         let computerCache = ComputerInventoryCache.shared
         let mobileCache = MobileDeviceInventoryCache.shared
-        
+
+        // When a metric's inventory sections were never fetched the percentage path
+        // scores every affected device Unknown. Withhold those devices from
+        // evaluation here too, then re-add them as Unknown below — otherwise the
+        // drill-down would contradict the card that opened it.
+        let computerBlocked = !missingComputerSections(for: metricType).isEmpty
+        let mobileBlocked = !missingMobileSections(for: metricType).isEmpty
+        let evaluableComputers = computerBlocked ? [] : computerCache.computers
+        let evaluableMobile = mobileBlocked ? [] : mobileCache.devices
+
         var devices: [DeviceListItem] = []
-        
+
         switch metricType {
         case .checkedIn:
             devices = getCheckedInDevices(
-                computers: computerCache.computers,
-                mobileDevices: mobileCache.devices,
+                computers: evaluableComputers,
+                mobileDevices: evaluableMobile,
                 segment: segment
             )
         case .protected:
             devices = getProtectedDevices(
-                computers: computerCache.computers,
-                mobileDevices: mobileCache.devices,
+                computers: evaluableComputers,
+                mobileDevices: evaluableMobile,
                 segment: segment
             )
         case .encrypted:
             devices = getEncryptedDevices(
-                computers: computerCache.computers,
-                mobileDevices: mobileCache.devices,
+                computers: evaluableComputers,
+                mobileDevices: evaluableMobile,
                 segment: segment
             )
         case .secured:
             devices = getSecuredDevices(
-                computers: computerCache.computers,
-                mobileDevices: mobileCache.devices,
+                computers: evaluableComputers,
+                mobileDevices: evaluableMobile,
                 segment: segment
             )
         case .upToDate:
             devices = getUpToDateDevices(
-                computers: computerCache.computers,
-                mobileDevices: mobileCache.devices,
+                computers: evaluableComputers,
+                mobileDevices: evaluableMobile,
                 segment: segment
             )
         }
-        
+
+        if segment == .unknown {
+            if computerBlocked {
+                devices += inScopeComputers(computerCache.computers, for: metricType)
+                    .map { computerToDeviceListItem($0) }
+            }
+            if mobileBlocked {
+                devices += mobileCache.devices.map { mobileDeviceToDeviceListItem($0) }
+            }
+        }
+
         return devices
+    }
+
+    /// Computers a metric evaluates at all. Encrypted deliberately excludes the
+    /// GroundControl site, so devices withheld for a data gap must be filtered the
+    /// same way — otherwise the drill-down lists devices the card never counted.
+    private func inScopeComputers(
+        _ computers: [ComputerInventoryItem],
+        for metric: HealthMetricType
+    ) -> [ComputerInventoryItem] {
+        guard metric == .encrypted else { return computers }
+        return computers.filter { ($0.siteName ?? "").lowercased() != "groundcontrol" }
     }
     
     // MARK: - Checked-In Device Filtering
@@ -851,18 +1036,25 @@ final class HealthMetricsCalculator: ObservableObject {
         for device in mobileDevices {
             let isManaged = device.isManaged
             let isSupervised = device.isSupervised
-            let notJailbroken = !(device.security?.jailBreakDetected ?? false)
+            // Mirrors calculateSecuredMetric: absent security data is Unknown, not
+            // "not jailbroken". Without this the card and this list disagree for
+            // any device Jamf returns a null security object for.
+            guard let security = device.security else {
+                if segment == .unknown { devices.append(mobileDeviceToDeviceListItem(device)) }
+                continue
+            }
+            let notJailbroken = !(security.jailBreakDetected ?? false)
             let ddmEnabled = device.general?.declarativeDeviceManagementEnabled ?? false
-            
+
             let platform = device.platformType
             let status: HealthSegmentType
-            
+
             if platform == .visionOS {
                 // visionOS: Managed, Supervised, Not Jailbroken, DDM Enabled
                 status = (isManaged && isSupervised && notJailbroken && ddmEnabled) ? .compliant : .nonCompliant
             } else {
                 // iOS/iPadOS: Also requires successful attestation
-                let successfulAttestation = device.security?.attestationStatus?.uppercased() == "SUCCESS"
+                let successfulAttestation = security.attestationStatus?.uppercased() == "SUCCESS"
                 status = (isManaged && isSupervised && notJailbroken && successfulAttestation && ddmEnabled) ? .compliant : .nonCompliant
             }
             
