@@ -149,7 +149,11 @@ enum AppleCareFilter: String, CaseIterable, Identifiable, Codable {
 enum SoftwareUpdateFilter: String, CaseIterable, Identifiable, Codable {
     case all = "All Devices"
     case hasPendingUpdates = "Has Pending Updates"
-    case upToDate = "Up to Date"
+    /// "No pending updates" — deliberately NOT named `upToDate`. That name belongs
+    /// to HealthMetricType.upToDate, which means something different (OS major
+    /// version vs a configured minimum). The rawValue is unchanged so persisted
+    /// filter selections still decode.
+    case noPendingUpdates = "Up to Date"
     case noUpdateData = "No Update Data"
     var id: String { rawValue }
 }
@@ -1666,7 +1670,7 @@ struct ReportsView: View {
                 switch status {
                 case .all: return true
                 case .hasPendingUpdates: return updateInfo.hasData && updateInfo.pendingCount > 0
-                case .upToDate: return updateInfo.hasData && updateInfo.pendingCount == 0
+                case .noPendingUpdates: return updateInfo.hasData && updateInfo.pendingCount == 0
                 case .noUpdateData: return !updateInfo.hasData
                 }
             }
