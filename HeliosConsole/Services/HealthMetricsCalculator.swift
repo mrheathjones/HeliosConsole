@@ -134,16 +134,25 @@ final class HealthMetricsCalculator: ObservableObject {
         }
     }
 
+    /// Inventory sections the profile is actually requesting, per platform.
+    var configuredComputerSections: [String] {
+        (MDMConfigurationManager.shared.configuration.features?
+            .effectiveComputers ?? .empty).validatedInventorySections
+    }
+
+    var configuredMobileSections: [String] {
+        (MDMConfigurationManager.shared.configuration.features?
+            .effectiveMobileDevices ?? .empty).validatedInventorySections
+    }
+
     /// Sections this metric needs that the profile is not requesting.
     private func missingComputerSections(for metric: HealthMetricType) -> [String] {
-        let configured = Set((MDMConfigurationManager.shared.configuration.features?
-            .effectiveComputers ?? .empty).validatedInventorySections)
+        let configured = Set(configuredComputerSections)
         return SectionRequirement.computers(metric).filter { !configured.contains($0) }
     }
 
     private func missingMobileSections(for metric: HealthMetricType) -> [String] {
-        let configured = Set((MDMConfigurationManager.shared.configuration.features?
-            .effectiveMobileDevices ?? .empty).validatedInventorySections)
+        let configured = Set(configuredMobileSections)
         return SectionRequirement.mobileDevices(metric).filter { !configured.contains($0) }
     }
 
@@ -233,6 +242,43 @@ final class HealthMetricsCalculator: ObservableObject {
             NSLog("⚠️ HealthMetricsCalculator: %d site(s) matched no Protected/Secured rule and scored Unknown: %@",
                   unmatchedSiteNames.count, unmatchedSiteNames.joined(separator: ", "))
         }
+
+        runParityCheck(computers: computerCache.computers, mobileDevices: mobileCache.devices)
+    }
+
+    /// Compares the unified HealthEvaluator against this class's live logic on the
+    /// real fleet. Temporary migration scaffolding — see HealthParityCheck.
+    private func runParityCheck(
+        computers: [ComputerInventoryItem],
+        mobileDevices: [MobileDeviceInventoryItem]
+    ) {
+        guard HealthParityCheck.isEnabled else { return }
+
+        HealthParityCheck.run(
+            computers: computers,
+            mobileDevices: mobileDevices,
+            policy: .current(checkedInDays: checkInThresholdDays, minimums: minimumOSVersions),
+            computerSections: configuredComputerSections,
+            mobileSections: configuredMobileSections,
+            oldVerdicts: { [weak self] metric in
+                guard let self else { return [:] }
+                // Derive the CURRENT per-device verdict from the existing
+                // drill-down rather than reimplementing it — a second copy of the
+                // logic here would compare the new evaluator against itself.
+                var map: [String: String] = [:]
+                let segments: [(HealthSegmentType, HealthVerdict)] = [
+                    (.compliant, .compliant),
+                    (.nonCompliant, .nonCompliant),
+                    (.unknown, .unknown)
+                ]
+                for (segment, verdict) in segments {
+                    for item in self.getFilteredDevices(for: metric, segment: segment) {
+                        map[item.originalId] = verdict.rawValue
+                    }
+                }
+                return map
+            }
+        )
     }
 
     /// Records a device whose site fell through the Protected/Secured site cascade.
