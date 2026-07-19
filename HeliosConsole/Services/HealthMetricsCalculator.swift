@@ -230,32 +230,6 @@ final class HealthMetricsCalculator: ObservableObject {
                   unmatchedSiteNames.count, unmatchedSiteNames.joined(separator: ", "))
         }
 
-        runParityCheck(computers: computerCache.computers, mobileDevices: mobileCache.devices)
-    }
-
-    /// Compares the unified HealthEvaluator against this class's live logic on the
-    /// real fleet. Temporary migration scaffolding — see HealthParityCheck.
-    private func runParityCheck(
-        computers: [ComputerInventoryItem],
-        mobileDevices: [MobileDeviceInventoryItem]
-    ) {
-        guard HealthParityCheck.isEnabled else { return }
-
-        HealthParityCheck.run(
-            computers: computers,
-            mobileDevices: mobileDevices,
-            policy: .current(checkedInDays: checkInThresholdDays, minimums: minimumOSVersions),
-            computerSections: configuredComputerSections,
-            mobileSections: configuredMobileSections,
-            // Both fleet oracles are now retired: the drill-down and the
-            // percentage path both route through the evaluator, so either
-            // comparison would be checking it against itself and passing
-            // vacuously. What remains useful is the app-matcher measurement, and
-            // the per-device comparison that step 3 will add against
-            // DeviceHealthEvaluator — the last un-migrated copy.
-            oldVerdicts: nil,
-            liveTallies: [:]
-        )
     }
 
     /// Records a device whose site fell through the Protected/Secured site cascade.

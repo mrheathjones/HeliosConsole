@@ -509,13 +509,19 @@ struct DeviceHealthSection: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 12)
         .padding(.horizontal, 8)
+        // Tinted from displayStatus, not result.status. The Coverage card is the
+        // Encrypted metric repurposed to show AppleCare, so its icon and label
+        // come from warranty data while result.status still holds the encryption
+        // verdict — keying the fill and border off the latter painted the tile red
+        // while it read "Coverage / Unknown". For every other card the two are the
+        // same value, so nothing else changes.
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(result.status.color.opacity(0.1))
+                .fill(displayStatus.color.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(result.status.color.opacity(0.3), lineWidth: 1)
+                .stroke(displayStatus.color.opacity(0.3), lineWidth: 1)
         )
         .popover(isPresented: binding(for: result.type)) {
             metricDetailPopover(result)

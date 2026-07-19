@@ -660,3 +660,52 @@ enum HealthEvaluator {
         parseDate(lastContactTime) ?? parseDate(reportDate)
     }
 }
+
+// MARK: - Fleet model projections
+
+extension ComputerInventoryItem {
+    func healthInput(availability: SectionAvailability) -> ComputerHealthInput {
+        ComputerHealthInput(
+            deviceID: id,
+            rawSiteName: siteName,
+            checkInDate: HealthEvaluator.resolveCheckIn(
+                lastContactTime: general?.lastContactTime,
+                reportDate: general?.reportDate
+            ),
+            isManaged: isManaged,
+            isSupervised: isSupervised,
+            ddmEnabled: general?.declarativeDeviceManagementEnabled ?? false,
+            osVersion: operatingSystem?.version,
+            applicationNames: applications.map { $0.compactMap(\.name) },
+            firewallEnabled: security?.firewallEnabled ?? false,
+            sipStatus: security?.sipStatus,
+            gatekeeperStatus: security?.gatekeeperStatus,
+            bootstrapTokenEscrowedStatus: security?.bootstrapTokenEscrowedStatus,
+            encryptionState: BootEncryptionState.parse(
+                partitionState: diskEncryption?.bootPartitionEncryptionDetails?.partitionFileVault2State,
+                fileVault2Enabled: diskEncryption?.fileVault2Enabled,
+                hasDiskEncryptionObject: diskEncryption != nil
+            ),
+            availability: availability
+        )
+    }
+}
+
+extension MobileDeviceInventoryItem {
+    func healthInput(availability: SectionAvailability) -> MobileHealthInput {
+        MobileHealthInput(
+            deviceID: id,
+            platform: platformType,
+            resolvedCheckIn: lastInventoryUpdate,
+            osVersion: osVersion,
+            isManaged: isManaged,
+            isSupervised: isSupervised,
+            ddmEnabled: general?.declarativeDeviceManagementEnabled ?? false,
+            hasSecurityObject: security != nil,
+            jailBreakDetected: security?.jailBreakDetected,
+            attestationStatus: security?.attestationStatus,
+            hardwareEncryption: security?.hardwareEncryption,
+            availability: availability
+        )
+    }
+}
