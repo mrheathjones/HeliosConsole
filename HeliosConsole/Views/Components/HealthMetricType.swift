@@ -25,7 +25,23 @@ enum HealthMetricType: String, CaseIterable, Identifiable, Hashable {
     case upToDate = "Up to Date"
     
     var id: String { rawValue }
-    
+
+    /// The id this metric is addressed by in the features-domain profile.
+    ///
+    /// Deliberately separate from `rawValue`, which is a display string ("Up to
+    /// Date"). Config keys must be stable identifiers — renaming a card must not
+    /// silently orphan every profile that configures it, which is how the two
+    /// namespaces drifted apart in the first place.
+    var configID: String {
+        switch self {
+        case .checkedIn: return "checkedIn"
+        case .protected: return "protected"
+        case .encrypted: return "encrypted"
+        case .secured:   return "secured"
+        case .upToDate:  return "upToDate"
+        }
+    }
+
     var icon: String {
         switch self {
         case .checkedIn: return "clock.badge.checkmark"

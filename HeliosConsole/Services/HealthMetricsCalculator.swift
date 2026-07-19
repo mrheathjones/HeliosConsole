@@ -67,18 +67,17 @@ final class HealthMetricsCalculator: ObservableObject {
     /// (schema default 7).
     var checkInThresholdDays: Int {
         MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: "checkedIn")?
+            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.checkedIn.configID)?
             .effectiveCheckedInDays ?? 7
     }
 
     /// Minimum compliant OS major versions for the "Up to Date" metric —
-    /// features domain healthScorecard.metrics[id=softwareUpdateCompliance]
-    /// .minimumOSVersions. The single source for BOTH the scorecard
-    /// percentage and the drill-down list (they previously hard-coded
-    /// different macOS baselines and disagreed).
+    /// features domain healthScorecard.metrics[id=upToDate].minimumOSVersions.
+    /// Profiles written against the old schema addressed this as
+    /// `softwareUpdateCompliance`; effectiveMetric(id:) still honours that.
     var minimumOSVersions: FeaturesConfiguration.HealthMetricSetting.MinimumOSVersions {
         MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: "softwareUpdateCompliance")?
+            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.upToDate.configID)?
             .effectiveMinimumOSVersions ?? .empty
     }
     

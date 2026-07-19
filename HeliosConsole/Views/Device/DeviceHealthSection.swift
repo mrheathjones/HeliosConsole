@@ -52,12 +52,12 @@ struct DeviceHealthEvaluator {
     // per-device health panel and the fleet scorecard can never disagree.
     static var checkInThresholdDays: Int {
         MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: "checkedIn")?
+            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.checkedIn.configID)?
             .effectiveCheckedInDays ?? 7
     }
     static var minimumMacOSVersion: Int {
         (MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: "softwareUpdateCompliance")?
+            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.upToDate.configID)?
             .effectiveMinimumOSVersions ?? .empty).effectiveMacOS
     }
     
@@ -72,7 +72,7 @@ struct DeviceHealthEvaluator {
         let policy = HealthPolicy.current(
             checkedInDays: checkInThresholdDays,
             minimums: MDMConfigurationManager.shared.configuration.features?
-                .effectiveHealthScorecard.effectiveMetric(id: "softwareUpdateCompliance")?
+                .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.upToDate.configID)?
                 .effectiveMinimumOSVersions ?? .empty
         )
         let input = healthInput(computer)

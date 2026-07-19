@@ -190,12 +190,7 @@ enum BootEncryptionState: Equatable {
 /// replaces the initialiser body with profile-driven values without changing any
 /// consumer of this type.
 struct HealthPolicy {
-    struct SiteRule {
-        let siteName: String
-        let requiredApps: [String]
-        /// Security checks this site must satisfy for the Secured metric.
-        let securedChecks: Set<SecuredCheck>
-    }
+    typealias MetricSetting = FeaturesConfiguration.HealthMetricSetting
 
     enum SecuredCheck: String, CaseIterable {
         case firewall, sip, gatekeeper, managed, supervised, diskEncrypted, bootstrapToken, ddm
@@ -206,46 +201,59 @@ struct HealthPolicy {
     let minimumIOS: Int
     let minimumIPadOS: Int
     let minimumVisionOS: Int
-    let siteRules: [SiteRule]
-    /// Sites removed from the Encrypted metric entirely.
-    let encryptedExcludedSites: [String]
+    /// Per-metric settings, keyed by the metric's config id.
+    let metrics: [String: MetricSetting]
 
-    /// Mirrors the literals the calculator uses today, so the evaluator can be
-    /// compared against live behavior before anything becomes configurable.
+    /// Reads the whole policy from the features domain. Every value has a default
+    /// that reproduces what was hard-coded before, so a tenant with no
+    /// healthScorecard profile is unaffected.
     static func current(
         checkedInDays: Int,
-        minimums: FeaturesConfiguration.HealthMetricSetting.MinimumOSVersions
+        minimums: MetricSetting.MinimumOSVersions
     ) -> HealthPolicy {
-        HealthPolicy(
+        let scorecard = MDMConfigurationManager.shared.configuration.features?
+            .effectiveHealthScorecard
+
+        var metrics: [String: MetricSetting] = [:]
+        for metric in HealthMetricType.allCases {
+            if let setting = scorecard?.effectiveMetric(id: metric.configID) {
+                metrics[metric.configID] = setting
+            }
+        }
+
+        return HealthPolicy(
             checkedInDays: checkedInDays,
             minimumMacOS: minimums.effectiveMacOS,
             minimumIOS: minimums.effectiveIOS,
             minimumIPadOS: minimums.effectiveIPadOS,
             minimumVisionOS: minimums.effectiveVisionOS,
-            siteRules: [
-                SiteRule(
-                    siteName: "enterprise",
-                    requiredApps: ["Cisco Secure Client", "Zscaler", "QualysCloudAgent", "Falcon", "JamfProtect"],
-                    securedChecks: Set(SecuredCheck.allCases)
-                ),
-                SiteRule(
-                    siteName: "groundcontrol",
-                    requiredApps: ["Falcon"],
-                    securedChecks: [.firewall, .sip, .managed, .supervised, .bootstrapToken, .ddm]
-                )
-            ],
-            encryptedExcludedSites: ["groundcontrol"]
+            metrics: metrics
         )
     }
 
-    func rule(forSite site: String?) -> SiteRule? {
-        let normalized = (site ?? "").lowercased()
-        return siteRules.first { $0.siteName == normalized }
+    func setting(for metric: HealthMetricType) -> MetricSetting? {
+        metrics[metric.configID]
     }
 
-    func isEncryptedExcluded(site: String?) -> Bool {
-        let normalized = (site ?? "").lowercased()
-        return encryptedExcludedSites.contains(normalized)
+    /// First matching site rule for this metric, in profile order.
+    func rule(for metric: HealthMetricType, site: String?) -> MetricSetting.SiteRule? {
+        setting(for: metric)?.effectiveSiteRules.first { $0.matches(site: site) }
+    }
+
+    /// What a device whose site matched no rule scores for this metric.
+    func unmatchedSiteVerdict(for metric: HealthMetricType) -> HealthVerdict {
+        switch setting(for: metric)?.effectiveUnmatchedSiteVerdict ?? "unknown" {
+        case "compliant": return .compliant
+        case "noncompliant": return .nonCompliant
+        default: return .unknown
+        }
+    }
+
+    func isExcluded(metric: HealthMetricType, site: String?) -> Bool {
+        let normalized = MetricSetting.SiteRule.normalized(site)
+        guard !normalized.isEmpty else { return false }
+        return setting(for: metric)?.effectiveExcludedSites
+            .contains { MetricSetting.SiteRule.normalized($0) == normalized } ?? false
     }
 }
 
@@ -363,7 +371,7 @@ enum HealthEvaluator {
     ) -> HealthEvaluation {
         // Site exclusion precedes the data-gap check: an excluded device belongs
         // in no bucket, so a missing section must not pull it into the denominator.
-        if metric == .encrypted, policy.isEncryptedExcluded(site: input.rawSiteName) {
+        if policy.isExcluded(metric: metric, site: input.rawSiteName) {
             return HealthEvaluation(
                 metric: metric,
                 verdict: .excluded,
@@ -416,49 +424,61 @@ enum HealthEvaluator {
         computer input: ComputerHealthInput,
         policy: HealthPolicy
     ) -> HealthEvaluation {
-        guard let rule = policy.rule(forSite: input.rawSiteName) else {
-            return HealthEvaluation(metric: .protected, verdict: .unknown,
-                                    causes: [.unmatchedSite(raw: input.rawSiteName ?? "")])
+        guard let rule = policy.rule(for: .protected, site: input.rawSiteName) else {
+            // The cause is attached only when the resolved verdict is Unknown.
+            // The dashboard banner harvests it and states those devices "are
+            // scored Unknown" — an admin who sets the verdict to compliant would
+            // otherwise get a banner describing devices that passed.
+            let verdict = policy.unmatchedSiteVerdict(for: .protected)
+            return HealthEvaluation(
+                metric: .protected,
+                verdict: verdict,
+                causes: verdict == .unknown ? [.unmatchedSite(raw: input.rawSiteName ?? "")] : []
+            )
         }
         guard let installed = input.applicationNames else {
             return HealthEvaluation(metric: .protected, verdict: .unknown,
                                     causes: [.missingField("application inventory")])
         }
+        // A matched rule that requires nothing must not certify the device. An
+        // empty list is a half-written rule, and passing it would be the same
+        // fail-open — verdict without evidence — that this branch exists to fix.
+        guard !rule.effectiveRequiredApps.isEmpty else {
+            return HealthEvaluation(
+                metric: .protected, verdict: .unknown,
+                causes: [.requirementFailed(
+                    "Site \"\(rule.effectiveSiteName)\" has a rule but lists no required applications")]
+            )
+        }
 
         var requirements: [HealthRequirement] = []
         var causes: [HealthCause] = []
-        for app in rule.requiredApps {
-            let present = matches(app, in: installed)
-            let failure = "\(app) not installed"
+        var metCount = 0
+        for app in rule.effectiveRequiredApps {
+            let present = app.isInstalled(among: installed)
+            let failure = "\(app.effectiveName) not installed"
             requirements.append(HealthRequirement(
-                id: "appInstalled", label: "\(app) installed",
+                id: "appInstalled", label: "\(app.effectiveName) installed",
                 outcome: present ? .met : .failed, failureText: failure
             ))
-            if !present { causes.append(.requirementFailed(failure)) }
+            if present { metCount += 1 } else { causes.append(.requirementFailed(failure)) }
         }
+
+        let satisfied: Bool
+        switch rule.effectiveRequireMode {
+        case "any": satisfied = metCount > 0 || rule.effectiveRequiredApps.isEmpty
+        default:    satisfied = causes.isEmpty
+        }
+        // Under "any" the individual misses are not failures; drop them so the
+        // popover does not list reasons for a device that passed.
+        if satisfied { causes.removeAll() }
 
         return HealthEvaluation(
             metric: .protected,
-            verdict: causes.isEmpty ? .compliant : .nonCompliant,
+            verdict: satisfied ? .compliant : .nonCompliant,
             causes: causes,
             requirements: requirements
         )
-    }
-
-    /// Substring, case-insensitive — the fleet's historical rule. The per-device
-    /// panel used exact-or-".app", which is stricter and arguably more correct,
-    /// but the fleet number is the published one. PR 3 replaces both with
-    /// configurable per-app matching against bundle identifiers.
-    static func matches(_ required: String, in installed: [String]) -> Bool {
-        let needle = required.lowercased()
-        return installed.contains { $0.lowercased().contains(needle) }
-    }
-
-    /// The stricter matcher, retained only so the parity harness can measure how
-    /// far apart the two rules actually are on a real fleet before PR 3 chooses.
-    static func matchesStrict(_ required: String, in installed: [String]) -> Bool {
-        let needle = required.lowercased()
-        return installed.contains { $0.lowercased() == needle || $0.lowercased() == "\(needle).app" }
     }
 
     private static func evaluateEncrypted(computer input: ComputerHealthInput) -> HealthEvaluation {
@@ -486,16 +506,31 @@ enum HealthEvaluator {
         computer input: ComputerHealthInput,
         policy: HealthPolicy
     ) -> HealthEvaluation {
-        guard let rule = policy.rule(forSite: input.rawSiteName) else {
-            return HealthEvaluation(metric: .secured, verdict: .unknown,
-                                    causes: [.unmatchedSite(raw: input.rawSiteName ?? "")])
+        guard let rule = policy.rule(for: .secured, site: input.rawSiteName) else {
+            // See evaluateProtected — cause only when the verdict is Unknown.
+            let verdict = policy.unmatchedSiteVerdict(for: .secured)
+            return HealthEvaluation(
+                metric: .secured,
+                verdict: verdict,
+                causes: verdict == .unknown ? [.unmatchedSite(raw: input.rawSiteName ?? "")] : []
+            )
         }
 
+        // See evaluateProtected: a matched rule with no checks certifies nothing.
+        guard !rule.effectiveChecks.isEmpty else {
+            return HealthEvaluation(
+                metric: .secured, verdict: .unknown,
+                causes: [.requirementFailed(
+                    "Site \"\(rule.effectiveSiteName)\" has a rule but lists no security checks")]
+            )
+        }
+
+        let enabledChecks = Set(rule.effectiveChecks.map { $0.lowercased() })
         var requirements: [HealthRequirement] = []
         var causes: [HealthCause] = []
 
         func check(_ id: HealthPolicy.SecuredCheck, _ label: String, _ failure: String, _ passed: Bool) {
-            guard rule.securedChecks.contains(id) else { return }
+            guard enabledChecks.contains(id.rawValue.lowercased()) else { return }
             requirements.append(HealthRequirement(
                 id: id.rawValue, label: label,
                 outcome: passed ? .met : .failed, failureText: failure

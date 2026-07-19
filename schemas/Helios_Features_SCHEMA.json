@@ -1,20 +1,20 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.features",
-  "title": "Helios Console — Features",
-  "description": "Feature-module and tuning configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.features — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). Values take effect at app relaunch.",
+  "title": "Helios Console \u2014 Features",
+  "description": "Feature-module and tuning configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.features \u2014 deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). Values take effect at app relaunch.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
-      "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
+      "description": "Schema/profile version stamp (informational \u2014 the loader logs it, nothing else reads it).",
       "default": "3.0"
     },
     "userExperience": {
       "type": "object",
       "title": "User Experience",
-      "description": "Visibility switches for top-level app areas. Moved here from the ui domain — a ui profile still delivering these keys is honored until you re-push, but features wins when both are present. These only hide an area a role already grants; they never reveal one it withholds.",
+      "description": "Visibility switches for top-level app areas. Moved here from the ui domain \u2014 a ui profile still delivering these keys is honored until you re-push, but features wins when both are present. These only hide an area a role already grants; they never reveal one it withholds.",
       "properties": {
         "showAnnouncements": {
           "type": "boolean",
@@ -33,7 +33,7 @@
     "localAdministration": {
       "type": "object",
       "title": "Local Administration",
-      "description": "Local administrator account used by the LAPS password lookup in the device view. Moved here from the core domain — a core profile still delivering this block is honored until you re-push, but features wins when both are present.",
+      "description": "Local administrator account used by the LAPS password lookup in the device view. Moved here from the core domain \u2014 a core profile still delivering this block is honored until you re-push, but features wins when both are present.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -52,7 +52,7 @@
     "cleanup": {
       "type": "object",
       "title": "Cleanup (Stale Device) Settings",
-      "description": "Tunables for the Cleanup module — this block grants nothing. Which roles see the module and which sub-actions they may run stay in the access domain. Moved here from access — an access profile still delivering this block is honored until you re-push, but features wins when both are present.",
+      "description": "Tunables for the Cleanup module \u2014 this block grants nothing. Which roles see the module and which sub-actions they may run stay in the access domain. Moved here from access \u2014 an access profile still delivering this block is honored until you re-push, but features wins when both are present.",
       "properties": {
         "staleDays": {
           "type": "integer",
@@ -207,7 +207,8 @@
             "properties": {
               "id": {
                 "type": "string",
-                "title": "Metric ID"
+                "title": "Metric ID",
+                "description": "Stable metric identifier. One of: checkedIn, protected, encrypted, secured, upToDate. Legacy ids softwareUpdateCompliance and fileVaultEnabled are still accepted for one release."
               },
               "enabled": {
                 "type": "boolean",
@@ -269,6 +270,101 @@
                     "default": 2
                   }
                 }
+              },
+              "siteRules": {
+                "type": "array",
+                "title": "Site Rules",
+                "description": "Per-site requirements, evaluated in order \u2014 first match wins. Used by the protected metric (requiredApps) and the secured metric (checks). A device whose site matches no rule scores defaultVerdictForUnmatchedSite.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteName": {
+                      "type": "string",
+                      "title": "Jamf Site Name",
+                      "description": "Matched case-insensitively."
+                    },
+                    "siteMatchMode": {
+                      "type": "string",
+                      "title": "Site Match Mode",
+                      "enum": [
+                        "exact",
+                        "prefix"
+                      ],
+                      "default": "exact",
+                      "description": "Use prefix for versioned site names such as Enterprise_NextVer."
+                    },
+                    "requiredApps": {
+                      "type": "array",
+                      "title": "Required Applications",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "title": "Application Name"
+                          },
+                          "matchMode": {
+                            "type": "string",
+                            "title": "Match Mode",
+                            "enum": [
+                              "exact",
+                              "substring"
+                            ],
+                            "default": "exact",
+                            "description": "exact matches \"Name\" or \"Name.app\". Use substring only when the installed name varies; it also matches things like \"Name Uninstaller.app\"."
+                          }
+                        }
+                      }
+                    },
+                    "requireMode": {
+                      "type": "string",
+                      "title": "Require Mode",
+                      "enum": [
+                        "all",
+                        "any"
+                      ],
+                      "default": "all",
+                      "description": "Whether every listed app is required, or at least one."
+                    },
+                    "checks": {
+                      "type": "array",
+                      "title": "Security Checks",
+                      "description": "Checks a device on this site must pass for the secured metric.",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "firewall",
+                          "sip",
+                          "gatekeeper",
+                          "managed",
+                          "supervised",
+                          "diskEncrypted",
+                          "bootstrapToken",
+                          "ddm"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "excludedSites": {
+                "type": "array",
+                "title": "Excluded Sites",
+                "description": "Devices on these sites are removed from this metric entirely \u2014 they count toward neither the numerator nor the denominator.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "defaultVerdictForUnmatchedSite": {
+                "type": "string",
+                "title": "Verdict For Unmatched Site",
+                "enum": [
+                  "unknown",
+                  "nonCompliant",
+                  "compliant"
+                ],
+                "default": "unknown",
+                "description": "What a device scores when its site matches no rule. Defaults to unknown so an unconfigured site is reported as unevaluated rather than silently counted as passing."
               }
             }
           },
@@ -276,7 +372,7 @@
             {
               "id": "checkedIn",
               "enabled": true,
-              "displayName": "Recent Check-Ins",
+              "displayName": "Checked-In",
               "thresholds": {
                 "critical": 50,
                 "warning": 80
@@ -290,98 +386,131 @@
               ]
             },
             {
-              "id": "managed",
+              "id": "protected",
               "enabled": true,
-              "displayName": "",
+              "displayName": "Protected",
               "thresholds": {
                 "critical": 50,
                 "warning": 80
               },
-              "checkedInDays": 7,
               "platforms": [
                 "macOS",
                 "iOS",
                 "iPadOS",
                 "visionOS"
+              ],
+              "defaultVerdictForUnmatchedSite": "unknown",
+              "siteRules": [
+                {
+                  "siteName": "enterprise",
+                  "siteMatchMode": "exact",
+                  "requireMode": "all",
+                  "requiredApps": [
+                    {
+                      "name": "Cisco Secure Client",
+                      "matchMode": "exact"
+                    },
+                    {
+                      "name": "Zscaler",
+                      "matchMode": "exact"
+                    },
+                    {
+                      "name": "QualysCloudAgent",
+                      "matchMode": "exact"
+                    },
+                    {
+                      "name": "Falcon",
+                      "matchMode": "exact"
+                    },
+                    {
+                      "name": "JamfProtect",
+                      "matchMode": "exact"
+                    }
+                  ]
+                },
+                {
+                  "siteName": "groundcontrol",
+                  "siteMatchMode": "exact",
+                  "requireMode": "all",
+                  "requiredApps": [
+                    {
+                      "name": "Falcon",
+                      "matchMode": "exact"
+                    }
+                  ]
+                }
               ]
             },
             {
-              "id": "supervised",
+              "id": "encrypted",
               "enabled": true,
-              "displayName": "",
+              "displayName": "Encrypted",
               "thresholds": {
                 "critical": 50,
                 "warning": 80
               },
-              "checkedInDays": 7,
               "platforms": [
                 "macOS",
                 "iOS",
                 "iPadOS",
                 "visionOS"
+              ],
+              "excludedSites": [
+                "groundcontrol"
               ]
             },
             {
-              "id": "fileVaultEnabled",
+              "id": "secured",
               "enabled": true,
-              "displayName": "",
+              "displayName": "Secured",
               "thresholds": {
                 "critical": 50,
                 "warning": 80
               },
-              "checkedInDays": 7,
               "platforms": [
-                "macOS"
+                "macOS",
+                "iOS",
+                "iPadOS",
+                "visionOS"
+              ],
+              "defaultVerdictForUnmatchedSite": "unknown",
+              "siteRules": [
+                {
+                  "siteName": "enterprise",
+                  "siteMatchMode": "exact",
+                  "checks": [
+                    "firewall",
+                    "sip",
+                    "gatekeeper",
+                    "managed",
+                    "supervised",
+                    "diskEncrypted",
+                    "bootstrapToken",
+                    "ddm"
+                  ]
+                },
+                {
+                  "siteName": "groundcontrol",
+                  "siteMatchMode": "exact",
+                  "checks": [
+                    "firewall",
+                    "sip",
+                    "managed",
+                    "supervised",
+                    "bootstrapToken",
+                    "ddm"
+                  ]
+                }
               ]
             },
             {
-              "id": "firewallEnabled",
+              "id": "upToDate",
               "enabled": true,
-              "displayName": "",
+              "displayName": "Up to Date",
               "thresholds": {
                 "critical": 50,
                 "warning": 80
               },
-              "checkedInDays": 7,
-              "platforms": [
-                "macOS"
-              ]
-            },
-            {
-              "id": "gatekeeperEnabled",
-              "enabled": true,
-              "displayName": "",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
-              },
-              "checkedInDays": 7,
-              "platforms": [
-                "macOS"
-              ]
-            },
-            {
-              "id": "sipEnabled",
-              "enabled": true,
-              "displayName": "",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
-              },
-              "checkedInDays": 7,
-              "platforms": [
-                "macOS"
-              ]
-            },
-            {
-              "id": "softwareUpdateCompliance",
-              "enabled": true,
-              "displayName": "",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
-              },
-              "checkedInDays": 7,
               "platforms": [
                 "macOS",
                 "iOS",
