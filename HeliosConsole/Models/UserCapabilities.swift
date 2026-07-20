@@ -79,6 +79,12 @@ struct UserCapabilities: Equatable {
     /// interpreted by `canUsePrestage(named:)`.
     let allowedPrestages: Set<String>
 
+    /// Jamf site IDs the user may move a device into, plus the reserved
+    /// literal `all` — interpreted by `canMoveDevice(toSiteID:)`. IDs not
+    /// names: sites get renamed, and a rename must not silently widen or void
+    /// a role's scope. Empty means moveToSite is hidden even when granted.
+    let allowedSites: Set<String>
+
     /// Whether the prestage-on-assign step is offered after abmAssign. OR'd
     /// across roles.
     let allowPrestageOnAssign: Bool
@@ -105,6 +111,7 @@ struct UserCapabilities: Equatable {
         cleanupActions: Set<String>,
         allowedMdmServers: Set<String> = [],
         allowedPrestages: Set<String> = [],
+        allowedSites: Set<String> = [],
         allowPrestageOnAssign: Bool = false,
         returnToServiceOptions: AccessConfiguration.ReturnToServiceOptions = .empty,
         allowExport: Bool,
@@ -133,6 +140,7 @@ struct UserCapabilities: Equatable {
         self.cleanupActions = cleanupActions
         self.allowedMdmServers = allowedMdmServers
         self.allowedPrestages = allowedPrestages
+        self.allowedSites = allowedSites
         self.allowPrestageOnAssign = allowPrestageOnAssign
         self.returnToServiceOptions = returnToServiceOptions
         self.allowExport = allowExport
@@ -165,6 +173,7 @@ struct UserCapabilities: Equatable {
             && lhs.cleanupActions == rhs.cleanupActions
             && lhs.allowedMdmServers == rhs.allowedMdmServers
             && lhs.allowedPrestages == rhs.allowedPrestages
+            && lhs.allowedSites == rhs.allowedSites
             && lhs.allowPrestageOnAssign == rhs.allowPrestageOnAssign
             && lhs.returnToServiceOptions == rhs.returnToServiceOptions
             && lhs.allowExport == rhs.allowExport
@@ -199,6 +208,7 @@ struct UserCapabilities: Equatable {
         var cleanupActions: Set<String> = []
         var allowedMdmServers: Set<String> = []
         var allowedPrestages: Set<String> = []
+        var allowedSites: Set<String> = []
         var allowPrestageOnAssign = false
         var allowExport = false
         var allowScorecardDiagnostics = false
@@ -226,6 +236,14 @@ struct UserCapabilities: Equatable {
             cleanupActions.formUnion(definition.effectiveCleanupActions)
             allowedMdmServers.formUnion(definition.effectiveAllowedMdmServers)
             allowedPrestages.formUnion(definition.effectiveAllowedPrestages)
+            // Plain union across ALL roles, matching allowedMdmServers /
+            // allowedPrestages rather than the RTS-options rule below. A site
+            // move is reversible — move it back — so it does not warrant the
+            // most-restrictive-wins treatment reserved for the irreversible
+            // record deletions. Consequence: a role that does NOT grant
+            // moveToSite still contributes its allowedSites to a user who
+            // holds moveToSite via some other role.
+            allowedSites.formUnion(definition.effectiveAllowedSites)
             allowPrestageOnAssign = allowPrestageOnAssign || definition.effectiveAllowPrestageOnAssign
             allowExport = allowExport || definition.effectiveAllowExport
             allowScorecardDiagnostics = allowScorecardDiagnostics
@@ -247,6 +265,7 @@ struct UserCapabilities: Equatable {
             cleanupActions: cleanupActions,
             allowedMdmServers: allowedMdmServers,
             allowedPrestages: allowedPrestages,
+            allowedSites: allowedSites,
             allowPrestageOnAssign: allowPrestageOnAssign,
             returnToServiceOptions: rtsGrantingRoleSeen
                 ? AccessConfiguration.ReturnToServiceOptions(
@@ -311,4 +330,26 @@ struct UserCapabilities: Equatable {
         let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return allowedPrestages.contains(candidate)
     }
+
+    // MARK: - Site allow-list gate (role-only, `all` sentinel)
+
+    /// Whether every site Jamf returns is in scope.
+    var allowsAllSites: Bool {
+        AccessConfiguration.ABMAllowList.containsSentinel(allowedSites)
+    }
+
+    /// Whether the user may move a device INTO this site. Matched on Jamf's
+    /// site ID, unlike the MDM-server and PreStage gates which match names —
+    /// see `allowedSites`. Sentinel interpreted BEFORE id matching, so a site
+    /// whose id is literally "all" could never be granted individually (Jamf
+    /// ids are numeric, so this is theoretical).
+    func canMoveDevice(toSiteID id: String) -> Bool {
+        if allowsAllSites { return true }
+        let candidate = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !candidate.isEmpty && allowedSites.contains(candidate)
+    }
+
+    /// Whether moveToSite has anywhere to go at all — the emptiness check that
+    /// makes the action fail closed rather than opening an empty picker.
+    var hasAnyAllowedSite: Bool { !allowedSites.isEmpty }
 }

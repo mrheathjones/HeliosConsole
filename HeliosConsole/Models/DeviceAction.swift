@@ -36,6 +36,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
     case unlockUserAccount
     // Inventory
     case sendBlankPush
+    // Site
+    case moveToSite
     // Apple Business Manager
     case abmAssign
     case abmUnassign
@@ -52,6 +54,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case security = "Security"
         case userManagement = "User Management"
         case inventory = "Inventory"
+        case site = "Site"
         case appleBusinessManager = "Apple Business Manager"
         case preStage = "Pre-Stage"
 
@@ -70,6 +73,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
             return .userManagement
         case .sendBlankPush:
             return .inventory
+        case .moveToSite:
+            return .site
         case .abmAssign, .abmUnassign:
             return .appleBusinessManager
         case .assignPreStage:
@@ -95,6 +100,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewFileVaultKey: return "FileVault Key"
         case .unlockUserAccount: return "Unlock User Account"
         case .sendBlankPush: return "Send Blank Push"
+        case .moveToSite: return "Move to Site"
         case .abmAssign: return "Assign to MDM Server"
         case .abmUnassign: return "Unassign from MDM Server"
         case .assignPreStage: return "Assign to PreStage"
@@ -127,6 +133,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewLocalAdminPassword: return "View Local Admin Password?"
         case .viewFileVaultKey: return "View FileVault Recovery Key?"
         case .sendBlankPush: return "Send Blank Push?"
+        case .moveToSite: return "Move to Site?"
         case .screenShare: return "Screen Share?"
         case .unlockUserAccount: return "Unlock User Account?"
         case .abmAssign: return "Assign to MDM Server?"
@@ -149,6 +156,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewLocalAdminPassword: return "This will retrieve and display the local administrator password for this device. This action is logged for security auditing."
         case .viewFileVaultKey: return "This will retrieve and display the FileVault personal recovery key for this device. This key can be used to unlock the encrypted disk. This action is logged for security auditing."
         case .sendBlankPush: return "This will send an APNs (Apple Push Notification) to the device, prompting it to check in with Jamf Pro. Use this to verify device connectivity or to trigger pending MDM commands."
+        case .moveToSite: return "This will change the Jamf Pro site the device's record belongs to. Nothing changes on the device itself, but site membership drives scoping — policies, profiles and group memberships targeted by site will start or stop applying at the device's next check-in." // Fallback only — the picker sheet composes its own copy from the chosen site.
         case .screenShare: return "This will open a screen sharing session to the device using Apple's built-in Screen Sharing app. If the device is on VPN, the VPN IP address will be used."
         case .unlockUserAccount: return "This will unlock a local user account on the device. This action is logged for security auditing."
         case .abmAssign: return "This will assign the device's serial number to the selected MDM server in Apple Business Manager. Nothing changes on the device now — the assignment determines which MDM the device enrolls with at its next Automated Device Enrollment. If the device is currently assigned to a different MDM server, it will be reassigned."
@@ -170,6 +178,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewLocalAdminPassword: return "key.fill"
         case .viewFileVaultKey: return "lock.shield"
         case .sendBlankPush: return "bell.badge"
+        case .moveToSite: return "building.2"
         case .screenShare: return "shared.with.you"
         case .unlockUserAccount: return "person.badge.key"
         case .abmAssign: return "externaldrive.badge.plus"
@@ -189,6 +198,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewLocalAdminPassword: return .purple
         case .viewFileVaultKey: return .green
         case .sendBlankPush: return .blue
+        case .moveToSite: return .indigo
         case .screenShare: return .cyan
         case .unlockUserAccount: return .blue
         case .abmAssign: return .blue
@@ -210,6 +220,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewLocalAdminPassword: return "View Password"
         case .viewFileVaultKey: return "View Key"
         case .sendBlankPush: return "Send Push"
+        case .moveToSite: return "Move"
         case .screenShare: return "Connect"
         case .unlockUserAccount: return "Unlock"
         case .abmAssign: return "Assign"
@@ -246,6 +257,7 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         case .viewLocalAdminPassword: return "View Local Admin Password"
         case .viewFileVaultKey: return "View FileVault Key"
         case .sendBlankPush: return "Send Blank Push"
+        case .moveToSite: return "Move to Site"
         case .screenShare: return "Screen Share"
         case .unlockUserAccount: return "Unlock User Account"
         case .abmAssign: return "ABM Assign to MDM"
@@ -266,6 +278,8 @@ enum DeviceAction: String, CaseIterable, Identifiable {
             return "User Management"
         case .sendBlankPush:
             return "Inventory"
+        case .moveToSite:
+            return "Site"
         case .abmAssign, .abmUnassign:
             return "Apple Business Manager"
         case .assignPreStage:
