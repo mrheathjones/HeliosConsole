@@ -11,8 +11,31 @@ import SwiftUI
 struct MobileDeviceView: View {
     let device: MobileDevice
     @Environment(\.dismiss) private var dismiss
-    
+
+    @ObservedObject private var configManager = MDMConfigurationManager.shared
+    @ObservedObject private var session = UserSession.shared
+
     @State private var selectedSection: MobileDeviceSection = .overview
+
+    // MARK: - Action State
+    @State private var showingSiteMoveSheet: Bool = false
+
+    /// The mobile-device action policy — the SAME role-capability gating as
+    /// computers, but consulting the user's `mobileDeviceActions` grant
+    /// (DeviceActionPolicy.Platform.mobileDevice). Recomputed on config or
+    /// capability change via the observed managers. `.moveToSite` also gates
+    /// on a non-empty `allowedSites` (shared with computers) — see
+    /// DeviceActionPolicy.hasUsableScope.
+    private var actionPolicy: DeviceActionPolicy {
+        configManager.configuration.mobileDeviceActionPolicy(capabilities: session.capabilities)
+    }
+
+    /// Mobile actions that actually have a UI/execution path today. The
+    /// `mobileDeviceActions` schema enum lists more (sendBlankPush, restart,
+    /// shutdown, wipe) as forward-looking, but nothing renders them yet — so
+    /// the menu is filtered to this set to avoid offering dead buttons. Add a
+    /// case here when its mobile flow lands.
+    private let implementedMobileActions: [DeviceAction] = [.moveToSite]
     
     // MARK: - Search State for Each Section
     @State private var applicationsSearchText: String = ""
@@ -74,8 +97,25 @@ struct MobileDeviceView: View {
             }
         }
         .navigationBarBackButtonHidden(true)
+        .sheet(isPresented: $showingSiteMoveSheet) {
+            SiteMoveSheet(
+                deviceID: device.id,
+                deviceName: device.displayName,
+                serialNumber: device.serialNumber ?? "",
+                currentSiteID: device.site?.id,
+                currentSiteName: device.site?.name,
+                title: ActionBranding.label(for: .moveToSite),
+                policyProvider: { actionPolicy },
+                performMove: { siteID in
+                    try await JamfSiteService.shared.moveMobileDevice(mobileDeviceID: device.id, toSiteID: siteID)
+                },
+                onFinished: { success, _, detail in
+                    logMobileAction(.moveToSite, success: success, detail: detail)
+                }
+            )
+        }
     }
-    
+
     // MARK: - Device Header
     
     private var deviceHeader: some View {
@@ -160,12 +200,100 @@ struct MobileDeviceView: View {
             // Actions
             HStack(spacing: 12) {
                 actionButton(icon: "arrow.clockwise", title: "Refresh")
-                actionButton(icon: "ellipsis", title: "More")
+
+                // Fail-closed like the computer view: the menu renders only
+                // when the user's role grants at least one IMPLEMENTED mobile
+                // action (today just Move to Site, and only with a non-empty
+                // allowedSites). No grant → no button, rather than a dead
+                // placeholder. Bound once per render — the computed policy
+                // rebuilds its grants on every access.
+                let policy = actionPolicy
+                let visible = implementedMobileActions.filter { policy.isAllowed($0) }
+                if !visible.isEmpty {
+                    actionsMenu(visible: visible)
+                }
             }
         }
         .padding(.horizontal, 32)
         .padding(.vertical, 24)
         .background(Color.black.opacity(0.3))
+    }
+
+    // MARK: - Actions Menu
+
+    /// Header actions menu for mobile devices. Mirrors the computer view's
+    /// menu (sectioned, policy-gated, ActionBranding label/icon overrides)
+    /// but is filtered to `implementedMobileActions` so nothing dead is ever
+    /// offered. Styled to match the header's other `actionButton`s rather
+    /// than the computer view's pill.
+    private func actionsMenu(visible: [DeviceAction]) -> some View {
+        Menu {
+            ForEach(DeviceAction.MenuSection.allCases, id: \.self) { section in
+                let sectionActions = visible.filter { $0.menuSection == section }
+                if !sectionActions.isEmpty {
+                    Section(section.title) {
+                        ForEach(sectionActions) { action in
+                            Button(role: action.isDestructive ? .destructive : nil) {
+                                trigger(action)
+                            } label: {
+                                Label(ActionBranding.label(for: action), systemImage: ActionBranding.icon(for: action))
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16))
+                Text("More")
+                    .font(.system(size: 11))
+            }
+            .foregroundColor(.gray)
+            .frame(width: 60, height: 50)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+    }
+
+    // MARK: - Action Routing
+
+    /// Routes a granted mobile action. Own-sheet actions (moveToSite) open
+    /// their sheet after a defense-in-depth policy re-check; the menu already
+    /// filters by policy, but never trust the UI filter alone. As more mobile
+    /// actions gain flows, add their routing here.
+    private func trigger(_ action: DeviceAction) {
+        switch action {
+        case .moveToSite:
+            if actionPolicy.denialReason(for: .moveToSite) != nil {
+                logMobileAction(.moveToSite, success: false, detail: "Denied by policy at trigger (menu filter bypassed)")
+            } else {
+                showingSiteMoveSheet = true
+            }
+        default:
+            // Not reachable: the menu only offers implementedMobileActions.
+            logMobileAction(action, success: false, detail: "No mobile flow implemented for '\(action.rawValue)'")
+        }
+    }
+
+    /// Audit-logs a mobile action end state, mirroring the computer view's
+    /// logABMAction. deviceId uses the mobile inventory id.
+    private func logMobileAction(_ action: DeviceAction, success: Bool, detail: String?) {
+        ActionLogService.shared.logAction(
+            actionName: action.logName,
+            actionCategory: action.logCategory,
+            deviceName: device.displayName,
+            deviceSerialNumber: device.serialNumber ?? "Unknown",
+            deviceId: device.id,
+            success: success,
+            errorMessage: detail
+        )
     }
     
     private func statusBadge(_ text: String, color: Color) -> some View {

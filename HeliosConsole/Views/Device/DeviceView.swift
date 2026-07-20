@@ -85,6 +85,7 @@ struct DeviceView: View {
     @State private var showingUnlockAccountSheet: Bool = false
     @State private var showingABMAssignSheet: Bool = false
     @State private var showingPreStageAssignSheet: Bool = false
+    @State private var showingSiteMoveSheet: Bool = false
     @State private var unlockUsername: String = ""
     @State private var showingLocalAdminPassword: Bool = false
     @State private var localAdminPassword: String = ""
@@ -232,6 +233,24 @@ struct DeviceView: View {
                 policyProvider: { actionPolicy },
                 onFinished: { success, _, detail in
                     logABMAction(.assignPreStage, serial: displayComputer.serialNumber ?? "Unknown",
+                                 success: success, error: detail)
+                }
+            )
+        }
+        .sheet(isPresented: $showingSiteMoveSheet) {
+            SiteMoveSheet(
+                deviceID: displayComputer.id,
+                deviceName: displayComputer.displayName,
+                serialNumber: displayComputer.serialNumber ?? "",
+                currentSiteID: displayComputer.general?.site?.id,
+                currentSiteName: displayComputer.general?.site?.name,
+                title: ActionBranding.label(for: .moveToSite),
+                policyProvider: { actionPolicy },
+                performMove: { siteID in
+                    try await JamfSiteService.shared.moveComputer(computerID: displayComputer.id, toSiteID: siteID)
+                },
+                onFinished: { success, _, detail in
+                    logABMAction(.moveToSite, serial: displayComputer.serialNumber ?? "Unknown",
                                  success: success, error: detail)
                 }
             )
@@ -739,6 +758,20 @@ struct DeviceView: View {
             }
             return
         }
+        if action == .moveToSite {
+            // Site selection happens inside the sheet, so it owns the whole
+            // flow (like abmAssign / assignPreStage). Same defense in depth:
+            // never trust the menu filter alone. Note denialReason also
+            // catches the empty-allowedSites case, so a role granted the
+            // action with no sites reaches the audit log rather than an
+            // empty picker.
+            if let denial = actionPolicy.denialReason(for: .moveToSite) {
+                Task { await reportActionDenial(denial, for: .moveToSite) }
+            } else {
+                showingSiteMoveSheet = true
+            }
+            return
+        }
         if action == .returnToService {
             // Freeze the plan the confirmation dialog will describe.
             pendingRTSOptions = actionPolicy.returnToServiceOptions()
@@ -803,6 +836,11 @@ struct DeviceView: View {
             // Never routed here (trigger() opens the sheet, which owns the
             // flow and its own audit logging) — keep the switch exhaustive.
             await MainActor.run { showingPreStageAssignSheet = true }
+            return
+        case .moveToSite:
+            // Never routed here (trigger() opens the sheet, which owns the
+            // flow and its own audit logging) — keep the switch exhaustive.
+            await MainActor.run { showingSiteMoveSheet = true }
             return
         }
         
@@ -905,7 +943,20 @@ struct DeviceView: View {
     /// (executeAction and the Unlock Account sheet): surfaces the
     /// "Action Not Permitted" alert and audit-logs which layer denied.
     private func reportActionDenial(_ denial: DeviceActionPolicy.DenialReason, for action: DeviceAction) async {
-        // Gating is role-only now: the sole denial reason is role capability.
+        // The operator-facing copy is the same either way — "not available for
+        // your role" is true of both — but the AUDIT LOG distinguishes them,
+        // because an emptyScope denial is a profile authoring mistake (the
+        // action was granted, then scoped to nothing) and would otherwise be
+        // indistinguishable from an intentional denial when someone asks why
+        // a technician cannot see a button they were told they have.
+        let auditDetail: String
+        switch denial {
+        case .roleCapability:
+            auditDetail = "Blocked by role capability (no role held by this user grants '\(action.rawValue)' on computers; roles: \(signedInRolesDescription))"
+        case .emptyScope:
+            auditDetail = "Blocked by empty scope ('\(action.rawValue)' IS granted, but the role's target allow-list is empty — check allowedSites in the access profile; roles: \(signedInRolesDescription))"
+        }
+
         await MainActor.run {
             commandResult = CommandResult(
                 success: false,
@@ -921,7 +972,7 @@ struct DeviceView: View {
             deviceSerialNumber: displayComputer.serialNumber ?? "Unknown",
             deviceId: displayComputer.id,
             success: false,
-            errorMessage: "Blocked by role capability (no role held by this user grants '\(action.rawValue)' on computers; roles: \(signedInRolesDescription))"
+            errorMessage: auditDetail
         )
     }
 

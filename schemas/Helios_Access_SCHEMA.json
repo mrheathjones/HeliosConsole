@@ -90,7 +90,8 @@
                 "wipe",
                 "abmAssign",
                 "abmUnassign",
-                "assignPreStage"
+                "assignPreStage",
+                "moveToSite"
               ]
             },
             "default": []
@@ -98,11 +99,12 @@
           "mobileDeviceActions": {
             "type": "array",
             "title": "Allowed Mobile Device Actions \u2014 usable by THIS ROLE",
-            "description": "Mobile-device action ids this role may run. Forward-looking \u2014 the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
+            "description": "Mobile-device action ids this role may run. Today only `moveToSite` has a UI in the mobile device detail view (Move to Site, gated additionally by allowedSites); the others (sendBlankPush, restart, shutdown, wipe) are forward-looking and render nothing yet. Absent or empty = none.",
             "items": {
               "type": "string",
               "title": "Action ID",
               "enum": [
+                "moveToSite",
                 "sendBlankPush",
                 "restart",
                 "shutdown",
@@ -145,6 +147,16 @@
             "items": {
               "type": "string",
               "title": "PreStage Display Name (or `all`)"
+            },
+            "default": []
+          },
+          "allowedSites": {
+            "type": "array",
+            "title": "Allowed Sites (Move to Site action)",
+            "description": "Jamf Pro site IDs this role may move a device INTO with the moveToSite action — gates BOTH the computer and mobile-device Move to Site flows. Each entry must be a site ID (the numeric id, NOT the display name — sites get renamed, ids do not); the reserved literal `all` grants every site Jamf returns. The picker always shows the site's display name. Absent or empty = the moveToSite action is hidden even when listed in computerActions or mobileDeviceActions (fail-closed). Unioned across matched roles. Typical admin role: [\"all\"]; support role: a curated list like [\"12\",\"17\",\"23\"].",
+            "items": {
+              "type": "string",
+              "title": "Site ID (or `all`)"
             },
             "default": []
           },

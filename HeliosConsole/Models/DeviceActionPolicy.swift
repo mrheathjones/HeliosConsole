@@ -42,9 +42,13 @@ struct DeviceActionPolicy {
     static let denyAll = DeviceActionPolicy(capabilities: .none, platform: .computer)
 
     /// Kept for call-site compatibility with the defense-in-depth guards.
-    /// There is now only one layer, so the sole reason is `roleCapability`.
+    /// `roleCapability` is the ordinary denial; `emptyScope` means the role
+    /// DOES grant the action but scoped it to nothing, which is worth
+    /// distinguishing in the audit log because it is almost always a profile
+    /// authoring mistake rather than an intentional denial.
     enum DenialReason {
         case roleCapability
+        case emptyScope
     }
 
     /// Whether the user's roles grant `action` on this policy's platform.
@@ -55,13 +59,26 @@ struct DeviceActionPolicy {
         }
     }
 
-    func denialReason(for action: DeviceAction) -> DenialReason? {
-        capabilityGrants(action) ? nil : .roleCapability
+    /// Actions whose grant is meaningless without a non-empty target scope.
+    /// Granting moveToSite with no `allowedSites` would open a picker with
+    /// nothing in it, so the action is hidden instead (fail-closed).
+    private func hasUsableScope(_ action: DeviceAction) -> Bool {
+        switch action {
+        case .moveToSite: return capabilities.hasAnyAllowedSite
+        default: return true
+        }
     }
 
-    /// The single allow check: the signed-in user's role grants the action.
+    func denialReason(for action: DeviceAction) -> DenialReason? {
+        guard capabilityGrants(action) else { return .roleCapability }
+        guard hasUsableScope(action) else { return .emptyScope }
+        return nil
+    }
+
+    /// The single allow check: the signed-in user's role grants the action,
+    /// AND the action has somewhere to act (see `hasUsableScope`).
     func isAllowed(_ action: DeviceAction) -> Bool {
-        capabilityGrants(action)
+        denialReason(for: action) == nil
     }
 
     // MARK: - Role-scoped action options (thin pass-through to capabilities)
@@ -89,6 +106,15 @@ struct DeviceActionPolicy {
     }
 
     var allowsAllPrestages: Bool { capabilities.allowsAllPrestages }
+
+    /// Whether the role permits moving a device into this Jamf site ID (the
+    /// `all` sentinel is handled inside). Used to filter the fetched site
+    /// list down to the role's curated scope.
+    func canMoveDevice(toSiteID id: String) -> Bool {
+        capabilities.canMoveDevice(toSiteID: id)
+    }
+
+    var allowsAllSites: Bool { capabilities.allowsAllSites }
 
     /// False → the Actions button is not rendered at all.
     func hasAnyVisibleAction() -> Bool {

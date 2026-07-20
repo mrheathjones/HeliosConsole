@@ -182,6 +182,15 @@ struct AccessConfiguration: Codable {
         /// names plus the RESERVED literal `all`. Absent/empty → no PreStage
         /// offered (fail-closed).
         var allowedPrestages: [String]?
+        /// Jamf site IDs this role may move a device INTO (moveToSite).
+        /// Matched against `JamfSite.id` — IDs, NOT names, because sites get
+        /// renamed and a rename must not silently widen or void a role's
+        /// scope. The picker always DISPLAYS the name it resolved from Jamf.
+        /// Exact id match plus the RESERVED literal `all` (any letter case) =
+        /// every site Jamf returns. Absent/empty → moveToSite is HIDDEN even
+        /// when granted in `computerActions`, since a move with nowhere to go
+        /// is not a capability (fail-closed).
+        var allowedSites: [String]?
         /// Whether abmAssign offers the optional PreStage registration step
         /// after a successful assignment. Absent → false (fail-closed).
         var allowPrestageOnAssign: Bool?
@@ -214,6 +223,7 @@ struct AccessConfiguration: Codable {
         var effectiveCleanupActions: [String] { Self.normalizedList(cleanupActions) }
         var effectiveAllowedMdmServers: [String] { Self.normalizedList(allowedMdmServers) }
         var effectiveAllowedPrestages: [String] { Self.normalizedList(allowedPrestages) }
+        var effectiveAllowedSites: [String] { Self.normalizedList(allowedSites) }
 
         /// Absent/malformed → false (fail-closed).
         var effectiveAllowPrestageOnAssign: Bool { allowPrestageOnAssign ?? false }
@@ -222,7 +232,8 @@ struct AccessConfiguration: Codable {
 
         enum CodingKeys: String, CodingKey {
             case name, modules, deviceTabs, computerActions, mobileDeviceActions, cleanupActions
-            case allowedMdmServers, allowedPrestages, allowPrestageOnAssign, returnToServiceOptions, allowExport
+            case allowedMdmServers, allowedPrestages, allowedSites
+            case allowPrestageOnAssign, returnToServiceOptions, allowExport
             case allowScorecardDiagnostics
         }
 
@@ -235,6 +246,7 @@ struct AccessConfiguration: Codable {
             cleanupActions: [String]? = nil,
             allowedMdmServers: [String]? = nil,
             allowedPrestages: [String]? = nil,
+            allowedSites: [String]? = nil,
             allowPrestageOnAssign: Bool? = nil,
             returnToServiceOptions: ReturnToServiceOptions? = nil,
             allowExport: Bool? = nil,
@@ -248,6 +260,7 @@ struct AccessConfiguration: Codable {
             self.cleanupActions = cleanupActions
             self.allowedMdmServers = allowedMdmServers
             self.allowedPrestages = allowedPrestages
+            self.allowedSites = allowedSites
             self.allowPrestageOnAssign = allowPrestageOnAssign
             self.returnToServiceOptions = returnToServiceOptions
             self.allowExport = allowExport
@@ -273,6 +286,7 @@ struct AccessConfiguration: Codable {
             cleanupActions = Self.decodeList(container, .cleanupActions)
             allowedMdmServers = Self.decodeList(container, .allowedMdmServers)
             allowedPrestages = Self.decodeList(container, .allowedPrestages)
+            allowedSites = Self.decodeList(container, .allowedSites)
             allowPrestageOnAssign = Self.decodeBool(container, .allowPrestageOnAssign)
             returnToServiceOptions = try? container.decodeIfPresent(ReturnToServiceOptions.self, forKey: .returnToServiceOptions)
             allowExport = Self.decodeBool(container, .allowExport)
