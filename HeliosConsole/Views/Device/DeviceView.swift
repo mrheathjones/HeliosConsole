@@ -934,9 +934,9 @@ struct DeviceView: View {
     // MARK: - Screen Share
     
     private func launchScreenShare() async {
-        // Prefer the VPN IP when the profile names the extension attribute
-        // that carries it (core jamfPro.vpnIPExtensionAttributeName;
-        // unset = use the reported LAN IP).
+        // Prefer the VPN IP when the profile enables the lookup and identifies
+        // the extension attribute that carries it (core
+        // jamfPro.vpnIPExtensionAttributeEnabled / …ID; off = LAN IP).
         let vpnIP = configManager.configuration.vpnIPExtensionAttribute
             .flatMap { getExtensionAttributeValue($0) }
         let hasVPN = vpnIP != nil && !vpnIP!.isEmpty && vpnIP!.uppercased() != "N/A"
@@ -2917,7 +2917,7 @@ struct DeviceView: View {
     
     private var ipAddressCard: some View {
         // Check for the configured VPN IP extension attribute first
-        // (core jamfPro.vpnIPExtensionAttributeName; unset = LAN IP only).
+        // (core jamfPro.vpnIPExtensionAttributeEnabled / …ID; off = LAN IP only).
         let vpnIP = configManager.configuration.vpnIPExtensionAttribute
             .flatMap { getExtensionAttributeValue($0) }
         // Only consider VPN valid if it has a value that's not empty or "N/A"
@@ -2972,21 +2972,21 @@ struct DeviceView: View {
         )
     }
     
-    private func getExtensionAttributeValue(_ name: String) -> String? {
+    private func getExtensionAttributeValue(_ ref: VPNIPExtensionAttributeRef) -> String? {
         // Check general extension attributes
         if let eas = displayComputer.general?.extensionAttributes {
-            if let ea = eas.first(where: { $0.name == name }) {
+            if let ea = eas.first(where: { ref.matches($0) }) {
                 return ea.values?.first
             }
         }
-        
+
         // Check top-level extension attributes
         if let eas = displayComputer.extensionAttributes {
-            if let ea = eas.first(where: { $0.name == name }) {
+            if let ea = eas.first(where: { ref.matches($0) }) {
                 return ea.values?.first
             }
         }
-        
+
         return nil
     }
     

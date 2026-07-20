@@ -441,6 +441,22 @@ struct ExtensionAttribute: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
+/// How the profile identifies a single Extension Attribute. `id` matches the
+/// stable `definitionId`; `name` is the deprecated form kept for one release
+/// (an admin renaming the EA in Jamf silently breaks a name match).
+enum VPNIPExtensionAttributeRef: Codable, Equatable, Sendable {
+    case id(Int)
+    case name(String)
+
+    /// Whether this reference identifies the given attribute.
+    func matches(_ attribute: ExtensionAttribute) -> Bool {
+        switch self {
+        case .id(let id): return attribute.definitionId == id
+        case .name(let name): return attribute.name == name
+        }
+    }
+}
+
 // MARK: - Content Caching
 
 struct ContentCaching: Codable, Hashable, Sendable {

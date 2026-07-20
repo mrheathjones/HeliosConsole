@@ -147,18 +147,23 @@ struct CoreConfiguration: Codable {
         /// URLSession request timeout in seconds.
         var requestTimeout: Int?
 
-        /// Name of the Jamf Extension Attribute holding a device's VPN IP,
-        /// used by Screen Share (and the device IP card) to prefer the VPN
-        /// address. Org-specific — absent/empty disables the VPN-IP lookup
-        /// and the app uses the reported LAN IP.
-        ///
-        /// TODO: migrate to the EA's *id* rather than its name, matching the
-        /// convention adopted for Jamf sites in healthScorecard — an admin can
-        /// rename an Extension Attribute in Jamf and silently break this lookup,
-        /// whereas the id is stable. The name should be resolved from the id for
-        /// display only. Requires reading the EA id from
-        /// /api/v1/computer-extension-attributes and a one-release fallback that
-        /// accepts either, since existing profiles deliver the name.
+        /// Master switch for the VPN-IP lookup. Not every org publishes a VPN
+        /// address as an Extension Attribute, so the feature is off unless the
+        /// profile turns it on. Off = Screen Share and the device IP card use
+        /// the reported LAN IP.
+        var vpnIPExtensionAttributeEnabled: Bool?
+
+        /// `definitionId` of the Jamf Extension Attribute holding a device's
+        /// VPN IP. The id is stable across renames, unlike the name — an admin
+        /// renaming the EA in Jamf must not silently break the lookup. Read
+        /// only when `vpnIPExtensionAttributeEnabled` is true.
+        var vpnIPExtensionAttributeID: Int?
+
+        /// DEPRECATED — superseded by `vpnIPExtensionAttributeID`. Matches the
+        /// EA by name, which breaks when an admin renames it in Jamf. Honored
+        /// for one release so profiles delivering only this key keep working;
+        /// removed in the next major. See `effectiveVPNIPExtensionAttribute`
+        /// for the fallback's enablement semantics.
         var vpnIPExtensionAttributeName: String?
 
         /// Lifetime in days for per-user Jamf API client credentials
@@ -195,10 +200,33 @@ struct CoreConfiguration: Codable {
         /// Clamped 5...3600 s (see effectiveConnectionTimeout).
         var effectiveRequestTimeout: Int { min(max(requestTimeout ?? 60, 5), 3600) }
 
-        /// VPN-IP extension attribute — nil when not configured (feature off).
-        var effectiveVPNIPExtensionAttributeName: String? {
-            let name = vpnIPExtensionAttributeName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return name.isEmpty ? nil : name
+        /// How to locate the VPN-IP extension attribute on a device record —
+        /// nil when the feature is off or unconfigured (LAN IP only).
+        ///
+        /// Enablement, in order:
+        /// 1. `vpnIPExtensionAttributeEnabled == false` → off, unconditionally.
+        ///    An explicit off always wins, including over the legacy name.
+        /// 2. `vpnIPExtensionAttributeEnabled == true` → on; prefer the id and
+        ///    fall back to the legacy name, since a profile may be re-pushed
+        ///    with the toggle before anyone fills in the id.
+        /// 3. Toggle absent + legacy name present → on. This is a deliberate
+        ///    exception to the fail-closed rule, scoped to the legacy key: an
+        ///    existing deployment upgrading to a build that adds the toggle
+        ///    must not silently lose VPN IP before its profile is re-pushed.
+        ///    Removed with `vpnIPExtensionAttributeName` in the next major.
+        /// 4. Otherwise → off.
+        var effectiveVPNIPExtensionAttribute: VPNIPExtensionAttributeRef? {
+            if vpnIPExtensionAttributeEnabled == false { return nil }
+
+            let legacyName = vpnIPExtensionAttributeName?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            guard vpnIPExtensionAttributeEnabled == true || !legacyName.isEmpty else {
+                return nil
+            }
+
+            if let id = vpnIPExtensionAttributeID, id > 0 { return .id(id) }
+            return legacyName.isEmpty ? nil : .name(legacyName)
         }
 
         /// Credential lifetime with the documented default applied

@@ -44,10 +44,21 @@
           "title": "Request Timeout (seconds)",
           "default": 60
         },
+        "vpnIPExtensionAttributeEnabled": {
+          "type": "boolean",
+          "title": "Use Extension Attribute for VPN IP",
+          "description": "Turn on if your org publishes each device's VPN IP address as a Jamf Extension Attribute. When on, Screen Share and the device IP card prefer that address over the reported LAN IP. Off = LAN IP only.",
+          "default": false
+        },
+        "vpnIPExtensionAttributeID": {
+          "type": "integer",
+          "title": "VPN IP Extension Attribute ID",
+          "description": "Numeric ID of the Jamf Extension Attribute holding the VPN IP address. Find it in Jamf Pro under Settings > Computer Management > Extension Attributes — the id appears in the page URL. The ID is used rather than the name because renaming the attribute in Jamf would otherwise silently break the lookup. Only read when 'Use Extension Attribute for VPN IP' is on."
+        },
         "vpnIPExtensionAttributeName": {
           "type": "string",
-          "title": "VPN IP Extension Attribute Name",
-          "description": "Name of the Jamf Extension Attribute holding a device's VPN IP address. When set, Screen Share and the device IP card prefer this address over the reported LAN IP. Empty = disabled (LAN IP only).",
+          "title": "VPN IP Extension Attribute Name (deprecated)",
+          "description": "DEPRECATED — use 'VPN IP Extension Attribute ID' instead. Matches the Extension Attribute by name, which breaks if an admin renames it in Jamf. Still honored for one release so existing profiles keep working: if this is set and the enable toggle is absent, the lookup stays on. Removed in the next major version.",
           "default": ""
         },
         "userCredentialLifetimeDays": {
