@@ -41,10 +41,11 @@ struct MDMConfiguration: Codable {
     // anymore. Kept only until the core key is removed in a later major.
     let screenShareEnabled: Bool
 
-    /// Jamf Extension Attribute name holding a device's VPN IP (core
-    /// jamfPro.vpnIPExtensionAttributeName). nil = VPN-IP lookup disabled;
-    /// Screen Share and the IP card use the reported LAN IP.
-    let vpnIPExtensionAttribute: String?
+    /// How to locate the Jamf Extension Attribute holding a device's VPN IP
+    /// (core jamfPro.vpnIPExtensionAttributeEnabled / …ID, with the deprecated
+    /// …Name as fallback). nil = VPN-IP lookup disabled; Screen Share and the
+    /// IP card use the reported LAN IP.
+    let vpnIPExtensionAttribute: VPNIPExtensionAttributeRef?
 
     /// Lifetime (days) for per-user Jamf API credentials provisioned by the
     /// app (core jamfPro.userCredentialLifetimeDays, default 90).
@@ -460,7 +461,7 @@ struct MDMConfiguration: Codable {
         eraseAckTimeoutSeconds: Int = 180,
         eraseAckPollIntervalSeconds: Int = 15,
         screenShareEnabled: Bool,
-        vpnIPExtensionAttribute: String? = nil,
+        vpnIPExtensionAttribute: VPNIPExtensionAttributeRef? = nil,
         userCredentialLifetimeDays: Int = 90,
         abmAPIBaseURL: String = "https://api-business.apple.com/v1",
         abmOAuthScope: String = "business.api",
@@ -659,7 +660,7 @@ struct MDMConfiguration: Codable {
             eraseAckTimeoutSeconds: jamfPro?.effectiveEraseAckTimeoutSeconds ?? 180,
             eraseAckPollIntervalSeconds: jamfPro?.effectiveEraseAckPollIntervalSeconds ?? 15,
             screenShareEnabled: jamfPro?.effectiveScreenShareEnabled ?? false,
-            vpnIPExtensionAttribute: jamfPro?.effectiveVPNIPExtensionAttributeName,
+            vpnIPExtensionAttribute: jamfPro?.effectiveVPNIPExtensionAttribute,
             userCredentialLifetimeDays: jamfPro?.effectiveUserCredentialLifetimeDays ?? 90,
             abmAPIBaseURL: (core?.appleBusinessManager?.effectiveServiceType ?? .business).apiBaseURL,
             abmOAuthScope: (core?.appleBusinessManager?.effectiveServiceType ?? .business).oauthScope,

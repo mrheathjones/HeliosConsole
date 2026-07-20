@@ -45,9 +45,20 @@
 				<key>requiredRoleName</key>
 				<string>HeliosConsoleAPIRole</string>
 
-			<!-- Optional: name of the Jamf Extension Attribute holding a
-			     device's VPN IP. When set, Screen Share prefers it over
-			     the LAN IP. Empty/omitted = disabled.
+			<!-- Optional: prefer a VPN IP published as a Jamf Extension
+			     Attribute over the reported LAN IP (Screen Share and the
+			     device IP card). Off unless the toggle is on. Identify the
+			     EA by its numeric id — the id survives a rename in Jamf,
+			     the name does not.
+			<key>vpnIPExtensionAttributeEnabled</key>
+			<true/>
+			<key>vpnIPExtensionAttributeID</key>
+			<integer>42</integer> -->
+
+			<!-- DEPRECATED: identifies the same EA by name. Honored for one
+			     release — if this is set and the toggle above is absent, the
+			     lookup stays on so existing profiles keep working. Migrate to
+			     vpnIPExtensionAttributeID; removed in the next major.
 			<key>vpnIPExtensionAttributeName</key>
 			<string>EA_VPN_IP_ADDRESS</string> -->
 
