@@ -27,10 +27,11 @@ import Foundation
 /// Cleanup module. Distinct from the app-local `CleanupSettings` service
 /// class (Cleanup/Services/CleanupSettings.swift).
 ///
-/// HOME DOMAIN: `features.cleanup`. It is still decoded from `access.cleanup`
-/// for backward compatibility (aliased as `AccessConfiguration.CleanupSettings`)
-/// because deployed access profiles carry it; the composition layer prefers
-/// the features copy. These values GRANT NOTHING — which roles may see the
+/// HOME DOMAIN: `features.cleanup` — read from there and nowhere else. It
+/// moved from `access.cleanup` in the schema-3.0 domain cleanup; the
+/// transitional read of the access block has been REMOVED, so the block in a
+/// stale access profile is ignored and the values fall to their defaults.
+/// These values GRANT NOTHING — which roles may see the
 /// Cleanup module and which sub-actions they may run stay in the access
 /// domain.
 struct ManagedCleanupSettings: Codable {
@@ -76,20 +77,15 @@ struct ManagedCleanupSettings: Codable {
         defaultSiteID = try container.decodeIfPresent(String.self, forKey: .defaultSiteID)
     }
 
-    /// True when the profile delivered no cleanup values at all — the signal
-    /// the composition layer uses to fall back to the legacy access copy.
-    var isEmpty: Bool {
-        staleDays == nil && defaultStaticGroupID == nil && defaultSiteID == nil
-    }
 }
 
 /// The managed `localAdministration` block: the local admin account whose
 /// LAPS password Helios looks up in DeviceView.
 ///
-/// HOME DOMAIN: `features.localAdministration`. It is still decoded from
-/// `core.localAdministration` for backward compatibility (aliased as
-/// `CoreConfiguration.LocalAdminSettings`) because deployed core profiles
-/// carry it; the composition layer prefers the features copy.
+/// HOME DOMAIN: `features.localAdministration` — read from there and nowhere
+/// else. It moved from `core.localAdministration` in the schema-3.0 domain
+/// cleanup; the transitional read of the core copy has been REMOVED, so the
+/// key in a stale core profile is ignored and the value falls to its default.
 struct ManagedLocalAdminSettings: Codable {
 
     /// Whether local administration features are enabled.
@@ -107,9 +103,6 @@ struct ManagedLocalAdminSettings: Codable {
         return name.isEmpty ? "macadmin" : name
     }
 
-    /// True when the profile delivered no values at all — the signal the
-    /// composition layer uses to fall back to the legacy core copy.
-    var isEmpty: Bool { enabled == nil && username == nil }
 }
 
 /// Feature modules & tuning for Helios Console — delivered via the
@@ -132,24 +125,25 @@ struct FeaturesConfiguration: Codable {
 
     /// Top-level UI area visibility switches (`showAnnouncements`,
     /// `showSettings`). MOVED HERE from the ui domain during the domain
-    /// cleanup: these turn FEATURES on and off — they are not branding. The
-    /// ui domain still decodes its legacy copies; the composition layer
-    /// (MDMConfiguration.build) prefers these and falls back, so already-
-    /// deployed ui profiles keep working untouched.
+    /// cleanup: these turn FEATURES on and off — they are not branding.
+    /// Read from here and nowhere else — the transitional read of the ui
+    /// copies was REMOVED at schema 3.0, so the keys in a stale ui profile
+    /// are ignored and the values fall to their defaults (both true).
     let userExperience: UserExperienceSettings?
 
     /// Cleanup module tunables (stale threshold, default static group and
     /// site). MOVED HERE from the access domain during the domain cleanup:
     /// the access domain is for GRANTS, and these grant nothing — they tune a
     /// feature. Which roles may SEE Cleanup and which sub-actions they may run
-    /// stay in access. The access domain still decodes its legacy block; the
-    /// composition layer prefers this one and falls back.
+    /// stay in access (`roles[].modules` / `cleanupActions`). Read from here
+    /// and nowhere else — the transitional read of the access block was
+    /// REMOVED at schema 3.0.
     let cleanup: ManagedCleanupSettings?
 
     /// Local administrator account settings for the DeviceView LAPS lookup.
     /// MOVED HERE from the core domain: core is connection and integration
-    /// identity, and this is a feature of a view. The core domain still
-    /// decodes its legacy copy; the composition layer prefers this one.
+    /// identity, and this is a feature of a view. Read from here and nowhere
+    /// else — the transitional read of the core copy was REMOVED at schema 3.0.
     let localAdministration: ManagedLocalAdminSettings?
 
     // MARK: - Effective accessors (defaults per schemas/Helios_Features_SCHEMA.json)
