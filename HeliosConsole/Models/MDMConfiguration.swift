@@ -142,8 +142,9 @@ struct MDMConfiguration: Codable {
     /// Feature modules & tuning (features domain, whole model).
     let features: FeaturesConfiguration?
 
-    /// Sign-in behavior preferences (core domain `authentication`; the ui
-    /// domain's legacy copy is honored as a fallback).
+    /// Sign-in behavior preferences — core domain `authentication` only. It
+    /// moved from the ui domain in the schema-3.0 cleanup and the transitional
+    /// read of the ui copy has been REMOVED.
     let authentication: AuthenticationSettings?
 
     /// Whether the Announcements area may render (features domain
