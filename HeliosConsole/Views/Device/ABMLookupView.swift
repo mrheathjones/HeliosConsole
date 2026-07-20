@@ -205,7 +205,20 @@ struct ABMLookupView: View {
             ABMDeviceDetailSheet(
                 device: device,
                 assignedServer: cache.assignedServer(forDeviceId: device.id),
-                assetTag: assetTagsBySerial[device.serialNumber.uppercased()]
+                assetTag: assetTagsBySerial[device.serialNumber.uppercased()],
+                canAssign: canAssign(device),
+                canUnassign: canUnassign(device),
+                // The detail sheet must close before the assign sheet /
+                // confirmation can present — only one sheet may be up at a
+                // time, so hand off on the next runloop pass.
+                onAssign: {
+                    selectedDevice = nil
+                    Task { @MainActor in assignSheetDevice = device }
+                },
+                onUnassign: {
+                    selectedDevice = nil
+                    Task { @MainActor in unassignConfirmDevice = device }
+                }
             )
         }
         .sheet(item: $assignSheetDevice) { device in
@@ -614,21 +627,34 @@ struct ABMLookupView: View {
 
     // MARK: - Content
 
+    /// Below this list width the row's device metadata and two labelled
+    /// action buttons start fighting for the same space, so the buttons
+    /// collapse to icon-only (tooltip + accessibility label keep the meaning).
+    private static let iconOnlyActionsWidthThreshold: CGFloat = 720
+
     private var contentView: some View {
-        ScrollView {
-            LazyVStack(spacing: 8) {
-                ForEach(filteredDevices) { device in
-                    ABMDeviceRow(
-                        device: device,
-                        serverName: cache.assignedServer(forDeviceId: device.id)?.serverName,
-                        assetTag: assetTagsBySerial[device.serialNumber.uppercased()]
-                    ) {
-                        selectedDevice = device
+        GeometryReader { proxy in
+            let iconOnlyActions = proxy.size.width < Self.iconOnlyActionsWidthThreshold
+
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(filteredDevices) { device in
+                        ABMDeviceRow(
+                            device: device,
+                            serverName: cache.assignedServer(forDeviceId: device.id)?.serverName,
+                            assetTag: assetTagsBySerial[device.serialNumber.uppercased()],
+                            canAssign: canAssign(device),
+                            canUnassign: canUnassign(device),
+                            iconOnlyActions: iconOnlyActions,
+                            onAssign: { assignSheetDevice = device },
+                            onUnassign: { unassignConfirmDevice = device },
+                            onTap: { selectedDevice = device }
+                        )
+                        .contextMenu { actionMenuItems(for: device) }
                     }
-                    .contextMenu { actionMenuItems(for: device) }
                 }
+                .padding(32)
             }
-            .padding(32)
         }
     }
 
@@ -648,6 +674,17 @@ struct ABMLookupView: View {
             return config.computerActionPolicy(capabilities: session.capabilities)
         }
         return config.mobileDeviceActionPolicy(capabilities: session.capabilities)
+    }
+
+    /// Single source of truth for whether the assign affordance is offered —
+    /// shared by the inline row buttons, the detail sheet, and the context
+    /// menu so the three can never drift apart.
+    private func canAssign(_ device: ABMOrgDevice) -> Bool {
+        policy(for: device).isAllowed(.abmAssign)
+    }
+
+    private func canUnassign(_ device: ABMOrgDevice) -> Bool {
+        policy(for: device).isAllowed(.abmUnassign) && cache.assignmentMap[device.id] != nil
     }
 
     @ViewBuilder
@@ -974,6 +1011,14 @@ struct ABMDeviceRow: View {
     let device: ABMOrgDevice
     let serverName: String?
     let assetTag: String?
+    /// Role-gated: mirrors the same policy check that governs the context menu.
+    let canAssign: Bool
+    let canUnassign: Bool
+    /// Collapses the action buttons to their glyphs when the list is too
+    /// narrow to carry the labels alongside the device metadata.
+    let iconOnlyActions: Bool
+    let onAssign: () -> Void
+    let onUnassign: () -> Void
     let onTap: () -> Void
 
     @State private var isHovered = false
@@ -987,8 +1032,10 @@ struct ABMDeviceRow: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 16) {
+        // NOTE: this is a tap-gesture container, not a Button — the row holds
+        // real Buttons (Assign / Unassign) and nested buttons inside a Button
+        // label do not reliably receive their own clicks on macOS.
+        HStack(spacing: 16) {
                 // Product family icon tile
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
@@ -1068,23 +1115,95 @@ struct ABMDeviceRow: View {
 
                 Spacer()
 
+                // Role-gated actions — visible affordances, not hidden behind
+                // the right-click menu (which stays as a secondary path).
+                HStack(spacing: 8) {
+                    if canAssign {
+                        ABMActionButton(
+                            title: ActionBranding.label(for: .abmAssign),
+                            systemImage: ActionBranding.icon(for: .abmAssign),
+                            tint: .blue,
+                            compact: true,
+                            iconOnly: iconOnlyActions,
+                            action: onAssign
+                        )
+                    }
+                    if canUnassign {
+                        ABMActionButton(
+                            title: ActionBranding.label(for: .abmUnassign),
+                            systemImage: ActionBranding.icon(for: .abmUnassign),
+                            tint: .red,
+                            compact: true,
+                            iconOnly: iconOnlyActions,
+                            action: onUnassign
+                        )
+                    }
+                }
+
                 // Chevron
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.gray.opacity(0.5))
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(isHovered ? 0.06 : 0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(isHovered ? 0.1 : 0.05), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - ABM Action Button
+
+/// A real, obviously-clickable button for the ABM assign/unassign actions.
+/// Filled tint + border so it never reads as a plain clickable label.
+struct ABMActionButton: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    var compact: Bool = false
+    /// Glyph only — the label moves to the tooltip and the accessibility
+    /// label, so the control stays legible to VoiceOver when it collapses.
+    var iconOnly: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: compact ? 11 : 13, weight: .semibold))
+                if !iconOnly {
+                    Text(title)
+                        .font(.system(size: compact ? 12 : 13, weight: .semibold))
+                        .lineLimit(1)
+                }
             }
-            .padding(16)
+            .foregroundColor(tint)
+            .padding(.horizontal, iconOnly ? 9 : (compact ? 12 : 16))
+            .padding(.vertical, compact ? 7 : 10)
+            .frame(maxWidth: compact ? nil : .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(isHovered ? 0.06 : 0.03))
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(tint.opacity(isHovered ? 0.28 : 0.16))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(isHovered ? 0.1 : 0.05), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(tint.opacity(isHovered ? 0.8 : 0.45), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .help(title)
+        .accessibilityLabel(title)
     }
 }
 
@@ -1094,6 +1213,11 @@ struct ABMDeviceDetailSheet: View {
     let device: ABMOrgDevice
     let assignedServer: ABMMdmServer?
     let assetTag: String?
+    /// Role-gated by the caller with the same policy the row and menu use.
+    let canAssign: Bool
+    let canUnassign: Bool
+    let onAssign: () -> Void
+    let onUnassign: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -1179,6 +1303,33 @@ struct ABMDeviceDetailSheet: View {
                     appleCareCard
                 }
                 .padding(20)
+            }
+
+            if canAssign || canUnassign {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+
+                HStack(spacing: 12) {
+                    if canAssign {
+                        ABMActionButton(
+                            title: ActionBranding.label(for: .abmAssign),
+                            systemImage: ActionBranding.icon(for: .abmAssign),
+                            tint: .blue,
+                            action: onAssign
+                        )
+                    }
+                    if canUnassign {
+                        ABMActionButton(
+                            title: ActionBranding.label(for: .abmUnassign),
+                            systemImage: ActionBranding.icon(for: .abmUnassign),
+                            tint: .red,
+                            action: onUnassign
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(Color.white.opacity(0.03))
             }
         }
         .frame(width: 520, height: 640)
