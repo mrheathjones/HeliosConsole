@@ -402,6 +402,21 @@ For immediate lockout, disable the user or revoke sessions in Entra and enforce
 
 ## 3. Jamf Pro deployment steps
 
+> **Two Jamf Custom Schema limits, both confirmed by probing. Design within them —
+> a plist upload is not an acceptable fallback for this app.**
+>
+> 1. **Array nesting stops at two levels.** `array of objects → array of strings` and
+>    `array of objects → array of objects` both render. A third level gives **no editable
+>    field** for the innermost value, so the key is unauthorable even though the schema is
+>    valid and the app decodes it fine. This is why `healthScorecard.cards[]` carries its
+>    `siteIds` / `requiredApps` / `checks` directly rather than nesting them under a
+>    `targets[]` list.
+> 2. **The root `title` must be ASCII.** A non-ASCII character there — an em-dash, across
+>    all eight schemas — makes Jamf render its generic property editor: a `root` label with
+>    an `object` type dropdown and a type picker beside every property, instead of a clean
+>    form. `description` may contain any characters; only `title` matters. A bare
+>    reverse-DNS `$id` (not a URI) is fine, so the domain-as-`$id` convention below stands.
+
 Create **five** configuration profiles, one per domain. For each:
 
 1. **Jamf Pro → Configuration Profiles → New**.

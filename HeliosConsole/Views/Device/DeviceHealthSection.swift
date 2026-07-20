@@ -48,363 +48,90 @@ struct DeviceHealthMetricResult: Identifiable {
 
 struct DeviceHealthEvaluator {
     
-    // Configuration — same features-domain keys the scorecard uses, so the
-    // per-device health panel and the fleet scorecard can never disagree.
-    static var checkInThresholdDays: Int {
-        MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: "checkedIn")?
-            .effectiveCheckedInDays ?? 7
-    }
-    static var minimumMacOSVersion: Int {
-        (MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: "softwareUpdateCompliance")?
-            .effectiveMinimumOSVersions ?? .empty).effectiveMacOS
-    }
-    
+    // Tunables are per-target now and resolved inside HealthPolicy from whichever
+    // target matched this device, so the panel no longer reads them directly.
+
     // MARK: - Evaluate Computer Health
     
+    /// Routes every metric through HealthEvaluator — the same implementation the
+    /// fleet scorecard uses. This struct previously held a third copy of the
+    /// metric logic, which had drifted from the fleet in four places: a stricter
+    /// app matcher, a different FileVault pass-set, a contradiction between its
+    /// own Encrypted and Secured checks, and string-level check-in fallback.
     static func evaluateComputer(_ computer: Computer) -> [DeviceHealthMetricResult] {
-        var results: [DeviceHealthMetricResult] = []
-        
-        // 1. Checked-In
-        results.append(evaluateCheckedIn(computer))
-        
-        // 2. Protected
-        results.append(evaluateProtected(computer))
-        
-        // 3. Encrypted
-        results.append(evaluateEncrypted(computer))
-        
-        // 4. Secured
-        results.append(evaluateSecured(computer))
-        
-        // 5. Up to Date
-        results.append(evaluateUpToDate(computer))
-        
-        return results
-    }
-    
-    // MARK: - Checked-In Evaluation
-    
-    private static func evaluateCheckedIn(_ computer: Computer) -> DeviceHealthMetricResult {
-        var reasons: [String] = []
-        
-        guard let lastContactStr = computer.general?.lastContactTime ?? computer.general?.reportDate else {
-            return DeviceHealthMetricResult(
-                type: .checkedIn,
-                status: .unknown,
-                reasons: ["No check-in date available"]
+        let policy = HealthPolicy.current()
+        let input = healthInput(computer)
+        let facts = computer.scopeFacts()
+
+        return HealthMetricType.allCases.map { metric in
+            let evaluation = HealthEvaluator.evaluate(
+                metric, computer: input, facts: facts, policy: policy
             )
-        }
-        
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        var lastContactDate = formatter.date(from: lastContactStr)
-        if lastContactDate == nil {
-            formatter.formatOptions = [.withInternetDateTime]
-            lastContactDate = formatter.date(from: lastContactStr)
-        }
-        
-        guard let checkInDate = lastContactDate else {
             return DeviceHealthMetricResult(
-                type: .checkedIn,
-                status: .unknown,
-                reasons: ["Unable to parse check-in date"]
-            )
-        }
-        
-        let thresholdDate = Calendar.current.date(byAdding: .day, value: -checkInThresholdDays, to: Date()) ?? Date()
-        
-        if checkInDate >= thresholdDate {
-            return DeviceHealthMetricResult(type: .checkedIn, status: .compliant, reasons: [])
-        } else {
-            let daysSinceCheckIn = Calendar.current.dateComponents([.day], from: checkInDate, to: Date()).day ?? 0
-            reasons.append("Last check-in was \(daysSinceCheckIn) days ago (threshold: \(checkInThresholdDays) days)")
-            return DeviceHealthMetricResult(type: .checkedIn, status: .nonCompliant, reasons: reasons)
-        }
-    }
-    
-    // MARK: - Protected Evaluation
-    
-    private static func evaluateProtected(_ computer: Computer) -> DeviceHealthMetricResult {
-        var reasons: [String] = []
-        let siteName = computer.general?.site?.name ?? ""
-        
-        if siteName.lowercased() == "enterprise" {
-            // Enterprise site requires all protection apps
-            let requiredApps = [
-                ("Cisco Secure Client", hasApp(computer, "Cisco Secure Client")),
-                ("Zscaler", hasApp(computer, "Zscaler")),
-                ("QualysCloudAgent", hasApp(computer, "QualysCloudAgent")),
-                ("Falcon", hasApp(computer, "Falcon")),
-                ("JamfProtect", hasApp(computer, "JamfProtect"))
-            ]
-            
-            var allInstalled = true
-            for (appName, installed) in requiredApps {
-                if !installed {
-                    allInstalled = false
-                    reasons.append("\(appName) not installed")
-                }
-            }
-            
-            return DeviceHealthMetricResult(
-                type: .protected,
-                status: allInstalled ? .compliant : .nonCompliant,
-                reasons: reasons
-            )
-            
-        } else if siteName.lowercased() == "groundcontrol" {
-            // GroundControl requires only Falcon
-            let hasFalcon = hasApp(computer, "Falcon")
-            
-            if !hasFalcon {
-                reasons.append("Falcon not installed")
-            }
-            
-            return DeviceHealthMetricResult(
-                type: .protected,
-                status: hasFalcon ? .compliant : .nonCompliant,
-                reasons: reasons
-            )
-            
-        } else {
-            // No site rule matched. Unknown, not Compliant — reporting a device as
-            // Protected without evaluating anything states a conclusion we cannot back.
-            return DeviceHealthMetricResult(
-                type: .protected,
-                status: .unknown,
-                reasons: [unmatchedSiteReason(siteName)]
+                type: metric,
+                status: status(for: evaluation.verdict),
+                reasons: evaluation.reasons
             )
         }
     }
     
-    // MARK: - Encrypted Evaluation
-    
-    private static func evaluateEncrypted(_ computer: Computer) -> DeviceHealthMetricResult {
-        var reasons: [String] = []
-        let siteName = computer.general?.site?.name ?? ""
-        
-        // GroundControl site is excluded from encryption evaluation
-        if siteName.lowercased() == "groundcontrol" {
-            return DeviceHealthMetricResult(
-                type: .encrypted,
-                status: .excluded,
-                reasons: ["GroundControl site excluded from encryption evaluation"]
-            )
-        }
-        
-        // Check boot partition encryption state
-        if let bootState = computer.diskEncryption?.bootPartitionEncryptionDetails?.partitionFileVault2State?.uppercased() {
-            switch bootState {
-            case "ENCRYPTED":
-                return DeviceHealthMetricResult(type: .encrypted, status: .compliant, reasons: [])
-            case "ENCRYPTING":
-                return DeviceHealthMetricResult(type: .encrypted, status: .compliant, reasons: [])
-            case "DECRYPTING", "DECRYPTING_PAUSED":
-                reasons.append("Boot partition is decrypting (state: \(bootState))")
-                return DeviceHealthMetricResult(type: .encrypted, status: .nonCompliant, reasons: reasons)
-            default:
-                reasons.append("Boot partition not encrypted (state: \(bootState))")
-                return DeviceHealthMetricResult(type: .encrypted, status: .nonCompliant, reasons: reasons)
-            }
-        }
-        
-        // Fallback to fileVault2Enabled
-        if computer.diskEncryption?.fileVault2Enabled == true {
-            return DeviceHealthMetricResult(type: .encrypted, status: .compliant, reasons: [])
-        } else if computer.diskEncryption != nil {
-            reasons.append("FileVault is not enabled")
-            return DeviceHealthMetricResult(type: .encrypted, status: .nonCompliant, reasons: reasons)
-        }
-        
-        return DeviceHealthMetricResult(
-            type: .encrypted,
-            status: .unknown,
-            reasons: ["No encryption data available"]
+    // MARK: - Evaluation
+
+    /// The per-device fetch (ComputerSearchService) requests every inventory
+    /// section, so a nil top-level object here means this Computer came from a
+    /// lossy projection — fromDeviceListItem and fromInventoryItem drop
+    /// applications, security and site — rather than that the Mac lacks the data.
+    /// Declaring the section unavailable makes the panel report "cannot evaluate"
+    /// instead of a confident wrong answer such as "FileVault is not enabled" on
+    /// an encrypted Mac opened from Reports.
+    private static func availability(for computer: Computer) -> SectionAvailability {
+        var known: Set<String> = []
+        if computer.general != nil { known.insert("GENERAL") }
+        if computer.hardware != nil { known.insert("HARDWARE") }
+        if computer.operatingSystem != nil { known.insert("OPERATING_SYSTEM") }
+        if computer.applications != nil { known.insert("APPLICATIONS") }
+        if computer.security != nil { known.insert("SECURITY") }
+        if computer.diskEncryption != nil { known.insert("DISK_ENCRYPTION") }
+        if computer.groupMemberships != nil { known.insert("GROUP_MEMBERSHIPS") }
+        return SectionAvailability(
+            known: known,
+            configKey: "this device's inventory record"
         )
     }
-    
-    // MARK: - Secured Evaluation
-    
-    private static func evaluateSecured(_ computer: Computer) -> DeviceHealthMetricResult {
-        var reasons: [String] = []
-        let siteName = computer.general?.site?.name ?? ""
-        
-        if siteName.lowercased() == "enterprise" {
-            // Enterprise site - full security requirements
-            var allMet = true
-            
-            let firewallEnabled = computer.security?.firewallEnabled ?? false
-            if !firewallEnabled {
-                allMet = false
-                reasons.append("Firewall is disabled")
-            }
-            
-            let sipEnabled = computer.security?.sipStatus?.uppercased() == "ENABLED"
-            if !sipEnabled {
-                allMet = false
-                reasons.append("System Integrity Protection (SIP) is not enabled")
-            }
-            
-            let gatekeeperStatus = computer.security?.gatekeeperStatus?.uppercased() ?? ""
-            let gatekeeperOK = gatekeeperStatus == "APP_STORE_AND_IDENTIFIED_DEVELOPERS" || gatekeeperStatus == "APP_STORE"
-            if !gatekeeperOK {
-                allMet = false
-                reasons.append("Gatekeeper not set to App Store & Identified Developers")
-            }
-            
-            let isManaged = computer.isManaged
-            if !isManaged {
-                allMet = false
-                reasons.append("Device is not managed")
-            }
-            
-            let isSupervised = computer.isSupervised
-            if !isSupervised {
-                allMet = false
-                reasons.append("Device is not supervised")
-            }
-            
-            let isEncrypted = computer.diskEncryption?.bootPartitionEncryptionDetails?.partitionFileVault2State?.uppercased() == "ENCRYPTED" ||
-                              computer.diskEncryption?.fileVault2Enabled == true
-            if !isEncrypted {
-                allMet = false
-                reasons.append("Boot partition is not encrypted")
-            }
-            
-            let bootstrapEscrowed = computer.security?.bootstrapTokenEscrowedStatus?.uppercased() == "ESCROWED"
-            if !bootstrapEscrowed {
-                allMet = false
-                reasons.append("Bootstrap token is not escrowed")
-            }
-            
-            let ddmEnabled = computer.general?.declarativeDeviceManagementEnabled ?? false
-            if !ddmEnabled {
-                allMet = false
-                reasons.append("Declarative Device Management (DDM) is not enabled")
-            }
-            
-            return DeviceHealthMetricResult(
-                type: .secured,
-                status: allMet ? .compliant : .nonCompliant,
-                reasons: reasons
-            )
-            
-        } else if siteName.lowercased() == "groundcontrol" {
-            // GroundControl site - reduced security requirements
-            var allMet = true
-            
-            let firewallEnabled = computer.security?.firewallEnabled ?? false
-            if !firewallEnabled {
-                allMet = false
-                reasons.append("Firewall is disabled")
-            }
-            
-            let sipEnabled = computer.security?.sipStatus?.uppercased() == "ENABLED"
-            if !sipEnabled {
-                allMet = false
-                reasons.append("System Integrity Protection (SIP) is not enabled")
-            }
-            
-            let isManaged = computer.isManaged
-            if !isManaged {
-                allMet = false
-                reasons.append("Device is not managed")
-            }
-            
-            let isSupervised = computer.isSupervised
-            if !isSupervised {
-                allMet = false
-                reasons.append("Device is not supervised")
-            }
-            
-            let bootstrapEscrowed = computer.security?.bootstrapTokenEscrowedStatus?.uppercased() == "ESCROWED"
-            if !bootstrapEscrowed {
-                allMet = false
-                reasons.append("Bootstrap token is not escrowed")
-            }
-            
-            let ddmEnabled = computer.general?.declarativeDeviceManagementEnabled ?? false
-            if !ddmEnabled {
-                allMet = false
-                reasons.append("Declarative Device Management (DDM) is not enabled")
-            }
-            
-            return DeviceHealthMetricResult(
-                type: .secured,
-                status: allMet ? .compliant : .nonCompliant,
-                reasons: reasons
-            )
-            
-        } else {
-            // No site rule matched — see evaluateProtected. Unknown, not Compliant.
-            return DeviceHealthMetricResult(
-                type: .secured,
-                status: .unknown,
-                reasons: [unmatchedSiteReason(siteName)]
-            )
-        }
-    }
-    
-    // MARK: - Up to Date Evaluation
-    
-    private static func evaluateUpToDate(_ computer: Computer) -> DeviceHealthMetricResult {
-        var reasons: [String] = []
-        
-        guard let osVersion = computer.operatingSystem?.version else {
-            return DeviceHealthMetricResult(
-                type: .upToDate,
-                status: .unknown,
-                reasons: ["No OS version information available"]
-            )
-        }
-        
-        guard let majorVersion = extractMajorVersion(from: osVersion) else {
-            return DeviceHealthMetricResult(
-                type: .upToDate,
-                status: .unknown,
-                reasons: ["Unable to parse OS version: \(osVersion)"]
-            )
-        }
-        
-        if majorVersion >= minimumMacOSVersion {
-            return DeviceHealthMetricResult(type: .upToDate, status: .compliant, reasons: [])
-        } else {
-            reasons.append("macOS \(osVersion) is below minimum version \(minimumMacOSVersion).0")
-            return DeviceHealthMetricResult(type: .upToDate, status: .nonCompliant, reasons: reasons)
-        }
-    }
-    
-    // MARK: - Helper Methods
 
-    /// Explains an Unknown verdict caused by a site with no matching rule, so the
-    /// popover tells the admin what to fix rather than leaving a bare "Unknown".
-    private static func unmatchedSiteReason(_ siteName: String) -> String {
-        let trimmed = siteName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty
-            ? "Device has no Jamf site assigned, so no requirements could be evaluated"
-            : "No requirements are defined for site \"\(trimmed)\", so compliance could not be evaluated"
+    private static func healthInput(_ computer: Computer) -> ComputerHealthInput {
+        ComputerHealthInput(
+            deviceID: computer.id,
+            rawSiteName: computer.general?.site?.name,
+            checkInDate: HealthEvaluator.resolveCheckIn(
+                lastContactTime: computer.general?.lastContactTime,
+                reportDate: computer.general?.reportDate
+            ),
+            isManaged: computer.isManaged,
+            isSupervised: computer.isSupervised,
+            ddmEnabled: computer.general?.declarativeDeviceManagementEnabled ?? false,
+            osVersion: computer.operatingSystem?.version,
+            applicationNames: computer.applications.map { $0.compactMap(\.name) },
+            firewallEnabled: computer.security?.firewallEnabled ?? false,
+            sipStatus: computer.security?.sipStatus,
+            gatekeeperStatus: computer.security?.gatekeeperStatus,
+            bootstrapTokenEscrowedStatus: computer.security?.bootstrapTokenEscrowedStatus,
+            encryptionState: BootEncryptionState.parse(
+                partitionState: computer.diskEncryption?.bootPartitionEncryptionDetails?.partitionFileVault2State,
+                fileVault2Enabled: computer.diskEncryption?.fileVault2Enabled,
+                hasDiskEncryptionObject: computer.diskEncryption != nil
+            ),
+            availability: availability(for: computer)
+        )
     }
 
-    private static func hasApp(_ computer: Computer, _ appName: String) -> Bool {
-        guard let apps = computer.applications else { return false }
-        let searchName = appName.lowercased()
-        return apps.contains { app in
-            guard let name = app.name?.lowercased() else { return false }
-            // Check for exact match or .app suffix match
-            return name == searchName || name == "\(searchName).app"
+    private static func status(for verdict: HealthVerdict) -> DeviceHealthStatus {
+        switch verdict {
+        case .compliant: return .compliant
+        case .nonCompliant: return .nonCompliant
+        case .unknown: return .unknown
+        case .excluded: return .excluded
         }
-    }
-    
-    private static func extractMajorVersion(from version: String) -> Int? {
-        let components = version.split(separator: ".")
-        guard let firstComponent = components.first,
-              let major = Int(firstComponent) else {
-            return nil
-        }
-        return major
     }
 }
 
@@ -529,6 +256,14 @@ struct DeviceHealthSection: View {
         .onAppear {
             healthResults = DeviceHealthEvaluator.evaluateComputer(computer)
             loadAppleCareData()
+        }
+        // Re-evaluate when the record itself changes. A panel opened from the
+        // device list or a health drill-down is first rendered from a lossy
+        // projection, which now honestly reports Unknown for the sections that
+        // projection cannot carry; without this the panel would keep showing
+        // Unknown after DeviceView swaps in the full inventory record.
+        .onChange(of: computer) { _, newValue in
+            healthResults = DeviceHealthEvaluator.evaluateComputer(newValue)
         }
     }
     
@@ -718,7 +453,10 @@ struct DeviceHealthSection: View {
             displayStatusLabel = deviceHealthStatusLabel(for: result)
         }
         
-        let isClickable = !result.reasons.isEmpty || result.status == .compliant || result.type == .encrypted
+        // Every status now has popover content, so every tile opens. Keying this
+        // off reasons.isEmpty made Unknown tiles unclickable in exactly the case
+        // where the admin most needs the explanation.
+        let isClickable = true
         let reasonCount = result.reasons.count
         
         return VStack(alignment: .center, spacing: 6) {
@@ -759,13 +497,19 @@ struct DeviceHealthSection: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 12)
         .padding(.horizontal, 8)
+        // Tinted from displayStatus, not result.status. The Coverage card is the
+        // Encrypted metric repurposed to show AppleCare, so its icon and label
+        // come from warranty data while result.status still holds the encryption
+        // verdict — keying the fill and border off the latter painted the tile red
+        // while it read "Coverage / Unknown". For every other card the two are the
+        // same value, so nothing else changes.
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(result.status.color.opacity(0.1))
+                .fill(displayStatus.color.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(result.status.color.opacity(0.3), lineWidth: 1)
+                .stroke(displayStatus.color.opacity(0.3), lineWidth: 1)
         )
         .popover(isPresented: binding(for: result.type)) {
             metricDetailPopover(result)
@@ -853,18 +597,20 @@ struct DeviceHealthSection: View {
             
             Divider()
             
-            // Content based on type and status
+            // Routed on status, never on whether reasons happen to be present.
+            // Unknown results now carry an explanation ("no requirements are
+            // defined for site X"), and the previous reasons-first ordering would
+            // have rendered those in the orange "Requirements not met" panel.
             if result.type == .encrypted {
                 // Coverage card - always show AppleCare content
                 coveragePopoverContent()
-            } else if result.status == .compliant {
-                compliantContent(for: result.type)
-            } else if result.status == .excluded {
-                excludedContent(for: result)
-            } else if !result.reasons.isEmpty {
-                nonCompliantContent(for: result)
             } else {
-                unknownContent(for: result)
+                switch result.status {
+                case .compliant:    compliantContent(for: result.type)
+                case .excluded:     excludedContent(for: result)
+                case .unknown:      unknownContent(for: result)
+                case .nonCompliant: nonCompliantContent(for: result)
+                }
             }
         }
         .padding(16)

@@ -1,0 +1,85 @@
+{
+  "healthScorecard": {
+    "enabled": true,
+    "cards": [
+      {
+        "id": "checkedIn",
+        "enabled": true,
+        "siteIds": [
+          "ENTERPRISE_SITE_ID",
+          "GROUNDCONTROL_SITE_ID"
+        ],
+        "checkedInDays": 7
+      },
+      {
+        "id": "protected",
+        "enabled": true,
+        "platforms": [
+          "macOS"
+        ],
+        "siteIds": [
+          "ENTERPRISE_SITE_ID"
+        ],
+        "requireMode": "all",
+        "requiredApps": [
+          {
+            "name": "Cisco Secure Client"
+          },
+          {
+            "name": "Zscaler"
+          },
+          {
+            "name": "QualysCloudAgent"
+          },
+          {
+            "name": "Falcon"
+          },
+          {
+            "name": "JamfProtect"
+          }
+        ]
+      },
+      {
+        "id": "encrypted",
+        "enabled": true,
+        "siteIds": [
+          "ENTERPRISE_SITE_ID"
+        ]
+      },
+      {
+        "id": "secured",
+        "enabled": true,
+        "platforms": [
+          "macOS"
+        ],
+        "siteIds": [
+          "ENTERPRISE_SITE_ID"
+        ],
+        "checks": [
+          "firewall",
+          "sip",
+          "gatekeeper",
+          "managed",
+          "supervised",
+          "diskEncrypted",
+          "bootstrapToken",
+          "ddm"
+        ]
+      },
+      {
+        "id": "upToDate",
+        "enabled": true,
+        "siteIds": [
+          "ENTERPRISE_SITE_ID",
+          "GROUNDCONTROL_SITE_ID"
+        ],
+        "minimumOSVersions": {
+          "macOS": 26,
+          "iOS": 26,
+          "iPadOS": 26,
+          "visionOS": 2
+        }
+      }
+    ]
+  }
+}

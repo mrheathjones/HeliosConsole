@@ -192,6 +192,12 @@ struct AccessConfiguration: Codable {
         var returnToServiceOptions: ReturnToServiceOptions?
         var allowExport: Bool?
 
+        /// Whether this role may see the Health Scorecard's coverage diagnostics:
+        /// which devices no card is measuring, targets matching nothing, and the
+        /// Scope IDs inspector. Fail-closed — these expose fleet composition and
+        ///配置 detail that only whoever maintains the profile needs.
+        var allowScorecardDiagnostics: Bool?
+
         /// The role name, trimmed. `""` when absent, blank, or malformed —
         /// which makes the definition unreachable (no role name can ever
         /// match it) and is what `roleIndex(from:)` skips on.
@@ -212,10 +218,12 @@ struct AccessConfiguration: Codable {
         /// Absent/malformed → false (fail-closed).
         var effectiveAllowPrestageOnAssign: Bool { allowPrestageOnAssign ?? false }
         var effectiveAllowExport: Bool { allowExport ?? false }
+        var effectiveAllowScorecardDiagnostics: Bool { allowScorecardDiagnostics ?? false }
 
         enum CodingKeys: String, CodingKey {
             case name, modules, deviceTabs, computerActions, mobileDeviceActions, cleanupActions
             case allowedMdmServers, allowedPrestages, allowPrestageOnAssign, returnToServiceOptions, allowExport
+            case allowScorecardDiagnostics
         }
 
         init(
@@ -229,7 +237,8 @@ struct AccessConfiguration: Codable {
             allowedPrestages: [String]? = nil,
             allowPrestageOnAssign: Bool? = nil,
             returnToServiceOptions: ReturnToServiceOptions? = nil,
-            allowExport: Bool? = nil
+            allowExport: Bool? = nil,
+            allowScorecardDiagnostics: Bool? = nil
         ) {
             self.name = name
             self.modules = modules
@@ -242,6 +251,7 @@ struct AccessConfiguration: Codable {
             self.allowPrestageOnAssign = allowPrestageOnAssign
             self.returnToServiceOptions = returnToServiceOptions
             self.allowExport = allowExport
+            self.allowScorecardDiagnostics = allowScorecardDiagnostics
         }
 
         /// Per-field resilient decode: a malformed list degrades to nil (that
@@ -266,6 +276,7 @@ struct AccessConfiguration: Codable {
             allowPrestageOnAssign = Self.decodeBool(container, .allowPrestageOnAssign)
             returnToServiceOptions = try? container.decodeIfPresent(ReturnToServiceOptions.self, forKey: .returnToServiceOptions)
             allowExport = Self.decodeBool(container, .allowExport)
+            allowScorecardDiagnostics = Self.decodeBool(container, .allowScorecardDiagnostics)
         }
 
         /// Present-but-malformed bool → false (fail-closed); absent → nil.

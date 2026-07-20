@@ -151,6 +151,14 @@ struct CoreConfiguration: Codable {
         /// used by Screen Share (and the device IP card) to prefer the VPN
         /// address. Org-specific — absent/empty disables the VPN-IP lookup
         /// and the app uses the reported LAN IP.
+        ///
+        /// TODO: migrate to the EA's *id* rather than its name, matching the
+        /// convention adopted for Jamf sites in healthScorecard — an admin can
+        /// rename an Extension Attribute in Jamf and silently break this lookup,
+        /// whereas the id is stable. The name should be resolved from the id for
+        /// display only. Requires reading the EA id from
+        /// /api/v1/computer-extension-attributes and a one-release fallback that
+        /// accepts either, since existing profiles deliver the name.
         var vpnIPExtensionAttributeName: String?
 
         /// Lifetime in days for per-user Jamf API client credentials

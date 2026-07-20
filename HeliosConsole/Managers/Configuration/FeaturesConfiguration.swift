@@ -394,118 +394,309 @@ struct FeaturesConfiguration: Codable {
 
     // MARK: - Health Scorecard
 
+    /// The scorecard is an INCLUSION model: the admin declares which cards they
+    /// want and, per card, which Jamf sites or groups define the population.
+    /// Helios hardcodes no site or group anywhere — it cannot know them.
+    ///
+    /// Everything is addressed by Jamf **id**, never name. A site or group can be
+    /// renamed in Jamf; a rename must not silently change what is counted. Names
+    /// are resolved from device records for display only.
     struct HealthScorecardSettings: Codable {
         let enabled: Bool?
-        let metrics: [HealthMetricSetting]?
+        /// One entry per card. A card omitted here is not rendered at all —
+        /// distinct from a card present but scoped to nothing.
+        let cards: [HealthCard]?
 
         var effectiveEnabled: Bool { enabled ?? true }
-        var effectiveMetrics: [HealthMetricSetting] { metrics ?? Self.defaultMetrics }
+        /// nil when the profile delivers no cards: every card renders its setup
+        /// state. Deliberately NOT a default set of cards — shipping tenant
+        /// specific sites or groups is exactly what this model removes.
+        var effectiveCards: [HealthCard]? { cards }
 
-        /// Lookup for a single metric's settings: the configured row wins,
-        /// otherwise the built-in default row — so a profile that delivers
-        /// only some metrics never blanks the tuning of the others.
-        func effectiveMetric(id: String) -> HealthMetricSetting? {
-            effectiveMetrics.first { $0.id == id }
-                ?? Self.defaultMetrics.first { $0.id == id }
+        func card(id: String) -> HealthCard? { cards?.first { $0.id == id } }
+
+        static let empty = HealthScorecardSettings(enabled: nil, cards: nil)
+
+        init(enabled: Bool?, cards: [HealthCard]?) {
+            self.enabled = enabled
+            self.cards = cards
         }
 
-        static let empty = HealthScorecardSettings(enabled: nil, metrics: nil)
+        /// `HealthCard.init(from:)` needs a keyed container, so a `cards` array
+        /// holding a bare string throws. ManagedDomainLoader discards the ENTIRE
+        /// features domain on any throw, so that typo would take computers,
+        /// mobileDevices, reports and cleanup with it. Decode element by element.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try? container.decode(Bool.self, forKey: .enabled)
 
-        /// The 8 default scorecard metrics (mirrors the schema's `metrics` default).
-        static let defaultMetrics: [HealthMetricSetting] = [
-            HealthMetricSetting(id: "checkedIn", enabled: true, displayName: "Recent Check-Ins",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
-            HealthMetricSetting(id: "managed", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
-            HealthMetricSetting(id: "supervised", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"]),
-            HealthMetricSetting(id: "fileVaultEnabled", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS"]),
-            HealthMetricSetting(id: "firewallEnabled", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS"]),
-            HealthMetricSetting(id: "gatekeeperEnabled", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS"]),
-            HealthMetricSetting(id: "sipEnabled", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS"]),
-            HealthMetricSetting(id: "softwareUpdateCompliance", enabled: true, displayName: "",
-                                thresholds: .init(critical: 50, warning: 80), checkedInDays: 7,
-                                platforms: ["macOS", "iOS", "iPadOS", "visionOS"])
-        ]
+            guard container.contains(.cards) else { cards = nil; return }
+            if let rows = try? container.decode([FailableCard].self, forKey: .cards) {
+                let kept = rows.compactMap(\.value)
+                if kept.count != rows.count {
+                    NSLog("⚠️ healthScorecard.cards: dropped %d malformed entr%@",
+                          rows.count - kept.count, rows.count - kept.count == 1 ? "y" : "ies")
+                }
+                cards = kept
+            } else {
+                NSLog("⚠️ healthScorecard.cards: not an array of objects — ignoring")
+                cards = nil
+            }
+        }
+
+        private struct FailableCard: Decodable {
+            let value: HealthCard?
+            init(from decoder: Decoder) throws { value = try? HealthCard(from: decoder) }
+        }
     }
 
-    /// One health-scorecard metric row.
-    struct HealthMetricSetting: Codable {
+    /// One scorecard card. `id` is the metric's stable config id
+    /// (HealthMetricType.configID), never its display string.
+    struct HealthCard: Codable {
         let id: String?
         let enabled: Bool?
-        let displayName: String?
         let thresholds: Thresholds?
-        let checkedInDays: Int?
+        /// Platforms this card measures; omitted = all.
         let platforms: [String]?
-        /// Per-platform minimum compliant OS major version — only meaningful
-        /// on the `softwareUpdateCompliance` metric.
+        // --- Population: who this card measures ---
+        //
+        // Held directly on the card rather than on a nested target list. An
+        // earlier shape wrapped these in `targets[]` so one card could hold two
+        // populations with different requirements; that nests three array levels
+        // deep and Jamf's Custom Schema form will not render the innermost one,
+        // which makes it unauthorable. A card now measures ONE population against
+        // ONE standard — express a second standard as a second card.
+        /// Measure every device, ignoring sites and groups. Must be stated
+        /// affirmatively: an empty selector set means measure NOTHING, because
+        /// lenient decode turns malformed input into empty arrays and inferring
+        /// "everything" from silence would let a typo rescope the whole fleet.
+        let allDevices: Bool?
+        let siteIds: [String]?
+        /// Computer groups and mobile-device groups are SEPARATE Jamf id
+        /// namespaces — one `groupIds` key would make computer-group-12 and
+        /// mobile-group-12 silently interchangeable.
+        let computerGroupIds: [String]?
+        let mobileGroupIds: [String]?
+
+        // --- Requirements: which apply depends on the metric ---
+        let requiredApps: [RequiredApp]?
+        /// `all` (default) | `any`
+        let requireMode: String?
+        /// firewall, sip, gatekeeper, managed, supervised, diskEncrypted,
+        /// bootstrapToken, ddm
+        let checks: [String]?
+        let checkedInDays: Int?
         let minimumOSVersions: MinimumOSVersions?
+        /// Subtractive carve-out applied before targeting. Exists because
+        /// "this site except one group inside it" cannot be written as an
+        /// inclusion without enumerating the complement, which would need a group
+        /// directory the app does not fetch.
+        let except: [ScopeSelector]?
+        /// What a device matching no target scores: `excluded` (default) or
+        /// `unknown`. Excluded is the point of the inclusion model — untargeted
+        /// devices leave the metric rather than being enumerated. `unknown` turns
+        /// the card into a coverage audit.
+        let unmatchedVerdict: String?
 
         var effectiveEnabled: Bool { enabled ?? true }
-        var effectiveDisplayName: String { displayName ?? "" }
         var effectiveThresholds: Thresholds { thresholds ?? .empty }
-        /// Clamped 1...3650 — an absurd profile value must not break
-        /// Calendar date math downstream.
-        var effectiveCheckedInDays: Int { min(max(checkedInDays ?? 7, 1), 3650) }
         var effectivePlatforms: [String] { platforms ?? [] }
+        var effectiveExcept: [ScopeSelector] { except ?? [] }
+        /// Unrecognised values fall back to `excluded` rather than being trusted.
+        var effectiveUnmatchedVerdict: String {
+            (unmatchedVerdict ?? "excluded").lowercased() == "unknown" ? "unknown" : "excluded"
+        }
+
+        var effectiveSiteIds: [String] { (siteIds ?? []).map(Self.normalizedID) }
+        var effectiveComputerGroupIds: [String] { (computerGroupIds ?? []).map(Self.normalizedID) }
+        var effectiveMobileGroupIds: [String] { (mobileGroupIds ?? []).map(Self.normalizedID) }
+        var effectiveRequiredApps: [RequiredApp] { requiredApps ?? [] }
+        var effectiveRequireMode: String {
+            (requireMode ?? "all").lowercased() == "any" ? "any" : "all"
+        }
+        var effectiveChecks: [String] { checks ?? [] }
+        var effectiveCheckedInDays: Int { min(max(checkedInDays ?? 7, 1), 3650) }
         var effectiveMinimumOSVersions: MinimumOSVersions { minimumOSVersions ?? .empty }
+        var matchesAllDevices: Bool { allDevices == true }
+
+        /// A card with no selectors measures nothing and renders a setup state
+        /// rather than a percentage: 0/0 is 0% or 100% depending on which line of
+        /// arithmetic you write, and both readings lie.
+        var isConfigured: Bool {
+            matchesAllDevices
+                || !effectiveSiteIds.isEmpty
+                || !effectiveComputerGroupIds.isEmpty
+                || !effectiveMobileGroupIds.isEmpty
+        }
+
+        /// Jamf returns ids as strings in some payloads and integers in others,
+        /// and admins hand-type them with stray whitespace.
+        static func normalizedID(_ id: String?) -> String {
+            (id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        /// Whether this card covers the given device.
+        func covers(siteId: String?, groupIDs: [String], isMobile: Bool) -> Bool {
+            if matchesAllDevices { return true }
+            let site = Self.normalizedID(siteId)
+            if !site.isEmpty, effectiveSiteIds.contains(site) { return true }
+            let groupTargets = isMobile ? effectiveMobileGroupIds : effectiveComputerGroupIds
+            guard !groupTargets.isEmpty else { return false }
+            let normalized = Set(groupIDs.map(Self.normalizedID))
+            return groupTargets.contains { normalized.contains($0) }
+        }
+
+        func appliesTo(platform: String) -> Bool {
+            let list = effectivePlatforms
+            guard !list.isEmpty else { return true }
+            return list.contains { $0.caseInsensitiveCompare(platform) == .orderedSame }
+        }
 
         init(
-            id: String? = nil,
-            enabled: Bool? = nil,
-            displayName: String? = nil,
-            thresholds: Thresholds? = nil,
-            checkedInDays: Int? = nil,
-            platforms: [String]? = nil,
-            minimumOSVersions: MinimumOSVersions? = nil
+            id: String? = nil, enabled: Bool? = nil,
+            thresholds: Thresholds? = nil, platforms: [String]? = nil,
+            allDevices: Bool? = nil, siteIds: [String]? = nil,
+            computerGroupIds: [String]? = nil, mobileGroupIds: [String]? = nil,
+            requiredApps: [RequiredApp]? = nil, requireMode: String? = nil,
+            checks: [String]? = nil, checkedInDays: Int? = nil,
+            minimumOSVersions: MinimumOSVersions? = nil,
+            except: [ScopeSelector]? = nil, unmatchedVerdict: String? = nil
         ) {
-            self.id = id
-            self.enabled = enabled
-            self.displayName = displayName
-            self.thresholds = thresholds
-            self.checkedInDays = checkedInDays
-            self.platforms = platforms
+            self.id = id; self.enabled = enabled
+            self.thresholds = thresholds; self.platforms = platforms
+            self.allDevices = allDevices; self.siteIds = siteIds
+            self.computerGroupIds = computerGroupIds; self.mobileGroupIds = mobileGroupIds
+            self.requiredApps = requiredApps; self.requireMode = requireMode
+            self.checks = checks; self.checkedInDays = checkedInDays
             self.minimumOSVersions = minimumOSVersions
+            self.except = except; self.unmatchedVerdict = unmatchedVerdict
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try? c.decode(String.self, forKey: .id)
+            enabled = try? c.decode(Bool.self, forKey: .enabled)
+            thresholds = try? c.decode(Thresholds.self, forKey: .thresholds)
+            platforms = try? c.decode([String].self, forKey: .platforms)
+            unmatchedVerdict = try? c.decode(String.self, forKey: .unmatchedVerdict)
+            allDevices = try? c.decode(Bool.self, forKey: .allDevices)
+            siteIds = try? c.decode([String].self, forKey: .siteIds)
+            computerGroupIds = try? c.decode([String].self, forKey: .computerGroupIds)
+            mobileGroupIds = try? c.decode([String].self, forKey: .mobileGroupIds)
+            requiredApps = (try? c.decode([FailableApp].self, forKey: .requiredApps))?
+                .compactMap(\.value)
+            requireMode = try? c.decode(String.self, forKey: .requireMode)
+            checks = try? c.decode([String].self, forKey: .checks)
+            checkedInDays = try? c.decode(Int.self, forKey: .checkedInDays)
+            minimumOSVersions = try? c.decode(MinimumOSVersions.self, forKey: .minimumOSVersions)
+            except = (try? c.decode([FailableSelector].self, forKey: .except))?.compactMap(\.value)
+        }
+
+        private struct FailableApp: Decodable {
+            let value: RequiredApp?
+            init(from decoder: Decoder) throws { value = try? RequiredApp(from: decoder) }
+        }
+        private struct FailableSelector: Decodable {
+            let value: ScopeSelector?
+            init(from decoder: Decoder) throws { value = try? ScopeSelector(from: decoder) }
         }
 
         struct Thresholds: Codable {
             let critical: Int?
             let warning: Int?
-
             var effectiveCritical: Int { critical ?? 50 }
             var effectiveWarning: Int { warning ?? 80 }
-
             static let empty = Thresholds(critical: nil, warning: nil)
         }
+    }
 
-        /// Minimum compliant OS major version per platform. Defaults track
-        /// the current major releases (schema default; keep in sync with
-        /// Helios_Features_SCHEMA.json).
-        struct MinimumOSVersions: Codable {
-            let macOS: Int?
-            let iOS: Int?
-            let iPadOS: Int?
-            let visionOS: Int?
+    /// A single site or group reference, used by a card's `except` carve-out.
+    struct ScopeSelector: Codable {
+        /// `site` | `computerGroup` | `mobileGroup`
+        let type: String?
+        let id: String?
+        let comment: String?
 
-            var effectiveMacOS: Int { macOS ?? 26 }
-            var effectiveIOS: Int { iOS ?? 26 }
-            var effectiveIPadOS: Int { iPadOS ?? 26 }
-            var effectiveVisionOS: Int { visionOS ?? 2 }
+        enum Kind: String { case site, computerGroup, mobileGroup }
 
-            static let empty = MinimumOSVersions(macOS: nil, iOS: nil, iPadOS: nil, visionOS: nil)
+        var kind: Kind? {
+            switch (type ?? "").lowercased() {
+            case "site": return .site
+            case "computergroup": return .computerGroup
+            case "mobilegroup": return .mobileGroup
+            default: return nil
+            }
+        }
+        var effectiveID: String { HealthCard.normalizedID(id) }
+        var label: String {
+            if let comment, !comment.isEmpty { return comment }
+            return "\(type ?? "?") \(effectiveID)"
+        }
+
+        init(type: String? = nil, id: String? = nil, comment: String? = nil) {
+            self.type = type; self.id = id; self.comment = comment
+        }
+
+        func matches(siteId: String?, groupIDs: [String], isMobile: Bool) -> Bool {
+            let target = effectiveID
+            guard !target.isEmpty, let kind else { return false }
+            switch kind {
+            case .site:
+                return HealthCard.normalizedID(siteId) == target
+            case .computerGroup:
+                guard !isMobile else { return false }
+                return groupIDs.contains { HealthCard.normalizedID($0) == target }
+            case .mobileGroup:
+                guard isMobile else { return false }
+                return groupIDs.contains { HealthCard.normalizedID($0) == target }
+            }
         }
     }
+
+    /// An app a target requires. `matchMode` is per-app so one token needing
+    /// loose matching does not force every entry to be loose.
+    struct RequiredApp: Codable {
+        let name: String?
+        /// `exact` (default, matches "Name" or "Name.app") | `substring`
+        let matchMode: String?
+
+        init(name: String? = nil, matchMode: String? = nil) {
+            self.name = name; self.matchMode = matchMode
+        }
+
+        var effectiveName: String { name ?? "" }
+        var effectiveMatchMode: String {
+            (matchMode ?? "exact").lowercased() == "substring" ? "substring" : "exact"
+        }
+
+        func isInstalled(among installed: [String]) -> Bool {
+            let needle = effectiveName.lowercased()
+            guard !needle.isEmpty else { return false }
+            if effectiveMatchMode == "substring" {
+                return installed.contains { $0.lowercased().contains(needle) }
+            }
+            return installed.contains {
+                let name = $0.lowercased()
+                return name == needle || name == "\(needle).app"
+            }
+        }
+    }
+
+    /// Minimum compliant OS major version per platform.
+    struct MinimumOSVersions: Codable {
+        let macOS: Int?
+        let iOS: Int?
+        let iPadOS: Int?
+        let visionOS: Int?
+
+        var effectiveMacOS: Int { macOS ?? 26 }
+        var effectiveIOS: Int { iOS ?? 26 }
+        var effectiveIPadOS: Int { iPadOS ?? 26 }
+        var effectiveVisionOS: Int { visionOS ?? 2 }
+
+        static let empty = MinimumOSVersions(macOS: nil, iOS: nil, iPadOS: nil, visionOS: nil)
+    }
+
 
     // MARK: - Device Health
 

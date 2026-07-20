@@ -89,6 +89,11 @@ struct UserCapabilities: Equatable {
     /// Whether the user may export data out of the app.
     let allowExport: Bool
 
+    /// Whether the Health Scorecard's coverage diagnostics are offered at all.
+    /// OR'd across roles. Fail-closed: these name sites, groups and device counts
+    /// the rest of the console does not otherwise expose.
+    let allowScorecardDiagnostics: Bool
+
     /// Order is significant for `modules` and preserved verbatim apart from
     /// de-duplication: the FIRST occurrence of an id keeps its position and
     /// later repeats are dropped (never moved).
@@ -102,7 +107,8 @@ struct UserCapabilities: Equatable {
         allowedPrestages: Set<String> = [],
         allowPrestageOnAssign: Bool = false,
         returnToServiceOptions: AccessConfiguration.ReturnToServiceOptions = .empty,
-        allowExport: Bool
+        allowExport: Bool,
+        allowScorecardDiagnostics: Bool
     ) {
         var seen: Set<String> = []
         var ordered: [String] = []
@@ -130,6 +136,7 @@ struct UserCapabilities: Equatable {
         self.allowPrestageOnAssign = allowPrestageOnAssign
         self.returnToServiceOptions = returnToServiceOptions
         self.allowExport = allowExport
+        self.allowScorecardDiagnostics = allowScorecardDiagnostics
     }
 
     /// The fail-closed value: grants nothing at all. Used before
@@ -141,7 +148,8 @@ struct UserCapabilities: Equatable {
         computerActions: [],
         mobileDeviceActions: [],
         cleanupActions: [],
-        allowExport: false
+        allowExport: false,
+        allowScorecardDiagnostics: false
     )
 
     /// Hand-written because `moduleSet` is derived from `modules` — comparing
@@ -160,6 +168,7 @@ struct UserCapabilities: Equatable {
             && lhs.allowPrestageOnAssign == rhs.allowPrestageOnAssign
             && lhs.returnToServiceOptions == rhs.returnToServiceOptions
             && lhs.allowExport == rhs.allowExport
+            && lhs.allowScorecardDiagnostics == rhs.allowScorecardDiagnostics
     }
 
     /// Unions role definitions — a user holding multiple roles gets the SUM of
@@ -192,6 +201,7 @@ struct UserCapabilities: Equatable {
         var allowedPrestages: Set<String> = []
         var allowPrestageOnAssign = false
         var allowExport = false
+        var allowScorecardDiagnostics = false
 
         // RTS cleanup options are folded ONLY from roles that actually grant
         // the returnToService action, and combined with AND (most-restrictive
@@ -218,6 +228,8 @@ struct UserCapabilities: Equatable {
             allowedPrestages.formUnion(definition.effectiveAllowedPrestages)
             allowPrestageOnAssign = allowPrestageOnAssign || definition.effectiveAllowPrestageOnAssign
             allowExport = allowExport || definition.effectiveAllowExport
+            allowScorecardDiagnostics = allowScorecardDiagnostics
+                || definition.effectiveAllowScorecardDiagnostics
 
             if definition.effectiveComputerActions.contains(rtsActionID) {
                 let rts = definition.returnToServiceOptions ?? .empty
@@ -240,7 +252,8 @@ struct UserCapabilities: Equatable {
                 ? AccessConfiguration.ReturnToServiceOptions(
                     deleteJamfRecord: rtsDeleteJamf, deleteEntraObject: rtsDeleteEntra)
                 : .empty,
-            allowExport: allowExport
+            allowExport: allowExport,
+            allowScorecardDiagnostics: allowScorecardDiagnostics
         )
     }
 

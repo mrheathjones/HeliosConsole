@@ -83,7 +83,7 @@ struct HealthScorecardCard: View {
                         )
                 }
                 
-                Text(metric.type.rawValue)
+                Text(metric.effectiveTitle)
                     .font(.system(size: titleSize, weight: .semibold))
                     .foregroundColor(isDark ? .white : .primary)
                     .lineLimit(1)
@@ -92,15 +92,30 @@ struct HealthScorecardCard: View {
                 Spacer()
             }
             
-            // Percentage display
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(Int(metric.percentage))")
-                    .font(.system(size: percentageSize, weight: .bold))
-                    .foregroundColor(isDark ? .white : .primary)
-                
-                Text("%")
-                    .font(.system(size: percentSignSize, weight: .semibold))
-                    .foregroundColor(.gray)
+            // Percentage display — suppressed entirely when the card has no
+            // targets. 0/0 renders as 0% or 100% depending on which line of
+            // arithmetic you write; 0% reads as a crisis and 100% reads as
+            // success, and both are lies about a card nobody has scoped yet.
+            if metric.isConfigured {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(Int(metric.percentage))")
+                        .font(.system(size: percentageSize, weight: .bold))
+                        .foregroundColor(isDark ? .white : .primary)
+
+                    Text("%")
+                        .font(.system(size: percentSignSize, weight: .semibold))
+                        .foregroundColor(.gray)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 13))
+                        .foregroundColor(.yellow)
+                    Text("Not scoped")
+                        .font(.system(size: titleSize, weight: .semibold))
+                        .foregroundColor(.yellow)
+                }
+                .padding(.vertical, 4)
             }
             
             // Progress bar - show detailed breakdown for encryption
