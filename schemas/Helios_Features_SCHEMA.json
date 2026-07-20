@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.features",
-  "title": "Helios Console \u2014 Features",
+  "title": "Helios Console - Features",
   "description": "Feature-module and tuning configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.features \u2014 deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). Values take effect at app relaunch.",
   "type": "object",
   "properties": {
@@ -196,289 +196,165 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "title": "Enabled",
+          "title": "Enable Health Scorecard",
           "default": true
         },
-        "metrics": {
+        "cards": {
           "type": "array",
-          "title": "Scorecard Metrics",
+          "title": "Scorecard Cards",
+          "description": "One entry per scorecard card. Each card measures ONE population (its site/group ids) against ONE standard. To hold two populations to different standards, use two cards. A card omitted here is not rendered.",
           "items": {
             "type": "object",
             "properties": {
               "id": {
                 "type": "string",
-                "title": "Metric ID",
-                "description": "Stable metric identifier. One of: checkedIn, protected, encrypted, secured, upToDate. Legacy ids softwareUpdateCompliance and fileVaultEnabled are still accepted for one release."
+                "title": "Card",
+                "enum": [
+                  "checkedIn",
+                  "protected",
+                  "encrypted",
+                  "secured",
+                  "upToDate"
+                ]
               },
               "enabled": {
                 "type": "boolean",
                 "title": "Enabled",
                 "default": true
               },
-              "displayName": {
-                "type": "string",
-                "title": "Display Name"
-              },
               "thresholds": {
                 "type": "object",
-                "title": "Thresholds",
+                "title": "Colour Thresholds",
                 "properties": {
                   "critical": {
                     "type": "integer",
-                    "title": "Critical (%)"
+                    "default": 50
                   },
                   "warning": {
                     "type": "integer",
-                    "title": "Warning (%)"
+                    "default": 80
                   }
                 }
-              },
-              "checkedInDays": {
-                "type": "integer",
-                "title": "Checked-In Window (days)"
               },
               "platforms": {
                 "type": "array",
+                "title": "Platforms",
                 "items": {
-                  "type": "string"
-                },
-                "title": "Platforms"
-              },
-              "minimumOSVersions": {
-                "type": "object",
-                "title": "Minimum Compliant OS Versions",
-                "description": "Per-platform minimum OS MAJOR version counted as 'Up to Date'. Only meaningful on the softwareUpdateCompliance metric; drives BOTH the scorecard percentage and the drill-down device list.",
-                "properties": {
-                  "macOS": {
-                    "type": "integer",
-                    "title": "macOS",
-                    "default": 26
-                  },
-                  "iOS": {
-                    "type": "integer",
-                    "title": "iOS",
-                    "default": 26
-                  },
-                  "iPadOS": {
-                    "type": "integer",
-                    "title": "iPadOS",
-                    "default": 26
-                  },
-                  "visionOS": {
-                    "type": "integer",
-                    "title": "visionOS",
-                    "default": 2
-                  }
+                  "type": "string",
+                  "enum": [
+                    "macOS",
+                    "iOS",
+                    "iPadOS",
+                    "visionOS"
+                  ]
                 }
               },
-              "siteRules": {
+              "except": {
                 "type": "array",
-                "title": "Site Rules",
-                "description": "Per-site requirements, evaluated in order \u2014 first match wins. Used by the protected metric (requiredApps) and the secured metric (checks). A device whose site matches no rule scores defaultVerdictForUnmatchedSite.",
+                "title": "Except",
                 "items": {
                   "type": "object",
                   "properties": {
-                    "siteName": {
+                    "type": {
                       "type": "string",
-                      "title": "Jamf Site Name",
-                      "description": "Matched case-insensitively."
-                    },
-                    "siteMatchMode": {
-                      "type": "string",
-                      "title": "Site Match Mode",
                       "enum": [
-                        "exact",
-                        "prefix"
+                        "site",
+                        "computerGroup",
+                        "mobileGroup"
                       ],
-                      "default": "exact",
-                      "description": "Use prefix for versioned site names such as Enterprise_NextVer."
+                      "title": "Type"
                     },
-                    "requiredApps": {
-                      "type": "array",
-                      "title": "Required Applications",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "title": "Application Name"
-                          },
-                          "matchMode": {
-                            "type": "string",
-                            "title": "Match Mode",
-                            "enum": [
-                              "exact",
-                              "substring"
-                            ],
-                            "default": "exact",
-                            "description": "exact matches \"Name\" or \"Name.app\". Use substring only when the installed name varies; it also matches things like \"Name Uninstaller.app\"."
-                          }
-                        }
-                      }
-                    },
-                    "requireMode": {
+                    "id": {
                       "type": "string",
-                      "title": "Require Mode",
-                      "enum": [
-                        "all",
-                        "any"
-                      ],
-                      "default": "all",
-                      "description": "Whether every listed app is required, or at least one."
+                      "title": "Jamf ID"
                     },
-                    "checks": {
-                      "type": "array",
-                      "title": "Security Checks",
-                      "description": "Checks a device on this site must pass for the secured metric.",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "firewall",
-                          "sip",
-                          "gatekeeper",
-                          "managed",
-                          "supervised",
-                          "diskEncrypted",
-                          "bootstrapToken",
-                          "ddm"
-                        ]
-                      }
+                    "comment": {
+                      "type": "string",
+                      "title": "Comment"
                     }
                   }
-                }
+                },
+                "description": "Carve-out applied before targeting \u2014 for \"this site but not that group inside it\"."
               },
-              "excludedSites": {
+              "unmatchedVerdict": {
+                "type": "string",
+                "title": "Verdict For Untargeted Devices",
+                "enum": [
+                  "excluded",
+                  "unknown"
+                ],
+                "default": "excluded",
+                "description": "excluded removes untargeted devices from the card entirely. unknown keeps them visible as unevaluated, turning the card into a coverage audit."
+              },
+              "allDevices": {
+                "type": "boolean",
+                "title": "All Devices",
+                "default": false,
+                "description": "Measure every device, ignoring sites and groups. Must be stated explicitly \u2014 an empty target list means measure NOTHING, never everything."
+              },
+              "siteIds": {
                 "type": "array",
-                "title": "Excluded Sites",
-                "description": "Devices on these sites are removed from this metric entirely \u2014 they count toward neither the numerator nor the denominator.",
+                "title": "Jamf Site IDs",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Jamf site IDs this card measures - not names, because a site renamed in Jamf keeps its id. Find them via Scope IDs on the Helios dashboard. A card with no site or group ids measures nothing and shows a setup state."
+              },
+              "computerGroupIds": {
+                "type": "array",
+                "title": "Computer Group IDs",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Static or smart computer group ids. Separate from mobile group ids: they are different Jamf id namespaces."
+              },
+              "mobileGroupIds": {
+                "type": "array",
+                "title": "Mobile Device Group IDs",
                 "items": {
                   "type": "string"
                 }
               },
-              "defaultVerdictForUnmatchedSite": {
-                "type": "string",
-                "title": "Verdict For Unmatched Site",
-                "enum": [
-                  "unknown",
-                  "nonCompliant",
-                  "compliant"
-                ],
-                "default": "unknown",
-                "description": "What a device scores when its site matches no rule. Defaults to unknown so an unconfigured site is reported as unevaluated rather than silently counted as passing."
-              }
-            }
-          },
-          "default": [
-            {
-              "id": "checkedIn",
-              "enabled": true,
-              "displayName": "Checked-In",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
-              },
-              "checkedInDays": 7,
-              "platforms": [
-                "macOS",
-                "iOS",
-                "iPadOS",
-                "visionOS"
-              ]
-            },
-            {
-              "id": "protected",
-              "enabled": true,
-              "displayName": "Protected",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
-              },
-              "platforms": [
-                "macOS",
-                "iOS",
-                "iPadOS",
-                "visionOS"
-              ],
-              "defaultVerdictForUnmatchedSite": "unknown",
-              "siteRules": [
-                {
-                  "siteName": "enterprise",
-                  "siteMatchMode": "exact",
-                  "requireMode": "all",
-                  "requiredApps": [
-                    {
-                      "name": "Cisco Secure Client",
-                      "matchMode": "exact"
+              "requiredApps": {
+                "type": "array",
+                "title": "Required Applications",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "title": "Application Name"
                     },
-                    {
-                      "name": "Zscaler",
-                      "matchMode": "exact"
-                    },
-                    {
-                      "name": "QualysCloudAgent",
-                      "matchMode": "exact"
-                    },
-                    {
-                      "name": "Falcon",
-                      "matchMode": "exact"
-                    },
-                    {
-                      "name": "JamfProtect",
-                      "matchMode": "exact"
+                    "matchMode": {
+                      "type": "string",
+                      "title": "Match Mode",
+                      "enum": [
+                        "exact",
+                        "substring"
+                      ],
+                      "default": "exact",
+                      "description": "exact matches \"Name\" or \"Name.app\". substring also matches things like \"Name Uninstaller.app\" \u2014 use only when the installed name varies."
                     }
-                  ]
+                  }
                 },
-                {
-                  "siteName": "groundcontrol",
-                  "siteMatchMode": "exact",
-                  "requireMode": "all",
-                  "requiredApps": [
-                    {
-                      "name": "Falcon",
-                      "matchMode": "exact"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "id": "encrypted",
-              "enabled": true,
-              "displayName": "Encrypted",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
+                "description": "Used by the protected card. Every listed app is required unless Require Mode is 'any'."
               },
-              "platforms": [
-                "macOS",
-                "iOS",
-                "iPadOS",
-                "visionOS"
-              ],
-              "excludedSites": [
-                "groundcontrol"
-              ]
-            },
-            {
-              "id": "secured",
-              "enabled": true,
-              "displayName": "Secured",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
+              "requireMode": {
+                "type": "string",
+                "title": "Require Mode",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "default": "all"
               },
-              "platforms": [
-                "macOS",
-                "iOS",
-                "iPadOS",
-                "visionOS"
-              ],
-              "defaultVerdictForUnmatchedSite": "unknown",
-              "siteRules": [
-                {
-                  "siteName": "enterprise",
-                  "siteMatchMode": "exact",
-                  "checks": [
+              "checks": {
+                "type": "array",
+                "title": "Security Checks",
+                "description": "Used by the secured card.",
+                "items": {
+                  "type": "string",
+                  "enum": [
                     "firewall",
                     "sip",
                     "gatekeeper",
@@ -488,43 +364,39 @@
                     "bootstrapToken",
                     "ddm"
                   ]
-                },
-                {
-                  "siteName": "groundcontrol",
-                  "siteMatchMode": "exact",
-                  "checks": [
-                    "firewall",
-                    "sip",
-                    "managed",
-                    "supervised",
-                    "bootstrapToken",
-                    "ddm"
-                  ]
                 }
-              ]
-            },
-            {
-              "id": "upToDate",
-              "enabled": true,
-              "displayName": "Up to Date",
-              "thresholds": {
-                "critical": 50,
-                "warning": 80
               },
-              "platforms": [
-                "macOS",
-                "iOS",
-                "iPadOS",
-                "visionOS"
-              ],
+              "checkedInDays": {
+                "type": "integer",
+                "title": "Check-In Window (days)",
+                "default": 7,
+                "description": "Used by the checkedIn card."
+              },
               "minimumOSVersions": {
-                "macOS": 26,
-                "iOS": 26,
-                "iPadOS": 26,
-                "visionOS": 2
+                "type": "object",
+                "title": "Minimum OS Versions",
+                "description": "Used by the upToDate card.",
+                "properties": {
+                  "macOS": {
+                    "type": "integer",
+                    "default": 26
+                  },
+                  "iOS": {
+                    "type": "integer",
+                    "default": 26
+                  },
+                  "iPadOS": {
+                    "type": "integer",
+                    "default": 26
+                  },
+                  "visionOS": {
+                    "type": "integer",
+                    "default": 2
+                  }
+                }
               }
             }
-          ]
+          }
         }
       }
     },

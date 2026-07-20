@@ -169,6 +169,10 @@ struct MDMConfiguration: Codable {
     /// Empty when none delivered.
     let uiDeviceActionLabels: [DeviceActionLabelSetting]
 
+    /// Cosmetic scorecard card label overrides (ui domain `healthCardLabels`).
+    /// Read via `healthCardLabelOverride(id:)`. Empty when none delivered.
+    let uiHealthCardLabels: [HealthCardLabelSetting]
+
     /// Interactive sign-in configuration (core domain `signIn` block) —
     /// how users sign into the app itself: built-in email flow (default)
     /// or Microsoft Entra ID via a separate PUBLIC-client app registration.
@@ -415,6 +419,17 @@ struct MDMConfiguration: Codable {
         return result
     }
 
+    /// The display-name override for scorecard card `id`, or nil when none was
+    /// delivered or it is blank. Cosmetic only — which cards exist and what they
+    /// measure is the features domain's `healthScorecard.cards`.
+    func healthCardLabelOverride(id: String) -> String? {
+        var name: String?
+        for item in uiHealthCardLabels where item.effectiveID == id {
+            if !item.effectiveDisplayName.isEmpty { name = item.effectiveDisplayName }
+        }
+        return name
+    }
+
     /// The label/icon override for device-action `id`, or nil when none was
     /// delivered. Either field may still be nil (blank → app default). Last
     /// entry carrying a non-empty field for a duplicate id wins per field.
@@ -477,6 +492,7 @@ struct MDMConfiguration: Codable {
         userInterfaceExtras: UserInterfaceSettings? = nil,
         uiDeviceTabs: [DeviceTabLabelSetting] = [],
         uiDeviceActionLabels: [DeviceActionLabelSetting] = [],
+        uiHealthCardLabels: [HealthCardLabelSetting] = [],
         signIn: CoreConfiguration.SignInSettings? = nil
     ) {
         self.jamfURL = jamfURL
@@ -528,6 +544,7 @@ struct MDMConfiguration: Codable {
         self.userInterfaceExtras = userInterfaceExtras
         self.uiDeviceTabs = uiDeviceTabs
         self.uiDeviceActionLabels = uiDeviceActionLabels
+        self.uiHealthCardLabels = uiHealthCardLabels
         self.signIn = signIn
     }
 
@@ -678,6 +695,7 @@ struct MDMConfiguration: Codable {
             userInterfaceExtras: uiSettings,
             uiDeviceTabs: ui?.deviceTabs ?? [],
             uiDeviceActionLabels: ui?.deviceActionLabels ?? [],
+            uiHealthCardLabels: ui?.healthCardLabels ?? [],
             // Interactive sign-in passthrough. Absent core domain (or an
             // absent signIn block) → nil → signInMethod resolves to .email,
             // so undelivered profiles keep the email flow unchanged.

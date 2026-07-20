@@ -56,8 +56,16 @@ struct UserInterfaceConfiguration: Codable {
     /// action's built-in label and icon.
     var deviceActionLabels: [DeviceActionLabelSetting]?
 
+    /// Optional per-card label overrides for the Environment Health Scorecard.
+    /// COSMETIC ONLY — which cards exist and what they measure is the features
+    /// domain's `healthScorecard.cards`. Same split as sidebarItems and
+    /// deviceActionLabels: the thing is defined in its home domain, the label
+    /// that names it lives here.
+    var healthCardLabels: [HealthCardLabelSetting]?
+
     enum CodingKeys: String, CodingKey {
         case configurationVersion, userInterface, sidebarItems, deviceTabs, deviceActionLabels
+        case healthCardLabels
     }
 
     init(
@@ -128,6 +136,16 @@ struct UserInterfaceConfiguration: Codable {
             if !item.effectiveDisplayName.isEmpty { result = item.effectiveDisplayName }
         }
         return result
+    }
+
+    /// The display-name override for scorecard card `id`, or nil when none was
+    /// delivered or it is blank.
+    func healthCardLabelOverride(id: String) -> String? {
+        var name: String?
+        for item in (healthCardLabels ?? []) where item.effectiveID == id {
+            if !item.effectiveDisplayName.isEmpty { name = item.effectiveDisplayName }
+        }
+        return name
     }
 
     /// The label/icon override for device-action `id`, or `nil` when none was
@@ -345,6 +363,34 @@ struct DeviceTabLabelSetting: Codable {
 /// ({id, displayName, icon}). Cosmetic override for a device action's menu
 /// label and SF-Symbol icon; the action's availability is gated ROLE-ONLY by
 /// the access domain, never here.
+/// One scorecard card's label override. Mirrors DeviceActionLabelSetting.
+struct HealthCardLabelSetting: Codable {
+    var id: String?
+    var displayName: String?
+
+    enum CodingKeys: String, CodingKey { case id, displayName }
+
+    init(id: String? = nil, displayName: String? = nil) {
+        self.id = id
+        self.displayName = displayName
+    }
+
+    /// Resilient per-key decode: a malformed field degrades to nil rather than
+    /// failing the array (and, via the loader's catch, the whole ui domain).
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? container.decode(String.self, forKey: .id)
+        displayName = try? container.decode(String.self, forKey: .displayName)
+    }
+
+    var effectiveID: String {
+        (id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    var effectiveDisplayName: String {
+        (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 struct DeviceActionLabelSetting: Codable {
     var id: String?
     var displayName: String?

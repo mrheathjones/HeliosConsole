@@ -30,6 +30,7 @@
 		F016 /* ComputerSearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S016 /* ComputerSearchModels.swift */; };
 		F017 /* ComputerSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S017 /* ComputerSearchService.swift */; };
 		F251 /* HealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = S251 /* HealthEvaluator.swift */; };
+		S253 /* ScopeIDInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = S254 /* ScopeIDInspector.swift */; };
 		F018 /* HealthMetricsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = S018 /* HealthMetricsCalculator.swift */; };
 		F019 /* JamfAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S019 /* JamfAPIService.swift */; };
 		F250 /* EntraGraphService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S250 /* EntraGraphService.swift */; };
@@ -174,6 +175,7 @@
 		S016 /* ComputerSearchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerSearchModels.swift; sourceTree = "<group>"; };
 		S017 /* ComputerSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerSearchService.swift; sourceTree = "<group>"; };
 		S251 /* HealthEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthEvaluator.swift; sourceTree = "<group>"; };
+		S254 /* ScopeIDInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeIDInspector.swift; sourceTree = "<group>"; };
 		S018 /* HealthMetricsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricsCalculator.swift; sourceTree = "<group>"; };
 		S019 /* JamfAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfAPIService.swift; sourceTree = "<group>"; };
 		S250 /* EntraGraphService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntraGraphService.swift; sourceTree = "<group>"; };
@@ -515,6 +517,7 @@
 			children = (
 				S051 /* AnimatedBackgroundView.swift */,
 				S052 /* HealthMetricType.swift */,
+				S254 /* ScopeIDInspector.swift */,
 				S053 /* HealthMetricView.swift */,
 				S054 /* HealthScorecardCard.swift */,
 				S055 /* InventoryLoadingView.swift */,
@@ -781,6 +784,7 @@
 				F016 /* ComputerSearchModels.swift in Sources */,
 				F017 /* ComputerSearchService.swift in Sources */,
 				F018 /* HealthMetricsCalculator.swift in Sources */,
+				S253 /* ScopeIDInspector.swift in Sources */,
 				F251 /* HealthEvaluator.swift in Sources */,
 				F019 /* JamfAPIService.swift in Sources */,
 				F250 /* EntraGraphService.swift in Sources */,
@@ -970,7 +974,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 65;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -998,7 +1002,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 65;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1026,7 +1030,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 65;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1056,7 +1060,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 65;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;

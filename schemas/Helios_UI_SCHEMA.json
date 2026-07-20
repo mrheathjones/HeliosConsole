@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.ui",
-  "title": "Helios Console — Branding & UX",
-  "description": "Branding and user-experience settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.ui — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). The override lists here are cosmetic only — all gating is role-based in the access domain. Values take effect at app relaunch.",
+  "title": "Helios Console - Branding & UX",
+  "description": "Branding and user-experience settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.ui \u2014 deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios (no secrets, safe to scope broadly). The override lists here are cosmetic only \u2014 all gating is role-based in the access domain. Values take effect at app relaunch.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
-      "description": "Schema/profile version stamp (informational — the loader logs it, nothing else reads it).",
+      "description": "Schema/profile version stamp (informational \u2014 the loader logs it, nothing else reads it).",
       "default": "3.0"
     },
     "userInterface": {
@@ -93,7 +93,7 @@
     "sidebarItems": {
       "type": "array",
       "title": "Sidebar Item Overrides (optional)",
-      "description": "Optional label/icon overrides for sidebar rows — cosmetic only. Row presence and order come from the access domain's role modules. Blank field = built-in value; unknown ids are skipped. (`title` is accepted as an alias for `displayName`.)",
+      "description": "Optional label/icon overrides for sidebar rows \u2014 cosmetic only. Row presence and order come from the access domain's role modules. Blank field = built-in value; unknown ids are skipped. (`title` is accepted as an alias for `displayName`.)",
       "items": {
         "type": "object",
         "properties": {
@@ -131,7 +131,7 @@
     "deviceTabs": {
       "type": "array",
       "title": "Devices-Tab Label Overrides (optional)",
-      "description": "Optional label renames for tabs inside the Devices module — cosmetic only, no icon override. Tab presence comes from the access domain's role deviceTabs. An id absent here keeps its built-in title.",
+      "description": "Optional label renames for tabs inside the Devices module \u2014 cosmetic only, no icon override. Tab presence comes from the access domain's role deviceTabs. An id absent here keeps its built-in title.",
       "items": {
         "type": "object",
         "properties": {
@@ -159,7 +159,7 @@
     "deviceActionLabels": {
       "type": "array",
       "title": "Device-Action Label Overrides (optional)",
-      "description": "Optional label/icon overrides for the device Actions menu — cosmetic only. Action availability is gated by the access domain roles; this list never makes an action appear. Blank field = built-in. Confirmation-dialog safety copy is never overridable.",
+      "description": "Optional label/icon overrides for the device Actions menu \u2014 cosmetic only. Action availability is gated by the access domain roles; this list never makes an action appear. Blank field = built-in. Confirmation-dialog safety copy is never overridable.",
       "items": {
         "type": "object",
         "properties": {
@@ -203,6 +203,33 @@
         "additionalProperties": false
       },
       "default": []
+    },
+    "healthCardLabels": {
+      "type": "array",
+      "title": "Health Scorecard Card Labels (optional)",
+      "description": "Optional display-name overrides for Environment Health Scorecard cards - cosmetic only. Which cards exist and what each measures comes from the features domain's healthScorecard.cards. Blank field = built-in name; unknown ids are skipped.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Card ID",
+            "description": "Which scorecard card this override applies to.",
+            "enum": [
+              "checkedIn",
+              "protected",
+              "encrypted",
+              "secured",
+              "upToDate"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "title": "Display Name",
+            "description": "Blank = the card's built-in name."
+          }
+        }
+      }
     }
   }
 }

@@ -30,6 +30,50 @@ final class HealthMetricsCalculator: ObservableObject {
     /// needs a rule written from one that should be excluded outright.
     @Published private(set) var unmatchedSiteCounts: [(site: String, count: Int)] = []
 
+    /// Per-card coverage: how many devices no target covered, and which targets
+    /// matched nothing. Under an inclusion model an untargeted device silently
+    /// leaves the card and the percentage IMPROVES, because what remains is the
+    /// healthier population. That is much harder to notice than a visible Unknown
+    /// column, so this reporting is load-bearing rather than decorative.
+    @Published private(set) var cardCoverage: [HealthMetricType: CardCoverage] = [:]
+
+    /// Every Jamf site and group present in the fleet, with its id — the values an
+    /// admin needs to author a targeting profile. Derived from cached inventory,
+    /// so it costs no API call and cannot drift from what the app actually sees.
+    @Published private(set) var scopeDirectory: [ScopeDirectoryEntry] = []
+
+    struct CardCoverage {
+        var isConfigured: Bool = true
+        var inScope: Int = 0
+        var untargeted: Int = 0
+        /// Untargeted devices grouped by site, largest first — the shortlist of
+        /// ids an admin needs to add to a target.
+        var untargetedBySite: [(siteName: String, siteID: String, count: Int)] = []
+        /// Targets that matched zero devices. Never a legitimate steady state:
+        /// a typo, or a site/group that no longer exists.
+        var deadTargets: [String] = []
+    }
+
+    struct ScopeDirectoryEntry: Identifiable, Hashable {
+        enum Kind: String { case site = "Site", computerGroup = "Computer Group", mobileGroup = "Mobile Group" }
+        let kind: Kind
+        let id: String
+        let name: String
+        let deviceCount: Int
+        /// Only meaningful for groups.
+        let isSmart: Bool?
+
+        var configKeyHint: String {
+            switch kind {
+            case .site: return "siteIds"
+            case .computerGroup: return "computerGroupIds"
+            case .mobileGroup: return "mobileGroupIds"
+            }
+        }
+        var identity: String { "\(kind.rawValue)-\(id)" }
+        var id_: String { identity }
+    }
+
     /// Metrics that could not be evaluated because the Jamf inventory sections
     /// they depend on were never requested. Surfaced so a missing section reads
     /// as "cannot evaluate" instead of silently scoring every device as failing.
@@ -61,26 +105,11 @@ final class HealthMetricsCalculator: ObservableObject {
     @Published private(set) var upToDateMetric: HealthMetricData?
     
     // MARK: - Configuration
+    //
+    // check-in window and OS minimums are per-TARGET now, not per-metric: two
+    // populations on one card can legitimately have different thresholds. They
+    // are resolved inside HealthPolicy from the target that matched the device.
 
-    /// Number of days to consider a device as "recently checked in" —
-    /// features domain healthScorecard.metrics[id=checkedIn].checkedInDays
-    /// (schema default 7).
-    var checkInThresholdDays: Int {
-        MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.checkedIn.configID)?
-            .effectiveCheckedInDays ?? 7
-    }
-
-    /// Minimum compliant OS major versions for the "Up to Date" metric —
-    /// features domain healthScorecard.metrics[id=upToDate].minimumOSVersions.
-    /// Profiles written against the old schema addressed this as
-    /// `softwareUpdateCompliance`; effectiveMetric(id:) still honours that.
-    var minimumOSVersions: FeaturesConfiguration.HealthMetricSetting.MinimumOSVersions {
-        MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.upToDate.configID)?
-            .effectiveMinimumOSVersions ?? .empty
-    }
-    
     // MARK: - Inventory Section Requirements
 
     /// Jamf inventory sections each metric's evaluation depends on.
@@ -168,6 +197,8 @@ final class HealthMetricsCalculator: ObservableObject {
     /// Accumulates data gaps across a single recalculation pass.
     private var dataGapAccumulator: [MetricDataGap] = []
 
+    private var coverageAccumulator: [HealthMetricType: CardCoverage] = [:]
+
     /// Accumulates unmatched sites across a single recalculation pass, keyed by
     /// site name to the set of device ids seen there. Device ids rather than a
     /// running tally because Protected and Secured each walk the same computer
@@ -188,6 +219,7 @@ final class HealthMetricsCalculator: ObservableObject {
         isCalculating = true
         unmatchedSitesAccumulator.removeAll()
         dataGapAccumulator.removeAll()
+        coverageAccumulator.removeAll()
 
         let computerCache = ComputerInventoryCache.shared
         let mobileCache = MobileDeviceInventoryCache.shared
@@ -219,6 +251,11 @@ final class HealthMetricsCalculator: ObservableObject {
             .sorted { $0.count != $1.count ? $0.count > $1.count : $0.site < $1.site }
         unmatchedSiteNames = unmatchedSiteCounts.map(\.site)
         metricDataGaps = dataGapAccumulator
+        cardCoverage = coverageAccumulator
+        scopeDirectory = buildScopeDirectory(
+            computers: computerCache.computers,
+            mobileDevices: mobileCache.devices
+        )
         isCalculating = false
 
         NSLog("📊 HealthMetricsCalculator: Recalculated metrics - Checked-In: %d/%d (%.1f%%)",
@@ -290,13 +327,36 @@ final class HealthMetricsCalculator: ObservableObject {
         computers: [ComputerInventoryItem],
         mobileDevices: [MobileDeviceInventoryItem]
     ) -> HealthMetricData {
-        let policy = HealthPolicy.current(checkedInDays: checkInThresholdDays,
-                                          minimums: minimumOSVersions)
+        let policy = HealthPolicy.current()
+        let groupsFetched = Set(configuredComputerSections).contains("GROUP_MEMBERSHIPS")
+        let mobileGroupsFetched = Set(configuredMobileSections).contains("GROUPS")
         let computerAvailability = SectionAvailability.computers(configuredComputerSections)
         let mobileAvailability = SectionAvailability.mobileDevices(configuredMobileSections)
 
         noteDataGap(metric, .computers, missingComputerSections(for: metric))
         noteDataGap(metric, .mobileDevices, missingMobileSections(for: metric))
+
+        var coverage = CardCoverage()
+        coverage.isConfigured = policy.card(for: metric)?.isConfigured ?? false
+        var untargetedSites: [String: (name: String, count: Int)] = [:]
+
+        /// Records where a device landed so the card can account for what it is
+        /// NOT measuring, which inclusion otherwise hides.
+        func note(_ facts: DeviceScopeFacts) {
+            switch policy.resolveScope(for: metric, facts: facts) {
+            case .inScope:
+                coverage.inScope += 1
+            case .untargeted:
+                coverage.untargeted += 1
+                let id = facts.siteID ?? ""
+                let key = id.isEmpty ? "(no site)" : id
+                let name = facts.siteName ?? (id.isEmpty ? "(no site assigned)" : "site id \(id)")
+                let existing = untargetedSites[key]
+                untargetedSites[key] = (name: name, count: (existing?.count ?? 0) + 1)
+            default:
+                break
+            }
+        }
 
         var compliantCount = 0
         var nonCompliantCount = 0
@@ -332,9 +392,11 @@ final class HealthMetricsCalculator: ObservableObject {
             let evaluation = HealthEvaluator.evaluate(
                 metric,
                 computer: computer.healthInput(availability: computerAvailability),
+                facts: computer.scopeFacts(groupDataAvailable: groupsFetched),
                 policy: policy
             )
             tally(evaluation)
+            note(computer.scopeFacts(groupDataAvailable: groupsFetched))
             for cause in evaluation.causes {
                 if case .unmatchedSite(let raw) = cause {
                     noteUnmatchedSite(raw, deviceID: computer.id)
@@ -343,12 +405,31 @@ final class HealthMetricsCalculator: ObservableObject {
         }
 
         for device in mobileDevices {
+            let facts = device.scopeFacts(groupDataAvailable: mobileGroupsFetched)
             tally(HealthEvaluator.evaluate(
                 metric,
                 mobile: device.healthInput(availability: mobileAvailability),
+                facts: facts,
                 policy: policy
             ))
+            note(facts)
         }
+
+        coverage.untargetedBySite = untargetedSites
+            .map { (siteName: $0.value.name, siteID: $0.key, count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.siteName < $1.siteName }
+
+        // A configured card matching nothing is a typo or a decommissioned site —
+        // never a legitimate steady state, and invisible without saying so.
+        if coverage.isConfigured, coverage.inScope == 0 {
+            let card = policy.card(for: metric)
+            let ids = (card?.effectiveSiteIds ?? [])
+                + (card?.effectiveComputerGroupIds ?? [])
+                + (card?.effectiveMobileGroupIds ?? [])
+            coverage.deadTargets = ids.isEmpty ? [] : ["site/group id \(ids.joined(separator: ", "))"]
+        }
+
+        coverageAccumulator[metric] = coverage
 
         return HealthMetricData(
             type: metric,
@@ -358,8 +439,83 @@ final class HealthMetricsCalculator: ObservableObject {
             encryptedCount: encryptedCount,
             encryptingCount: encryptingCount,
             decryptingCount: 0,
-            unencryptedCount: unencryptedCount
+            unencryptedCount: unencryptedCount,
+            isConfigured: coverage.isConfigured,
+            // Cosmetic label lives in the ui domain alongside sidebarItems and
+            // deviceActionLabels; what the card MEASURES stays in features.
+            displayName: MDMConfigurationManager.shared.configuration
+                .healthCardLabelOverride(id: metric.configID) ?? "",
+            untargetedCount: coverage.untargeted
         )
+    }
+
+    /// Builds the site/group directory from cached inventory.
+    ///
+    /// Exists because Helios displays no Jamf ids anywhere, and the targeting
+    /// profile is authored entirely in ids — without this an admin has to dig
+    /// them out of Jamf by hand, which is a hard blocker on the model being
+    /// usable. Derived from inventory rather than a directory API so it can only
+    /// ever show ids that real devices actually carry.
+    private func buildScopeDirectory(
+        computers: [ComputerInventoryItem],
+        mobileDevices: [MobileDeviceInventoryItem]
+    ) -> [ScopeDirectoryEntry] {
+        var sites: [String: (name: String, count: Int)] = [:]
+        var computerGroups: [String: (name: String, smart: Bool?, count: Int)] = [:]
+        var mobileGroups: [String: (name: String, smart: Bool?, count: Int)] = [:]
+
+        for computer in computers {
+            if let id = computer.general?.site?.id, !id.isEmpty {
+                let name = computer.siteName ?? "(unnamed)"
+                sites[id] = (name: name, count: (sites[id]?.count ?? 0) + 1)
+            }
+            for membership in computer.groupMemberships ?? [] {
+                guard let id = membership.groupId, !id.isEmpty else { continue }
+                let existing = computerGroups[id]
+                computerGroups[id] = (
+                    name: membership.groupName ?? existing?.name ?? "(unnamed)",
+                    smart: membership.smartGroup ?? existing?.smart,
+                    count: (existing?.count ?? 0) + 1
+                )
+            }
+        }
+
+        for device in mobileDevices {
+            if let id = device.general?.siteId, !id.isEmpty {
+                // Mobile inventory carries no resolved site name; borrow the one
+                // the computer fleet reported for the same id if there is one.
+                let name = sites[id]?.name ?? "(unnamed)"
+                sites[id] = (name: name, count: (sites[id]?.count ?? 0) + 1)
+            }
+            for group in device.groups ?? [] {
+                guard let id = group.groupId, !id.isEmpty else { continue }
+                let existing = mobileGroups[id]
+                mobileGroups[id] = (
+                    name: group.groupName ?? existing?.name ?? "(unnamed)",
+                    smart: group.smart ?? existing?.smart,
+                    count: (existing?.count ?? 0) + 1
+                )
+            }
+        }
+
+        var entries: [ScopeDirectoryEntry] = []
+        entries += sites.map {
+            .init(kind: .site, id: $0.key, name: $0.value.name,
+                  deviceCount: $0.value.count, isSmart: nil)
+        }
+        entries += computerGroups.map {
+            .init(kind: .computerGroup, id: $0.key, name: $0.value.name,
+                  deviceCount: $0.value.count, isSmart: $0.value.smart)
+        }
+        entries += mobileGroups.map {
+            .init(kind: .mobileGroup, id: $0.key, name: $0.value.name,
+                  deviceCount: $0.value.count, isSmart: $0.value.smart)
+        }
+        return entries.sorted {
+            $0.kind.rawValue != $1.kind.rawValue
+                ? $0.kind.rawValue < $1.kind.rawValue
+                : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
     }
 
     
@@ -383,8 +539,9 @@ final class HealthMetricsCalculator: ObservableObject {
         // functions this replaced duplicated the pass/fail logic of the
         // calculate*Metric functions line for line, and had already drifted from
         // them in four places.
-        let policy = HealthPolicy.current(checkedInDays: checkInThresholdDays,
-                                          minimums: minimumOSVersions)
+        let policy = HealthPolicy.current()
+        let groupsFetched = Set(configuredComputerSections).contains("GROUP_MEMBERSHIPS")
+        let mobileGroupsFetched = Set(configuredMobileSections).contains("GROUPS")
         let computerAvailability = SectionAvailability.computers(configuredComputerSections)
         let mobileAvailability = SectionAvailability.mobileDevices(configuredMobileSections)
 
@@ -394,6 +551,7 @@ final class HealthMetricsCalculator: ObservableObject {
             let evaluation = HealthEvaluator.evaluate(
                 metricType,
                 computer: computer.healthInput(availability: computerAvailability),
+                facts: computer.scopeFacts(groupDataAvailable: groupsFetched),
                 policy: policy
             )
             if Self.segment(for: evaluation.verdict) == segment {
@@ -405,6 +563,7 @@ final class HealthMetricsCalculator: ObservableObject {
             let evaluation = HealthEvaluator.evaluate(
                 metricType,
                 mobile: device.healthInput(availability: mobileAvailability),
+                facts: device.scopeFacts(groupDataAvailable: mobileGroupsFetched),
                 policy: policy
             )
             if Self.segment(for: evaluation.verdict) == segment {

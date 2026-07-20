@@ -1,21 +1,30 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "com.herojoneslabs.helios.console.whatsNew",
-  "title": "Helios Console – What's New Configuration",
+  "title": "Helios Console - What's New Configuration",
   "description": "Controls the 'What's New' screen shown after login. When this payload is present, the sheet is displayed once per unique version string. Remove the payload entirely to disable the feature.",
   "type": "object",
-  "required": ["version", "items"],
+  "required": [
+    "version",
+    "items"
+  ],
   "properties": {
     "version": {
       "type": "string",
-      "description": "Version identifier that controls when the sheet appears. The sheet shows once per unique value. Typically matches CFBundleShortVersionString (e.g. '0.3.1') but can be any string — use '0.3.1-hotfix2' to re-show after a config update within the same app version.",
-      "examples": ["0.3.1", "0.4.0-beta1"]
+      "description": "Version identifier that controls when the sheet appears. The sheet shows once per unique value. Typically matches CFBundleShortVersionString (e.g. '0.3.1') but can be any string \u2014 use '0.3.1-hotfix2' to re-show after a config update within the same app version.",
+      "examples": [
+        "0.3.1",
+        "0.4.0-beta1"
+      ]
     },
     "headline": {
       "type": "string",
       "description": "Main heading displayed at the top of the sheet. Defaults to 'What's New' if omitted.",
       "default": "What's New",
-      "examples": ["What's New in Helios", "Spring 2026 Update"]
+      "examples": [
+        "What's New in Helios",
+        "Spring 2026 Update"
+      ]
     },
     "items": {
       "type": "array",
@@ -23,28 +32,56 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["icon", "title", "description"],
+        "required": [
+          "icon",
+          "title",
+          "description"
+        ],
         "properties": {
           "icon": {
             "type": "string",
             "description": "SF Symbol name for the feature icon. See https://developer.apple.com/sf-symbols/",
-            "examples": ["bolt.fill", "chart.bar.fill", "shield.checkered", "shared.with.you"]
+            "examples": [
+              "bolt.fill",
+              "chart.bar.fill",
+              "shield.checkered",
+              "shared.with.you"
+            ]
           },
           "iconColor": {
             "type": "string",
             "description": "Color name for the icon circle. Supported values: blue, green, red, orange, yellow, purple, pink, cyan, teal, indigo, mint, brown, gray. Defaults to 'blue' if omitted.",
-            "enum": ["blue", "green", "red", "orange", "yellow", "purple", "pink", "cyan", "teal", "indigo", "mint", "brown", "gray"],
+            "enum": [
+              "blue",
+              "green",
+              "red",
+              "orange",
+              "yellow",
+              "purple",
+              "pink",
+              "cyan",
+              "teal",
+              "indigo",
+              "mint",
+              "brown",
+              "gray"
+            ],
             "default": "blue"
           },
           "title": {
             "type": "string",
             "description": "Bold title for this feature entry.",
-            "examples": ["Screen Share Auto-Dismiss", "Action Logs"]
+            "examples": [
+              "Screen Share Auto-Dismiss",
+              "Action Logs"
+            ]
           },
           "description": {
             "type": "string",
             "description": "Supporting description text shown below the title.",
-            "examples": ["Screen share confirmations now automatically disappear after 5 seconds."]
+            "examples": [
+              "Screen share confirmations now automatically disappear after 5 seconds."
+            ]
           }
         }
       }
@@ -53,7 +90,11 @@
       "type": "string",
       "description": "Label for the dismiss button at the bottom. Defaults to 'Continue' if omitted.",
       "default": "Continue",
-      "examples": ["Get Started", "Continue", "Let's Go"]
+      "examples": [
+        "Get Started",
+        "Continue",
+        "Let's Go"
+      ]
     }
   }
 }

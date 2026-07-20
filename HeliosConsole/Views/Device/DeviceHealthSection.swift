@@ -48,19 +48,9 @@ struct DeviceHealthMetricResult: Identifiable {
 
 struct DeviceHealthEvaluator {
     
-    // Configuration — same features-domain keys the scorecard uses, so the
-    // per-device health panel and the fleet scorecard can never disagree.
-    static var checkInThresholdDays: Int {
-        MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.checkedIn.configID)?
-            .effectiveCheckedInDays ?? 7
-    }
-    static var minimumMacOSVersion: Int {
-        (MDMConfigurationManager.shared.configuration.features?
-            .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.upToDate.configID)?
-            .effectiveMinimumOSVersions ?? .empty).effectiveMacOS
-    }
-    
+    // Tunables are per-target now and resolved inside HealthPolicy from whichever
+    // target matched this device, so the panel no longer reads them directly.
+
     // MARK: - Evaluate Computer Health
     
     /// Routes every metric through HealthEvaluator — the same implementation the
@@ -69,16 +59,14 @@ struct DeviceHealthEvaluator {
     /// app matcher, a different FileVault pass-set, a contradiction between its
     /// own Encrypted and Secured checks, and string-level check-in fallback.
     static func evaluateComputer(_ computer: Computer) -> [DeviceHealthMetricResult] {
-        let policy = HealthPolicy.current(
-            checkedInDays: checkInThresholdDays,
-            minimums: MDMConfigurationManager.shared.configuration.features?
-                .effectiveHealthScorecard.effectiveMetric(id: HealthMetricType.upToDate.configID)?
-                .effectiveMinimumOSVersions ?? .empty
-        )
+        let policy = HealthPolicy.current()
         let input = healthInput(computer)
+        let facts = computer.scopeFacts()
 
         return HealthMetricType.allCases.map { metric in
-            let evaluation = HealthEvaluator.evaluate(metric, computer: input, policy: policy)
+            let evaluation = HealthEvaluator.evaluate(
+                metric, computer: input, facts: facts, policy: policy
+            )
             return DeviceHealthMetricResult(
                 type: metric,
                 status: status(for: evaluation.verdict),

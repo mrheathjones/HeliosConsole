@@ -142,6 +142,19 @@ struct DashboardContentView: View {
     @ObservedObject private var computerCache = ComputerInventoryCache.shared
     @ObservedObject private var mobileCache = MobileDeviceInventoryCache.shared
     @ObservedObject private var healthCalculator = HealthMetricsCalculator.shared
+    @ObservedObject private var session = UserSession.shared
+    @State private var showScopeInspector = false
+
+    /// Per-user preference, only consulted when the role grants diagnostics.
+    /// The capability decides whether the toggle exists at all; this decides
+    /// whether someone who has it wants the panels on screen right now.
+    @AppStorage("showScorecardDiagnostics") private var showDiagnostics = true
+
+    /// Coverage banners, dead-target warnings and the Scope IDs button name
+    /// sites, groups and device counts that the rest of the console does not
+    /// expose. Fail-closed: a role must be granted allowScorecardDiagnostics.
+    private var canSeeDiagnostics: Bool { session.capabilities.allowScorecardDiagnostics }
+    private var diagnosticsVisible: Bool { canSeeDiagnostics && showDiagnostics }
     
     @FocusState private var isSearchFocused: Bool
     
@@ -432,7 +445,43 @@ struct DashboardContentView: View {
                 Text("Environment Health Scorecard")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
-                
+
+                if canSeeDiagnostics {
+                    Button {
+                        showDiagnostics.toggle()
+                    } label: {
+                        Image(systemName: showDiagnostics ? "eye" : "eye.slash")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .help(showDiagnostics
+                          ? "Hide scorecard coverage diagnostics"
+                          : "Show scorecard coverage diagnostics")
+
+                    Button {
+                        showScopeInspector = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "number")
+                                .font(.system(size: 10))
+                            Text("Scope IDs")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.12))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Jamf site and group ids for authoring scorecard targets")
+                }
+
                 Spacer()
                 
                 let overallHealth = calculateOverallHealth()
@@ -451,8 +500,11 @@ struct DashboardContentView: View {
                 .cornerRadius(8)
             }
             
-            missingSectionsBanner
-            unmatchedSitesBanner
+            if diagnosticsVisible {
+                missingSectionsBanner
+                unmatchedSitesBanner
+                coverageFooter
+            }
 
             // Responsive health cards grid — self-sizing via preference key
             ResponsiveHealthGrid(
@@ -467,8 +519,70 @@ struct DashboardContentView: View {
                 }
             )
         }
+        .sheet(isPresented: $showScopeInspector) {
+            ScopeIDInspector()
+        }
     }
-    
+
+    /// States how many devices each card is NOT measuring.
+    ///
+    /// Non-dismissible by design. Under an inclusion model an untargeted device
+    /// leaves the card silently and the percentage IMPROVES, because what remains
+    /// is the healthier population — strictly harder to notice than a visible
+    /// Unknown column. This footer is what keeps that honest, so it is not
+    /// decoration and must not be made collapsible.
+    @ViewBuilder
+    private var coverageFooter: some View {
+        let coverage = healthCalculator.cardCoverage
+        let uncovered = coverage.filter { $0.value.untargeted > 0 }
+        let dead = coverage.filter { !$0.value.deadTargets.isEmpty }
+
+        if !uncovered.isEmpty || !dead.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(uncovered.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { metric in
+                    if let c = coverage[metric] {
+                        let sites = c.untargetedBySite.prefix(4)
+                            .map { "\($0.siteName) (\($0.count))" }
+                            .joined(separator: ", ")
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "eye.slash")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                            Text("**\(metric.rawValue)** is not measuring \(c.untargeted) device\(c.untargeted == 1 ? "" : "s") — no target covers \(sites)")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+
+                ForEach(dead.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { metric in
+                    if let c = coverage[metric] {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                            Text("**\(metric.rawValue)** has target\(c.deadTargets.count == 1 ? "" : "s") matching no devices: \(c.deadTargets.joined(separator: ", ")) — the id may be wrong or the site may no longer exist")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Color.white.opacity(0.03))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .cornerRadius(8)
+        }
+    }
+
     /// Names metrics that could not be evaluated because the Jamf inventory
     /// sections they depend on are not being requested. Without this a missing
     /// section reads as "every device fails" — the failure mode that made

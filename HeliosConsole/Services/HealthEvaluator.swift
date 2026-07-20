@@ -183,79 +183,124 @@ enum BootEncryptionState: Equatable {
     }
 }
 
+// MARK: - Device scope
+
+/// What the scope resolver needs to know about a device. Built once per device
+/// per sweep and reused across all five cards.
+struct DeviceScopeFacts {
+    let deviceID: String
+    /// "macOS" | "iOS" | "iPadOS" | "visionOS"
+    let platform: String
+    let siteID: String?
+    /// Display only — never used for matching. Sites are matched by id because a
+    /// rename in Jamf must not change what is counted.
+    let siteName: String?
+    let groupIDs: [String]
+    /// False when the inventory fetch never requested group memberships. Under an
+    /// inclusion model a missing section can DELETE devices from a card rather
+    /// than merely failing them, so this must force Unknown, never Excluded.
+    let groupDataAvailable: Bool
+    let isMobile: Bool
+}
+
 // MARK: - Policy
 
-/// The tunables and site rules a metric is evaluated against. Hard-coded for now
-/// and populated from `HealthMetricsCalculator`'s existing config accessors; PR 3
-/// replaces the initialiser body with profile-driven values without changing any
-/// consumer of this type.
+/// The resolved scorecard configuration. Reads entirely from the features
+/// domain; Helios hardcodes no site or group.
 struct HealthPolicy {
-    typealias MetricSetting = FeaturesConfiguration.HealthMetricSetting
+    typealias Card = FeaturesConfiguration.HealthCard
 
-    enum SecuredCheck: String, CaseIterable {
-        case firewall, sip, gatekeeper, managed, supervised, diskEncrypted, bootstrapToken, ddm
+    /// Cards keyed by HealthMetricType.configID.
+    let cards: [String: Card]
+    /// True when the profile delivered a `cards` array at all. Distinguishes
+    /// "not configured yet" from "configured to measure nothing".
+    let isConfigured: Bool
+
+    enum ScopeResolution {
+        case inScope(card: Card)
+        case cardDisabled
+        case cardUnconfigured
+        case notOnCardPlatform
+        case excludedByExcept(FeaturesConfiguration.ScopeSelector)
+        case untargeted
+        /// Group selectors are in play but group data was never fetched.
+        case groupDataUnavailable
     }
 
-    let checkedInDays: Int
-    let minimumMacOS: Int
-    let minimumIOS: Int
-    let minimumIPadOS: Int
-    let minimumVisionOS: Int
-    /// Per-metric settings, keyed by the metric's config id.
-    let metrics: [String: MetricSetting]
-
-    /// Reads the whole policy from the features domain. Every value has a default
-    /// that reproduces what was hard-coded before, so a tenant with no
-    /// healthScorecard profile is unaffected.
-    static func current(
-        checkedInDays: Int,
-        minimums: MetricSetting.MinimumOSVersions
-    ) -> HealthPolicy {
+    static func current() -> HealthPolicy {
         let scorecard = MDMConfigurationManager.shared.configuration.features?
             .effectiveHealthScorecard
+        let delivered = scorecard?.effectiveCards
 
-        var metrics: [String: MetricSetting] = [:]
-        for metric in HealthMetricType.allCases {
-            if let setting = scorecard?.effectiveMetric(id: metric.configID) {
-                metrics[metric.configID] = setting
-            }
+        var byID: [String: Card] = [:]
+        for card in delivered ?? [] {
+            guard let id = card.id else { continue }
+            byID[id] = card
+        }
+        return HealthPolicy(cards: byID, isConfigured: delivered != nil)
+    }
+
+    func card(for metric: HealthMetricType) -> Card? { cards[metric.configID] }
+
+    /// Whether this card should render at all. A card omitted from a delivered
+    /// `cards` array is not shown — that is how an admin removes one.
+    func isRendered(_ metric: HealthMetricType) -> Bool {
+        guard isConfigured else { return true }   // nothing delivered: show setup state
+        guard let card = card(for: metric) else { return false }
+        return card.effectiveEnabled
+    }
+
+    /// Resolve which target, if any, governs this device for this card.
+    ///
+    /// Order is fixed and load-bearing: platform, then the subtractive carve-out,
+    /// then the group-data guard, then targets in authored order. Array order is
+    /// the only precedence signal, chosen because it is the one an admin can read
+    /// off the profile and predict — every "most specific wins" heuristic requires
+    /// a group directory the app does not fetch and changes silently when Jamf
+    /// group contents change.
+    func resolveScope(for metric: HealthMetricType, facts: DeviceScopeFacts) -> ScopeResolution {
+        guard let card = card(for: metric) else { return .cardUnconfigured }
+        guard card.effectiveEnabled else { return .cardDisabled }
+        guard card.appliesTo(platform: facts.platform) else { return .notOnCardPlatform }
+        guard card.isConfigured else { return .cardUnconfigured }
+
+        for selector in card.effectiveExcept
+        where selector.matches(siteId: facts.siteID, groupIDs: facts.groupIDs, isMobile: facts.isMobile) {
+            return .excludedByExcept(selector)
         }
 
-        return HealthPolicy(
-            checkedInDays: checkedInDays,
-            minimumMacOS: minimums.effectiveMacOS,
-            minimumIOS: minimums.effectiveIOS,
-            minimumIPadOS: minimums.effectiveIPadOS,
-            minimumVisionOS: minimums.effectiveVisionOS,
-            metrics: metrics
-        )
-    }
-
-    func setting(for metric: HealthMetricType) -> MetricSetting? {
-        metrics[metric.configID]
-    }
-
-    /// First matching site rule for this metric, in profile order.
-    func rule(for metric: HealthMetricType, site: String?) -> MetricSetting.SiteRule? {
-        setting(for: metric)?.effectiveSiteRules.first { $0.matches(site: site) }
-    }
-
-    /// What a device whose site matched no rule scores for this metric.
-    func unmatchedSiteVerdict(for metric: HealthMetricType) -> HealthVerdict {
-        switch setting(for: metric)?.effectiveUnmatchedSiteVerdict ?? "unknown" {
-        case "compliant": return .compliant
-        case "noncompliant": return .nonCompliant
-        default: return .unknown
+        // A card selecting by group cannot be evaluated without group data: every
+        // group selector would match nothing, the devices would silently leave the
+        // card, and that reads as a clean small denominator rather than a fetch gap.
+        let usesGroups = !card.effectiveComputerGroupIds.isEmpty
+            || !card.effectiveMobileGroupIds.isEmpty
+        if !facts.groupDataAvailable, usesGroups {
+            return .groupDataUnavailable
         }
+
+        return card.covers(siteId: facts.siteID, groupIDs: facts.groupIDs, isMobile: facts.isMobile)
+            ? .inScope(card: card)
+            : .untargeted
     }
 
-    func isExcluded(metric: HealthMetricType, site: String?) -> Bool {
-        let normalized = MetricSetting.SiteRule.normalized(site)
-        guard !normalized.isEmpty else { return false }
-        return setting(for: metric)?.effectiveExcludedSites
-            .contains { MetricSetting.SiteRule.normalized($0) == normalized } ?? false
+    /// Verdict for a device no target covered.
+    func untargetedVerdict(for metric: HealthMetricType) -> HealthVerdict {
+        card(for: metric)?.effectiveUnmatchedVerdict == "unknown" ? .unknown : .excluded
+    }
+
+    // MARK: Requirement resolution
+    //
+    // A target omitting a tunable inherits the BUILT-IN default, never the value
+    // from an adjacent target — cross-target inheritance would make array order
+    // silently change requirements.
+
+    func checkedInDays(_ card: Card?) -> Int { card?.effectiveCheckedInDays ?? 7 }
+
+    func minimumOS(_ card: Card?) -> FeaturesConfiguration.MinimumOSVersions {
+        card?.effectiveMinimumOSVersions ?? .empty
     }
 }
+
 
 // MARK: - Inputs
 
@@ -362,99 +407,121 @@ enum HealthSectionRequirement {
 
 enum HealthEvaluator {
 
+    /// Maps a scope resolution to a verdict, or returns the target that governs
+    /// this device. Shared by both platforms so scope semantics cannot diverge.
+    private static func scopeOutcome(
+        _ metric: HealthMetricType,
+        _ resolution: HealthPolicy.ScopeResolution,
+        _ policy: HealthPolicy
+    ) -> (evaluation: HealthEvaluation?, card: HealthPolicy.Card?) {
+        switch resolution {
+        case .inScope(let card):
+            return (nil, card)
+
+        case .cardDisabled, .cardUnconfigured, .notOnCardPlatform:
+            return (HealthEvaluation(metric: metric, verdict: .excluded), nil)
+
+        case .excludedByExcept(let selector):
+            return (HealthEvaluation(metric: metric, verdict: .excluded,
+                                     causes: [.excludedBySite(selector.label)]), nil)
+
+        case .untargeted:
+            let verdict = policy.untargetedVerdict(for: metric)
+            return (HealthEvaluation(
+                metric: metric, verdict: verdict,
+                causes: verdict == .unknown ? [.unmatchedSite(raw: "")] : []
+            ), nil)
+
+        case .groupDataUnavailable:
+            // Never .excluded: under an inclusion model a missing inventory
+            // section would silently DELETE these devices from the card, which
+            // reads as a clean small denominator rather than a fetch gap.
+            return (HealthEvaluation(
+                metric: metric, verdict: .unknown,
+                causes: [.sectionGap(missing: ["GROUP_MEMBERSHIPS"],
+                                     configKey: "com.herojoneslabs.helios.console.features → computers.inventorySections")]
+            ), nil)
+        }
+    }
+
     // MARK: Computers
 
     static func evaluate(
         _ metric: HealthMetricType,
         computer input: ComputerHealthInput,
+        facts: DeviceScopeFacts,
         policy: HealthPolicy
     ) -> HealthEvaluation {
-        // Site exclusion precedes the data-gap check: an excluded device belongs
-        // in no bucket, so a missing section must not pull it into the denominator.
-        if policy.isExcluded(metric: metric, site: input.rawSiteName) {
-            return HealthEvaluation(
-                metric: metric,
-                verdict: .excluded,
-                causes: [.excludedBySite(input.rawSiteName ?? "")]
-            )
+        let (short, resolved) = scopeOutcome(metric, policy.resolveScope(for: metric, facts: facts), policy)
+        if let short { return short }
+        guard let card = resolved else {
+            return HealthEvaluation(metric: metric, verdict: .excluded)
         }
 
         let missing = input.availability.missing(HealthSectionRequirement.computers(metric))
         if !missing.isEmpty {
             return HealthEvaluation(
-                metric: metric,
-                verdict: .unknown,
+                metric: metric, verdict: .unknown,
                 causes: [.sectionGap(missing: missing, configKey: input.availability.configKey)]
             )
         }
 
         switch metric {
-        case .checkedIn:  return evaluateCheckedIn(computer: input, policy: policy)
-        case .protected:  return evaluateProtected(computer: input, policy: policy)
+        case .checkedIn:  return evaluateCheckedIn(computer: input, card: card, policy: policy)
+        case .protected:  return evaluateProtected(computer: input, card: card)
         case .encrypted:  return evaluateEncrypted(computer: input)
-        case .secured:    return evaluateSecured(computer: input, policy: policy)
-        case .upToDate:   return evaluateUpToDate(computer: input, policy: policy)
+        case .secured:    return evaluateSecured(computer: input, card: card)
+        case .upToDate:   return evaluateUpToDate(computer: input, card: card, policy: policy)
         }
     }
 
     private static func evaluateCheckedIn(
         computer input: ComputerHealthInput,
+        card: HealthPolicy.Card,
         policy: HealthPolicy
     ) -> HealthEvaluation {
+        let days = policy.checkedInDays(card)
         guard let date = input.checkInDate else {
             return HealthEvaluation(metric: .checkedIn, verdict: .unknown,
                                     causes: [.missingField("check-in date")])
         }
-        let threshold = Calendar.current.date(byAdding: .day, value: -policy.checkedInDays, to: Date())
+        let threshold = Calendar.current.date(byAdding: .day, value: -days, to: Date())
         let passed = threshold.map { date >= $0 } ?? false
+        let failure = "Device has not checked in within \(days) days"
         return HealthEvaluation(
             metric: .checkedIn,
             verdict: passed ? .compliant : .nonCompliant,
-            causes: passed ? [] : [.requirementFailed("Device has not checked in within \(policy.checkedInDays) days")],
+            causes: passed ? [] : [.requirementFailed(failure)],
             requirements: [HealthRequirement(
-                id: "checkedInWindow",
-                label: "Device checked in within \(policy.checkedInDays) days",
-                outcome: passed ? .met : .failed,
-                failureText: "Device has not checked in within \(policy.checkedInDays) days"
+                id: "checkedInWindow", label: "Device checked in within \(days) days",
+                outcome: passed ? .met : .failed, failureText: failure
             )]
         )
     }
 
     private static func evaluateProtected(
         computer input: ComputerHealthInput,
-        policy: HealthPolicy
+        card: HealthPolicy.Card
     ) -> HealthEvaluation {
-        guard let rule = policy.rule(for: .protected, site: input.rawSiteName) else {
-            // The cause is attached only when the resolved verdict is Unknown.
-            // The dashboard banner harvests it and states those devices "are
-            // scored Unknown" — an admin who sets the verdict to compliant would
-            // otherwise get a banner describing devices that passed.
-            let verdict = policy.unmatchedSiteVerdict(for: .protected)
-            return HealthEvaluation(
-                metric: .protected,
-                verdict: verdict,
-                causes: verdict == .unknown ? [.unmatchedSite(raw: input.rawSiteName ?? "")] : []
-            )
-        }
         guard let installed = input.applicationNames else {
             return HealthEvaluation(metric: .protected, verdict: .unknown,
                                     causes: [.missingField("application inventory")])
         }
-        // A matched rule that requires nothing must not certify the device. An
-        // empty list is a half-written rule, and passing it would be the same
-        // fail-open — verdict without evidence — that this branch exists to fix.
-        guard !rule.effectiveRequiredApps.isEmpty else {
+        // A target that matched devices but requires nothing certifies nothing.
+        // Passing it would be a verdict without evidence — the same fail-open
+        // this whole effort removed, re-entering through a half-written profile.
+        guard !card.effectiveRequiredApps.isEmpty else {
             return HealthEvaluation(
                 metric: .protected, verdict: .unknown,
                 causes: [.requirementFailed(
-                    "Site \"\(rule.effectiveSiteName)\" has a rule but lists no required applications")]
+                    "Card \"\(card.id ?? "?")\" matched this device but lists no required applications")]
             )
         }
 
         var requirements: [HealthRequirement] = []
         var causes: [HealthCause] = []
         var metCount = 0
-        for app in rule.effectiveRequiredApps {
+        for app in card.effectiveRequiredApps {
             let present = app.isInstalled(among: installed)
             let failure = "\(app.effectiveName) not installed"
             requirements.append(HealthRequirement(
@@ -464,13 +531,7 @@ enum HealthEvaluator {
             if present { metCount += 1 } else { causes.append(.requirementFailed(failure)) }
         }
 
-        let satisfied: Bool
-        switch rule.effectiveRequireMode {
-        case "any": satisfied = metCount > 0 || rule.effectiveRequiredApps.isEmpty
-        default:    satisfied = causes.isEmpty
-        }
-        // Under "any" the individual misses are not failures; drop them so the
-        // popover does not list reasons for a device that passed.
+        let satisfied = card.effectiveRequireMode == "any" ? metCount > 0 : causes.isEmpty
         if satisfied { causes.removeAll() }
 
         return HealthEvaluation(
@@ -502,35 +563,40 @@ enum HealthEvaluator {
         )
     }
 
+    /// Security check ids a target may list.
+    enum SecuredCheck: String, CaseIterable {
+        case firewall, sip, gatekeeper, managed, supervised, diskEncrypted, bootstrapToken, ddm
+    }
+
     private static func evaluateSecured(
         computer input: ComputerHealthInput,
-        policy: HealthPolicy
+        card: HealthPolicy.Card
     ) -> HealthEvaluation {
-        guard let rule = policy.rule(for: .secured, site: input.rawSiteName) else {
-            // See evaluateProtected — cause only when the verdict is Unknown.
-            let verdict = policy.unmatchedSiteVerdict(for: .secured)
-            return HealthEvaluation(
-                metric: .secured,
-                verdict: verdict,
-                causes: verdict == .unknown ? [.unmatchedSite(raw: input.rawSiteName ?? "")] : []
-            )
-        }
-
-        // See evaluateProtected: a matched rule with no checks certifies nothing.
-        guard !rule.effectiveChecks.isEmpty else {
+        guard !card.effectiveChecks.isEmpty else {
             return HealthEvaluation(
                 metric: .secured, verdict: .unknown,
                 causes: [.requirementFailed(
-                    "Site \"\(rule.effectiveSiteName)\" has a rule but lists no security checks")]
+                    "Card \"\(card.id ?? "?")\" matched this device but lists no security checks")]
             )
         }
 
-        let enabledChecks = Set(rule.effectiveChecks.map { $0.lowercased() })
+        let requested = Set(card.effectiveChecks.map { $0.lowercased() })
+        let known = Set(SecuredCheck.allCases.map { $0.rawValue.lowercased() })
+        let unrecognised = requested.subtracting(known)
+
         var requirements: [HealthRequirement] = []
         var causes: [HealthCause] = []
 
-        func check(_ id: HealthPolicy.SecuredCheck, _ label: String, _ failure: String, _ passed: Bool) {
-            guard enabledChecks.contains(id.rawValue.lowercased()) else { return }
+        // An unrecognised check id is dropped, but never silently: silently
+        // accepting "firewal" makes the metric measurably more permissive with
+        // no signal that it happened.
+        if !unrecognised.isEmpty {
+            causes.append(.requirementFailed(
+                "Card \"\(card.id ?? "?")\" lists unrecognised check(s): \(unrecognised.sorted().joined(separator: ", "))"))
+        }
+
+        func check(_ id: SecuredCheck, _ label: String, _ failure: String, _ passed: Bool) {
+            guard requested.contains(id.rawValue.lowercased()) else { return }
             requirements.append(HealthRequirement(
                 id: id.rawValue, label: label,
                 outcome: passed ? .met : .failed, failureText: failure
@@ -554,6 +620,11 @@ enum HealthEvaluator {
         check(.ddm, "DDM enabled", "Declarative Device Management (DDM) is not enabled",
               input.ddmEnabled)
 
+        // Every requested check was unrecognised: nothing was actually evaluated.
+        guard !requirements.isEmpty else {
+            return HealthEvaluation(metric: .secured, verdict: .unknown, causes: causes)
+        }
+
         return HealthEvaluation(
             metric: .secured,
             verdict: causes.isEmpty ? .compliant : .nonCompliant,
@@ -564,8 +635,10 @@ enum HealthEvaluator {
 
     private static func evaluateUpToDate(
         computer input: ComputerHealthInput,
+        card: HealthPolicy.Card,
         policy: HealthPolicy
     ) -> HealthEvaluation {
+        let minimum = policy.minimumOS(card).effectiveMacOS
         guard let version = input.osVersion else {
             return HealthEvaluation(metric: .upToDate, verdict: .unknown,
                                     causes: [.missingField("OS version")])
@@ -574,14 +647,14 @@ enum HealthEvaluator {
             return HealthEvaluation(metric: .upToDate, verdict: .unknown,
                                     causes: [.unparseableField(name: "OS version", value: version)])
         }
-        let passed = major >= policy.minimumMacOS
-        let failure = "macOS \(major) is below the minimum supported version \(policy.minimumMacOS)"
+        let passed = major >= minimum
+        let failure = "macOS \(major) is below the minimum supported version \(minimum)"
         return HealthEvaluation(
             metric: .upToDate,
             verdict: passed ? .compliant : .nonCompliant,
             causes: passed ? [] : [.requirementFailed(failure)],
             requirements: [HealthRequirement(
-                id: "osMinimum", label: "macOS version \(policy.minimumMacOS) or higher",
+                id: "osMinimum", label: "macOS version \(minimum) or higher",
                 outcome: passed ? .met : .failed, failureText: failure
             )]
         )
@@ -592,25 +665,31 @@ enum HealthEvaluator {
     static func evaluate(
         _ metric: HealthMetricType,
         mobile input: MobileHealthInput,
+        facts: DeviceScopeFacts,
         policy: HealthPolicy
     ) -> HealthEvaluation {
+        let (short, resolved) = scopeOutcome(metric, policy.resolveScope(for: metric, facts: facts), policy)
+        if let short { return short }
+        guard let card = resolved else {
+            return HealthEvaluation(metric: metric, verdict: .excluded)
+        }
+
         let missing = input.availability.missing(HealthSectionRequirement.mobileDevices(metric))
         if !missing.isEmpty {
             return HealthEvaluation(
-                metric: metric,
-                verdict: .unknown,
+                metric: metric, verdict: .unknown,
                 causes: [.sectionGap(missing: missing, configKey: input.availability.configKey)]
             )
         }
 
         switch metric {
         case .checkedIn:
-            // Mobile check-in is resolved by the caller (lastInventoryUpdate).
+            let days = policy.checkedInDays(card)
             guard let date = input.resolvedCheckIn else {
                 return HealthEvaluation(metric: metric, verdict: .unknown,
                                         causes: [.missingField("inventory update date")])
             }
-            let threshold = Calendar.current.date(byAdding: .day, value: -policy.checkedInDays, to: Date())
+            let threshold = Calendar.current.date(byAdding: .day, value: -days, to: Date())
             let passed = threshold.map { date >= $0 } ?? false
             return HealthEvaluation(metric: metric, verdict: passed ? .compliant : .nonCompliant)
 
@@ -648,6 +727,7 @@ enum HealthEvaluator {
             return HealthEvaluation(metric: metric, verdict: passed ? .compliant : .nonCompliant)
 
         case .upToDate:
+            let minimums = policy.minimumOS(card)
             guard let version = input.osVersion else {
                 return HealthEvaluation(metric: metric, verdict: .unknown,
                                         causes: [.missingField("OS version")])
@@ -658,15 +738,16 @@ enum HealthEvaluator {
             }
             let minimum: Int
             switch input.platform {
-            case .iOS:            minimum = policy.minimumIOS
-            case .iPadOS:         minimum = policy.minimumIPadOS
-            case .visionOS:       minimum = policy.minimumVisionOS
-            case .macOS, .all:    minimum = policy.minimumIOS
+            case .iOS:            minimum = minimums.effectiveIOS
+            case .iPadOS:         minimum = minimums.effectiveIPadOS
+            case .visionOS:       minimum = minimums.effectiveVisionOS
+            case .macOS, .all:    minimum = minimums.effectiveIOS
             }
             return HealthEvaluation(metric: metric,
                                     verdict: major >= minimum ? .compliant : .nonCompliant)
         }
     }
+
 
     // MARK: Shared helpers
 
@@ -741,6 +822,52 @@ extension MobileDeviceInventoryItem {
             attestationStatus: security?.attestationStatus,
             hardwareEncryption: security?.hardwareEncryption,
             availability: availability
+        )
+    }
+}
+
+// MARK: - Scope fact projections
+
+extension ComputerInventoryItem {
+    func scopeFacts(groupDataAvailable: Bool) -> DeviceScopeFacts {
+        DeviceScopeFacts(
+            deviceID: id,
+            platform: "macOS",
+            siteID: general?.site?.id,
+            siteName: siteName,
+            groupIDs: (groupMemberships ?? []).compactMap(\.groupId),
+            groupDataAvailable: groupDataAvailable,
+            isMobile: false
+        )
+    }
+}
+
+extension MobileDeviceInventoryItem {
+    func scopeFacts(groupDataAvailable: Bool) -> DeviceScopeFacts {
+        DeviceScopeFacts(
+            deviceID: id,
+            platform: platformType.rawValue,
+            siteID: general?.siteId,
+            // Mobile inventory carries no resolved site name. Irrelevant now that
+            // matching is id-based; it was only ever a problem for name matching.
+            siteName: nil,
+            groupIDs: (groups ?? []).compactMap(\.groupId),
+            groupDataAvailable: groupDataAvailable,
+            isMobile: true
+        )
+    }
+}
+
+extension Computer {
+    func scopeFacts() -> DeviceScopeFacts {
+        DeviceScopeFacts(
+            deviceID: id,
+            platform: "macOS",
+            siteID: general?.site?.id,
+            siteName: general?.site?.name,
+            groupIDs: (groupMemberships ?? []).compactMap(\.groupId),
+            groupDataAvailable: groupMemberships != nil,
+            isMobile: false
         )
     }
 }

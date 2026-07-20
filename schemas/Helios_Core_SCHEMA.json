@@ -1,20 +1,20 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.core",
-  "title": "Helios Console — Core",
-  "description": "Connection and integration settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.core — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios. Holds the non-secret connection settings: Jamf Pro server + master client identity, optional ABM / Jamf Protect / Entra integrations, sign-in method, and local administration. All secrets are delivered separately in com.herojoneslabs.helios.console.credentials. Values override in-app Settings and take effect at app relaunch.",
+  "title": "Helios Console - Core",
+  "description": "Connection and integration settings for Helios Console. Preference domain: com.herojoneslabs.helios.console.core \u2014 deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios. Holds the non-secret connection settings: Jamf Pro server + master client identity, optional ABM / Jamf Protect / Entra integrations, sign-in method, and local administration. All secrets are delivered separately in com.herojoneslabs.helios.console.credentials. Values override in-app Settings and take effect at app relaunch.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
-      "description": "Schema version for compatibility checking (informational — the loader logs it, nothing else reads it)",
+      "description": "Schema version for compatibility checking (informational \u2014 the loader logs it, nothing else reads it)",
       "default": "3.0"
     },
     "jamfPro": {
       "type": "object",
       "title": "Jamf Pro Connection",
-      "description": "Jamf Pro server connection and master API client identity. Required — Helios cannot operate without serverURL and masterClientID. The matching client secret is delivered in the credentials profile.",
+      "description": "Jamf Pro server connection and master API client identity. Required \u2014 Helios cannot operate without serverURL and masterClientID. The matching client secret is delivered in the credentials profile.",
       "properties": {
         "serverURL": {
           "type": "string",
@@ -25,7 +25,7 @@
         "masterClientID": {
           "type": "string",
           "title": "Master API Client ID",
-          "description": "OAuth client_id of the Jamf API client used by Helios. Not secret — the paired secret is jamfProClientSecret in the credentials profile.",
+          "description": "OAuth client_id of the Jamf API client used by Helios. Not secret \u2014 the paired secret is jamfProClientSecret in the credentials profile.",
           "minLength": 1
         },
         "requiredRoleName": {
@@ -59,7 +59,7 @@
         "eraseAckTimeoutSeconds": {
           "type": "integer",
           "title": "Erase Acknowledgment Timeout (seconds)",
-          "description": "How long every erase (Erase Device / Return to Service) waits for the device to acknowledge the ERASE_DEVICE command. Cleanup steps (Jamf record delete, Entra object delete) NEVER run without acknowledgment — on timeout the flow stops. Clamped 30-1800.",
+          "description": "How long every erase (Erase Device / Return to Service) waits for the device to acknowledge the ERASE_DEVICE command. Cleanup steps (Jamf record delete, Entra object delete) NEVER run without acknowledgment \u2014 on timeout the flow stops. Clamped 30-1800.",
           "default": 180
         },
         "eraseAckPollIntervalSeconds": {
@@ -77,7 +77,7 @@
     "appleBusinessManager": {
       "type": "object",
       "title": "Apple Business Manager (optional)",
-      "description": "Optional Apple Business Manager API connection — omit entirely if unused. The private key is delivered as abmPrivateKey in the credentials profile; ABM is configured only when clientID, keyID, and that key are all present.",
+      "description": "Optional Apple Business Manager API connection \u2014 omit entirely if unused. The private key is delivered as abmPrivateKey in the credentials profile; ABM is configured only when clientID, keyID, and that key are all present.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -93,7 +93,7 @@
         "keyID": {
           "type": "string",
           "title": "ABM Key ID",
-          "description": "Key ID of the ABM API private key. Not secret — the PEM itself lives in com.herojoneslabs.helios.console.credentials (abmPrivateKey)."
+          "description": "Key ID of the ABM API private key. Not secret \u2014 the PEM itself lives in com.herojoneslabs.helios.console.credentials (abmPrivateKey)."
         },
         "serviceType": {
           "type": "string",
@@ -107,12 +107,12 @@
         },
         "defaultMdmServerName": {
           "type": "string",
-          "title": "ABM Lookup — Default MDM Server Filter",
-          "description": "Preselect the ABM Lookup server filter to this MDM server name (case-insensitive match). A starting point the operator can change — not a lock. No match = 'Any Server'."
+          "title": "ABM Lookup \u2014 Default MDM Server Filter",
+          "description": "Preselect the ABM Lookup server filter to this MDM server name (case-insensitive match). A starting point the operator can change \u2014 not a lock. No match = 'Any Server'."
         },
         "defaultDeviceType": {
           "type": "string",
-          "title": "ABM Lookup — Default Device Type Filter",
+          "title": "ABM Lookup \u2014 Default Device Type Filter",
           "description": "Preselect the ABM Lookup device-type filter. A starting point the operator can change. Unrecognized values fall back to 'all'.",
           "enum": [
             "all",
@@ -130,7 +130,7 @@
     "jamfProtect": {
       "type": "object",
       "title": "Jamf Protect (optional)",
-      "description": "Optional Jamf Protect tenant connection for the Cleanup feature — omit entirely if unused. The API password may be delivered as jamfProtectPassword in the credentials profile (locks the in-app field); otherwise the app falls back to in-app entry stored in the Keychain.",
+      "description": "Optional Jamf Protect tenant connection for the Cleanup feature \u2014 omit entirely if unused. The API password may be delivered as jamfProtectPassword in the credentials profile (locks the in-app field); otherwise the app falls back to in-app entry stored in the Keychain.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -153,17 +153,17 @@
     "entra": {
       "type": "object",
       "title": "Microsoft Entra Device Cleanup (optional)",
-      "description": "Optional Entra (Graph) cleanup for Return to Service — deletes the erased Mac's Entra device object(s) so it can re-register cleanly. Omit to disable. This block only points to a separate preference domain holding the Graph credentials; no secrets live here. The app registration needs Device.ReadWrite.All plus the Cloud Device Administrator role.",
+      "description": "Optional Entra (Graph) cleanup for Return to Service \u2014 deletes the erased Mac's Entra device object(s) so it can re-register cleanly. Omit to disable. This block only points to a separate preference domain holding the Graph credentials; no secrets live here. The app registration needs Device.ReadWrite.All plus the Cloud Device Administrator role.",
       "properties": {
         "credentialDomain": {
           "type": "string",
           "title": "Credential Domain (bundle identifier)",
-          "description": "Preference domain of the separate managed-preferences payload holding the Entra Graph credentials (admin-chosen, e.g. com.herojoneslabs.helios.console.entra). That domain must supply a tenant id, a client id, and a certificate PEM string (preferred) or client secret. An already-deployed credential plist can be reused as-is — just keep this pointer matching it."
+          "description": "Preference domain of the separate managed-preferences payload holding the Entra Graph credentials (admin-chosen, e.g. com.herojoneslabs.helios.console.entra). That domain must supply a tenant id, a client id, and a certificate PEM string (preferred) or client secret. An already-deployed credential plist can be reused as-is \u2014 just keep this pointer matching it."
         },
         "tenantIdKey": {
           "type": "string",
           "title": "Tenant ID Key (optional)",
-          "description": "Exact key name to read the tenant id under in the credential domain — lets Helios reuse an existing plist as-is. If omitted, Helios tries: entra_tenant_id, tenantID, tenant_id, TenantID, entra_tenant."
+          "description": "Exact key name to read the tenant id under in the credential domain \u2014 lets Helios reuse an existing plist as-is. If omitted, Helios tries: entra_tenant_id, tenantID, tenant_id, TenantID, entra_tenant."
         },
         "clientIdKey": {
           "type": "string",
@@ -199,7 +199,7 @@
     "signIn": {
       "type": "object",
       "title": "Interactive Sign-In (optional)",
-      "description": "How users sign into Helios — identity only; it grants no capabilities (those live in the access domain's roles block). Omit to keep the built-in email sign-in flow. Distinct from the entra block above, which is app-only Graph cleanup credentials. FAIL-CLOSED: method=entra with missing tenant/client ids blocks sign-in rather than falling back to email.",
+      "description": "How users sign into Helios \u2014 identity only; it grants no capabilities (those live in the access domain's roles block). Omit to keep the built-in email sign-in flow. Distinct from the entra block above, which is app-only Graph cleanup credentials. FAIL-CLOSED: method=entra with missing tenant/client ids blocks sign-in rather than falling back to email.",
       "properties": {
         "method": {
           "type": "string",
@@ -214,12 +214,12 @@
         "entra": {
           "type": "object",
           "title": "Entra ID Sign-In",
-          "description": "Entra ID interactive sign-in settings. Use a separate PUBLIC-client app registration (no client secret — none is needed or used). Role capabilities are defined in the access domain, not here; a user whose token roles match no access-domain entry is refused sign-in (fail-closed). Also enable 'Assignment required' on the enterprise application Entra-side — client-side checks are a UX gate, not a security boundary.",
+          "description": "Entra ID interactive sign-in settings. Use a separate PUBLIC-client app registration (no client secret \u2014 none is needed or used). Role capabilities are defined in the access domain, not here; a user whose token roles match no access-domain entry is refused sign-in (fail-closed). Also enable 'Assignment required' on the enterprise application Entra-side \u2014 client-side checks are a UX gate, not a security boundary.",
           "properties": {
             "tenantId": {
               "type": "string",
               "title": "Tenant ID",
-              "description": "Directory (tenant) ID GUID. Required when method=entra. The aliases 'common' and 'organizations' are NOT supported — issuer validation is tenant-specific. Set the real value in Jamf; never commit it to a repo."
+              "description": "Directory (tenant) ID GUID. Required when method=entra. The aliases 'common' and 'organizations' are NOT supported \u2014 issuer validation is tenant-specific. Set the real value in Jamf; never commit it to a repo."
             },
             "clientId": {
               "type": "string",
@@ -229,7 +229,7 @@
             "cloudInstance": {
               "type": "string",
               "title": "Azure Cloud Instance",
-              "description": "Azure cloud for interactive sign-in: global (login.microsoftonline.com), usgov (Azure Government / GCC High), or china (Azure operated by 21Vianet). Same mapping as entra.cloudInstance above — both Entra features agree on hosts per cloud.",
+              "description": "Azure cloud for interactive sign-in: global (login.microsoftonline.com), usgov (Azure Government / GCC High), or china (Azure operated by 21Vianet). Same mapping as entra.cloudInstance above \u2014 both Entra features agree on hosts per cloud.",
               "enum": [
                 "global",
                 "usgov",
@@ -240,7 +240,7 @@
             "allowedGroupIds": {
               "type": "array",
               "title": "Allowed Group IDs (optional)",
-              "description": "Optional extra check: the signed-in user must belong to at least one of these Entra group object ids (GUIDs), via the token's groups claim. Empty = no check. Caveat: users in many groups get an overage token with no groups listed and will fail this check — prefer app roles, which never overage.",
+              "description": "Optional extra check: the signed-in user must belong to at least one of these Entra group object ids (GUIDs), via the token's groups claim. Empty = no check. Caveat: users in many groups get an overage token with no groups listed and will fail this check \u2014 prefer app roles, which never overage.",
               "items": {
                 "type": "string"
               },
@@ -263,7 +263,7 @@
     "authentication": {
       "type": "object",
       "title": "Authentication",
-      "description": "Sign-in behavior preferences, enforced in the sign-in and session views. Moved here from the ui domain — a ui profile still delivering this block is honored until you re-push, but core wins when both are present.",
+      "description": "Sign-in behavior preferences, enforced in the sign-in and session views. Moved here from the ui domain \u2014 a ui profile still delivering this block is honored until you re-push, but core wins when both are present.",
       "properties": {
         "requireBiometric": {
           "type": "boolean",

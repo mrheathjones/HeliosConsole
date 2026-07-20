@@ -111,8 +111,8 @@ enum HealthThresholds {
     static func color(forPercentage percentage: Double, metricID: String? = nil) -> Color {
         let scorecard = MDMConfigurationManager.shared.configuration
             .features?.effectiveHealthScorecard
-        let thresholds = metricID.flatMap { scorecard?.effectiveMetric(id: $0)?.effectiveThresholds }
-            ?? FeaturesConfiguration.HealthMetricSetting.Thresholds.empty
+        let thresholds = metricID.flatMap { scorecard?.card(id: $0)?.effectiveThresholds }
+            ?? FeaturesConfiguration.HealthCard.Thresholds.empty
         if percentage >= Double(thresholds.effectiveWarning) { return .green }
         if percentage >= Double(thresholds.effectiveCritical) { return .orange }
         return .red
@@ -165,7 +165,29 @@ struct HealthMetricData: Identifiable, Hashable {
     var encryptingCount: Int = 0     // Boot partition state = ENCRYPTING
     var decryptingCount: Int = 0     // Boot partition state = DECRYPTING
     var unencryptedCount: Int = 0    // Boot partition state = UNENCRYPTED or other non-compliant
-    
+
+    /// False when this card has no targets — never configured, or configured to
+    /// measure nothing. Such a card renders a setup state and NO percentage:
+    /// 0/0 reads as 0% or 100% depending on which line of arithmetic you write,
+    /// and 0% looks like a crisis while 100% looks like success. Both are lies.
+    var isConfigured: Bool = true
+
+    /// Profile-configured card name. Falls back to the metric's own display
+    /// string, so an unconfigured card still reads correctly.
+    var displayName: String = ""
+
+    /// Devices this card's targets did not cover. They are absent from every
+    /// count above by design — this is the number that keeps that honest.
+    var untargetedCount: Int = 0
+
+    /// What the card should be titled: the profile's displayName when set,
+    /// otherwise the metric's built-in name.
+    var effectiveTitle: String {
+        displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? type.rawValue
+            : displayName
+    }
+
     var totalCount: Int {
         compliantCount + nonCompliantCount + unknownCount
     }

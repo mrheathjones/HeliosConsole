@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "com.herojoneslabs.helios.console.access",
-  "title": "Helios Console — Access",
-  "description": "Role-capability configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.access — deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios. Every capability (modules, device actions, cleanup, export) is defined by the `roles` block — nothing is hardcoded in the app. FAIL-CLOSED: no roles block, or an unmatched role name, grants nothing. Role names come from the Entra token's roles claim (Entra sign-in) or the `role` key (MDM mode); matching multiple roles grants the union. Scope variants granting destructive actions to the same Macs as write-capable credentials profiles. Note: managed-preference plists are world-readable on disk.",
+  "title": "Helios Console - Access",
+  "description": "Role-capability configuration for Helios Console. Preference domain: com.herojoneslabs.helios.console.access \u2014 deploy as its own Jamf Pro Application & Custom Settings profile, scoped to all Macs running Helios. Every capability (modules, device actions, cleanup, export) is defined by the `roles` block \u2014 nothing is hardcoded in the app. FAIL-CLOSED: no roles block, or an unmatched role name, grants nothing. Role names come from the Entra token's roles claim (Entra sign-in) or the `role` key (MDM mode); matching multiple roles grants the union. Scope variants granting destructive actions to the same Macs as write-capable credentials profiles. Note: managed-preference plists are world-readable on disk.",
   "type": "object",
   "properties": {
     "configurationVersion": {
       "type": "string",
       "title": "Configuration Version",
-      "description": "Schema/profile version stamp (informational — the app logs it, nothing else reads it).",
+      "description": "Schema/profile version stamp (informational \u2014 the app logs it, nothing else reads it).",
       "default": "3.0"
     },
     "role": {
@@ -22,7 +22,7 @@
     "roles": {
       "type": "array",
       "title": "Role Definitions (capability sets)",
-      "description": "The capability source of truth — a list of admin-named capability sets. Name matching is exact and case-sensitive: in Entra mode against the token's app-role values, in MDM mode against the `role` key. A user matching several entries gets the union of their capabilities. FAIL-CLOSED: an absent block or unmatched name grants nothing (Entra mode refuses sign-in; MDM mode shows an empty app). Unknown ids in a role's lists are ignored, so newer profiles deploy safely to older builds. Entries sharing a name are unioned; entries without a name are skipped. See Deployment/sample.mobileconfig for a working example.",
+      "description": "The capability source of truth \u2014 a list of admin-named capability sets. Name matching is exact and case-sensitive: in Entra mode against the token's app-role values, in MDM mode against the `role` key. A user matching several entries gets the union of their capabilities. FAIL-CLOSED: an absent block or unmatched name grants nothing (Entra mode refuses sign-in; MDM mode shows an empty app). Unknown ids in a role's lists are ignored, so newer profiles deploy safely to older builds. Entries sharing a name are unioned; entries without a name are skipped. See Deployment/sample.mobileconfig for a working example.",
       "items": {
         "type": "object",
         "title": "Role Definition",
@@ -31,7 +31,7 @@
           "name": {
             "type": "string",
             "title": "Role Name",
-            "description": "Admin-chosen role name — required. Must exactly match (case-sensitive) an Entra app-role value or the `role` key above."
+            "description": "Admin-chosen role name \u2014 required. Must exactly match (case-sensitive) an Entra app-role value or the `role` key above."
           },
           "modules": {
             "type": "array",
@@ -68,7 +68,7 @@
           },
           "computerActions": {
             "type": "array",
-            "title": "Allowed Computer Actions — usable by THIS ROLE",
+            "title": "Allowed Computer Actions \u2014 usable by THIS ROLE",
             "description": "Computer device-action ids this role may see and run. An action not listed here is hidden and blocked. Unioned across matched roles; absent or empty = none. Labels/icons are cosmetic and live in the ui domain. Unknown ids are skipped.",
             "items": {
               "type": "string",
@@ -97,8 +97,8 @@
           },
           "mobileDeviceActions": {
             "type": "array",
-            "title": "Allowed Mobile Device Actions — usable by THIS ROLE",
-            "description": "Mobile-device action ids this role may run. Forward-looking — the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
+            "title": "Allowed Mobile Device Actions \u2014 usable by THIS ROLE",
+            "description": "Mobile-device action ids this role may run. Forward-looking \u2014 the mobile device detail view has no actions menu yet, so nothing renders from this list today. Absent or empty = none.",
             "items": {
               "type": "string",
               "title": "Action ID",
@@ -114,7 +114,7 @@
           "cleanupActions": {
             "type": "array",
             "title": "Allowed Cleanup Sub-Actions (for this role)",
-            "description": "Cleanup sub-actions this role may run. Absent or empty = none, even when modules includes `cleanup` — grant both to make the module useful. deleteFromProtect requires the core domain's jamfProtect block; deleteRecord and unmanage are destructive — pair with write-capable credentials scoping.",
+            "description": "Cleanup sub-actions this role may run. Absent or empty = none, even when modules includes `cleanup` \u2014 grant both to make the module useful. deleteFromProtect requires the core domain's jamfProtect block; deleteRecord and unmanage are destructive \u2014 pair with write-capable credentials scoping.",
             "items": {
               "type": "string",
               "title": "Cleanup Action ID",
@@ -141,7 +141,7 @@
           "allowedPrestages": {
             "type": "array",
             "title": "Allowed PreStages (Pre-Stage tab + prestage-on-assign + Assign to PreStage action)",
-            "description": "Jamf PreStage displayNames this role may select — in the Pre-Stage tab, the prestage-on-assign step, and the assignPreStage action. Each entry must match a displayName exactly (case-sensitive); the reserved literal `all` grants every PreStage. Absent or empty = none offered (fail-closed). Unioned across matched roles.",
+            "description": "Jamf PreStage displayNames this role may select \u2014 in the Pre-Stage tab, the prestage-on-assign step, and the assignPreStage action. Each entry must match a displayName exactly (case-sensitive); the reserved literal `all` grants every PreStage. Absent or empty = none offered (fail-closed). Unioned across matched roles.",
             "items": {
               "type": "string",
               "title": "PreStage Display Name (or `all`)"
@@ -156,7 +156,7 @@
           },
           "returnToServiceOptions": {
             "type": "object",
-            "title": "Return to Service — post-erase cleanup (for this role)",
+            "title": "Return to Service \u2014 post-erase cleanup (for this role)",
             "description": "Post-erase cleanup steps for the returnToService action. The erase always runs first and always waits for ERASE_DEVICE acknowledgment; only the cleanup steps are configurable. Both default true (full decommission). OR'd across matched roles.",
             "properties": {
               "deleteJamfRecord": {
@@ -179,6 +179,12 @@
             "title": "Allow Export / Download",
             "description": "Whether this role may extract data out of the app. Gates every export surface: the Reports export menu, both Cleanup export menus, and the Logs Export CSV button. Absent = false (fail-closed). OR'd across matched roles.",
             "default": false
+          },
+          "allowScorecardDiagnostics": {
+            "type": "boolean",
+            "title": "Allow Health Scorecard Diagnostics",
+            "default": false,
+            "description": "Whether this role sees the scorecard's coverage diagnostics: which devices no card measures, targets matching nothing, and the Scope IDs inspector. These name sites, groups and device counts the rest of the console does not expose, so it is off unless granted. OR'd across roles. Users who have it get a show/hide toggle on the scorecard."
           }
         },
         "required": [
