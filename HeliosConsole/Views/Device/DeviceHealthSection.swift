@@ -170,11 +170,12 @@ struct DeviceHealthEvaluator {
             )
             
         } else {
-            // All other sites - Protected by default
+            // No site rule matched. Unknown, not Compliant — reporting a device as
+            // Protected without evaluating anything states a conclusion we cannot back.
             return DeviceHealthMetricResult(
                 type: .protected,
-                status: .compliant,
-                reasons: []
+                status: .unknown,
+                reasons: [unmatchedSiteReason(siteName)]
             )
         }
     }
@@ -338,11 +339,11 @@ struct DeviceHealthEvaluator {
             )
             
         } else {
-            // All other sites - Secured by default
+            // No site rule matched — see evaluateProtected. Unknown, not Compliant.
             return DeviceHealthMetricResult(
                 type: .secured,
-                status: .compliant,
-                reasons: []
+                status: .unknown,
+                reasons: [unmatchedSiteReason(siteName)]
             )
         }
     }
@@ -377,7 +378,16 @@ struct DeviceHealthEvaluator {
     }
     
     // MARK: - Helper Methods
-    
+
+    /// Explains an Unknown verdict caused by a site with no matching rule, so the
+    /// popover tells the admin what to fix rather than leaving a bare "Unknown".
+    private static func unmatchedSiteReason(_ siteName: String) -> String {
+        let trimmed = siteName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty
+            ? "Device has no Jamf site assigned, so no requirements could be evaluated"
+            : "No requirements are defined for site \"\(trimmed)\", so compliance could not be evaluated"
+    }
+
     private static func hasApp(_ computer: Computer, _ appName: String) -> Bool {
         guard let apps = computer.applications else { return false }
         let searchName = appName.lowercased()
@@ -1035,9 +1045,10 @@ struct DeviceHealthSection: View {
                         requirementRow("JamfProtect installed", met: true)
                     } else if siteName.lowercased() == "groundcontrol" {
                         requirementRow("Falcon installed", met: true)
-                    } else {
-                        requirementRow("No specific requirements for this site", met: true)
                     }
+                    // No else: a site with no matching rule now evaluates to Unknown,
+                    // so it never reaches this Compliant popover. It previously claimed
+                    // "No specific requirements for this site" with a green check.
                 case .encrypted:
                     // Handled by coveragePopoverContent() - this case should not be reached
                     EmptyView()
@@ -1059,9 +1070,8 @@ struct DeviceHealthSection: View {
                         requirementRow("Device supervised", met: true)
                         requirementRow("Bootstrap token escrowed", met: true)
                         requirementRow("DDM enabled", met: true)
-                    } else {
-                        requirementRow("No specific requirements for this site", met: true)
                     }
+                    // No else — see .protected above.
                 case .upToDate:
                     requirementRow("macOS version 26.0 or higher", met: true)
                 }
