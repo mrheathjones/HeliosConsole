@@ -120,6 +120,13 @@ final class JamfPreStageService: ObservableObject {
     }
 
     private func getBearerToken() async throws -> String {
+        // Attribution: PreStage register/assign and Inventory Preload run on
+        // the per-user credential (fail-closed) when the profile routes the
+        // `prestage` scope to the operator.
+        if MDMConfigurationManager.shared.configuration.credentialSource(for: .prestage) == .user {
+            return try await JamfUserSession.shared.bearerToken()
+        }
+
         if let token = cachedValidToken() {
             return token
         }
@@ -525,13 +532,18 @@ final class JamfPreStageService: ObservableObject {
 
     /// Create-only record write for the bulk path (existence was already
     /// checked against fetchAllPreloadSerials — never blind-upsert in a
-    /// loop, that would be one search request per row).
-    func createPreloadRecord(serial: String, assetTag: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: [
+    /// loop, that would be one search request per row). `deviceType`
+    /// defaults to "Computer" (the only type the Pre-Stage tab targets)
+    /// but honors a per-row override parsed from the CSV.
+    func createPreloadRecord(serial: String, assetTag: String, deviceType: String = "Computer") async throws {
+        var payload: [String: String] = [
             "serialNumber": serial,
-            "deviceType": "Computer",
-            "assetTag": assetTag,
-        ])
+            "deviceType": deviceType,
+        ]
+        // An empty asset tag is omitted rather than written as "" — Jamf
+        // treats a present-but-empty field as an explicit clear.
+        if !assetTag.isEmpty { payload["assetTag"] = assetTag }
+        let body = try JSONSerialization.data(withJSONObject: payload)
         let (data, response) = try await request(
             "POST", path: "/api/v2/inventory-preload/records", body: body
         )
@@ -539,6 +551,87 @@ final class JamfPreStageService: ObservableObject {
             throw PreStageError.httpError(response.statusCode,
                                           String(data: data, encoding: .utf8) ?? "Unknown error")
         }
+    }
+
+    // MARK: - Inventory Preload CSV (template + validation)
+
+    /// Jamf's authoritative Inventory Preload CSV template for THIS instance
+    /// (GET /api/v2/inventory-preload/csv-template). Fetching it live means
+    /// the header row always reflects the org's own extension-attribute
+    /// columns rather than a stale hardcoded list. Returns the raw CSV bytes.
+    func downloadCSVTemplate() async throws -> Data {
+        guard let url = URL(string: "\(jamfURL)/api/v2/inventory-preload/csv-template") else {
+            throw PreStageError.invalidURL
+        }
+        let token = try await getBearerToken()
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = NetworkTuning.connectionTimeout
+        // The template endpoint returns text/csv; asking for JSON makes Jamf
+        // hand back an error envelope instead of the file.
+        request.setValue("text/csv", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw PreStageError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            throw PreStageError.httpError(http.statusCode,
+                                          String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+        return data
+    }
+
+    /// Outcome of a Jamf-side CSV validation.
+    struct CSVValidationResult {
+        let isValid: Bool
+        /// Jamf's problem detail when invalid (raw response body).
+        let detail: String?
+    }
+
+    /// Validates a preload CSV through Jamf BEFORE any records are written
+    /// (POST /api/v2/inventory-preload/csv-validate, multipart/form-data).
+    /// A 2xx means Jamf accepts the file; a 4xx carries the validation
+    /// problems in its body, which we surface verbatim so the operator can
+    /// fix the file. Network/auth failures throw.
+    func validateCSV(_ csv: Data, filename: String) async throws -> CSVValidationResult {
+        guard let url = URL(string: "\(jamfURL)/api/v2/inventory-preload/csv-validate") else {
+            throw PreStageError.invalidURL
+        }
+        let token = try await getBearerToken()
+
+        let boundary = "helios-\(UUID().uuidString)"
+        var body = Data()
+        let safeName = filename.isEmpty ? "upload.csv" : filename
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: text/csv\r\n\r\n".data(using: .utf8)!)
+        body.append(csv)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = NetworkTuning.requestTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw PreStageError.invalidResponse }
+
+        if (200...299).contains(http.statusCode) {
+            return CSVValidationResult(isValid: true, detail: nil)
+        }
+        // 4xx = the file is malformed/invalid; hand Jamf's detail back to the
+        // UI. Anything else (5xx, auth) is an operational error → throw.
+        if (400...499).contains(http.statusCode) {
+            let detail = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return CSVValidationResult(isValid: false, detail: detail?.isEmpty == false ? detail : nil)
+        }
+        throw PreStageError.httpError(http.statusCode,
+                                      String(data: data, encoding: .utf8) ?? "Unknown error")
     }
 }
 
@@ -556,6 +649,18 @@ enum CSVPreloadParser {
     struct Row: Equatable {
         let serialNumber: String
         let assetTag: String
+        /// Jamf preload device type ("Computer" / "Mobile Device" /
+        /// "Unknown"). Defaults to "Computer" when the CSV omits the column.
+        var deviceType: String = "Computer"
+    }
+
+    /// Maps a raw Device Type cell to a canonical Jamf value, defaulting to
+    /// "Computer" (the Pre-Stage tab's target) for blank/unrecognized input.
+    private static func canonicalDeviceType(_ raw: String) -> String {
+        let v = raw.lowercased().filter { $0.isLetter }
+        if v.contains("mobile") { return "Mobile Device" }
+        if v.contains("unknown") { return "Unknown" }
+        return "Computer"
     }
 
     struct ParseResult {
@@ -652,6 +757,7 @@ enum CSVPreloadParser {
         }
         let assetIdx = headers.firstIndex(of: "assettag")
         let nameIdx = headers.firstIndex(of: "computername")
+        let deviceTypeIdx = headers.firstIndex(of: "devicetype")
 
         var rows: [Row] = []
         var seen: Set<String> = []
@@ -683,7 +789,8 @@ enum CSVPreloadParser {
             guard !asset.isEmpty else { noAsset += 1; continue }
 
             guard seen.insert(serial).inserted else { dups += 1; continue }
-            rows.append(Row(serialNumber: serial, assetTag: asset))
+            let deviceType = canonicalDeviceType(col(deviceTypeIdx))
+            rows.append(Row(serialNumber: serial, assetTag: asset, deviceType: deviceType))
         }
 
         return ParseResult(

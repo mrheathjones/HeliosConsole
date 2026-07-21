@@ -86,6 +86,13 @@ struct PreStageView: View {
     @State private var isBulkRunning = false
     @State private var bulkProgress: (done: Int, total: Int, serial: String)?
     @State private var bulkSummary: BulkSummary?
+    /// True while the chosen CSV is being validated by Jamf before the
+    /// Import button is exposed.
+    @State private var isValidatingCSV = false
+    /// CSV template download (Jamf's live /csv-template) → fileExporter.
+    @State private var isDownloadingTemplate = false
+    @State private var templateDocument: ExportDocument?
+    @State private var showTemplateExporter = false
 
     struct BulkSummary {
         let created: Int
@@ -191,6 +198,14 @@ struct PreStageView: View {
         ) { result in
             handleCSVSelection(result)
         }
+        .fileExporter(
+            isPresented: $showTemplateExporter,
+            document: templateDocument,
+            contentType: .commaSeparatedText,
+            defaultFilename: "inventory-preload-template"
+        ) { _ in
+            templateDocument = nil
+        }
     }
 
     // MARK: - Bulk CSV Import
@@ -213,6 +228,12 @@ struct PreStageView: View {
             Text("Import Inventory Preload records (serial + asset tag) in bulk. The CSV needs a Serial Number column; when a row's Asset Tag is blank, the Computer Name is used if it looks like an asset tag (SH/CH + 6 digits). Records that already exist are skipped. No PreStage assignments are made in bulk.")
                 .font(.system(size: 11))
                 .foregroundColor(.gray)
+
+            // Column guidance mirrors Jamf's inventory-preload CSV schema.
+            Text("Required columns: **Serial Number** and **Device Type** (Computer, Mobile Device, or Unknown). Optional: **Asset Tag** — this is the value the bulk tool registers. Download the template below for your instance's exact header row; every file you choose is validated by Jamf before import.")
+                .font(.system(size: 11))
+                .foregroundColor(.gray.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
 
             if let progress = bulkProgress, isBulkRunning {
                 VStack(alignment: .leading, spacing: 6) {
@@ -262,15 +283,40 @@ struct PreStageView: View {
                     .buttonStyle(.bordered)
                     .padding(.top, 6)
                 }
-            } else {
-                Button {
-                    bulkError = nil
-                    showingCSVImporter = true
-                } label: {
-                    Label("Choose CSV…", systemImage: "folder")
+            } else if isValidatingCSV {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Validating \(bulkFileName ?? "CSV") with Jamf…")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
                 }
-                .buttonStyle(.bordered)
-                .disabled(isBulkRunning || isExecuting)
+            } else {
+                HStack(spacing: 10) {
+                    Button {
+                        bulkError = nil
+                        showingCSVImporter = true
+                    } label: {
+                        Label("Choose CSV…", systemImage: "folder")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isBulkRunning || isExecuting || isDownloadingTemplate)
+
+                    Button {
+                        downloadTemplate()
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isDownloadingTemplate {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "square.and.arrow.down")
+                            }
+                            Text("Download Template")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isBulkRunning || isExecuting || isDownloadingTemplate)
+                    .help("Downloads Jamf's Inventory Preload CSV template for this instance (Serial Number, Device Type, and your extension-attribute columns).")
+                }
             }
 
             if let bulkError {
@@ -309,8 +355,11 @@ struct PreStageView: View {
             guard let url = urls.first else { return }
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+            let data: Data
+            let parsed: CSVPreloadParser.ParseResult
             do {
-                let data = try Data(contentsOf: url)
+                data = try Data(contentsOf: url)
                 // UTF-8 first; legacy Excel exports (Windows-1252-ish) fall
                 // back to Latin-1, which decodes any byte sequence — serials
                 // and asset tags are ASCII either way.
@@ -318,10 +367,57 @@ struct PreStageView: View {
                         ?? String(data: data, encoding: .isoLatin1) else {
                     throw CocoaError(.fileReadInapplicableStringEncoding)
                 }
-                bulkParseResult = try CSVPreloadParser.parse(content)
-                bulkFileName = url.lastPathComponent
+                parsed = try CSVPreloadParser.parse(content)
             } catch {
                 bulkError = "Could not read the CSV: \(error.localizedDescription)"
+                return
+            }
+
+            bulkFileName = url.lastPathComponent
+            // Jamf validates the file before we expose the Import button.
+            validateThenStage(parsed, rawData: data, filename: url.lastPathComponent)
+        }
+    }
+
+    /// Runs the chosen CSV through Jamf's csv-validate endpoint, then either
+    /// exposes the Import button (valid) or blocks with Jamf's problem detail
+    /// (invalid). If the validator itself can't be reached, we fall back to
+    /// the local parse with a warning rather than blocking on infrastructure.
+    private func validateThenStage(_ parsed: CSVPreloadParser.ParseResult, rawData: Data, filename: String) {
+        isValidatingCSV = true
+        Task { @MainActor in
+            defer { isValidatingCSV = false }
+            do {
+                let result = try await JamfPreStageService.shared.validateCSV(rawData, filename: filename)
+                if result.isValid {
+                    bulkParseResult = parsed
+                } else {
+                    bulkParseResult = nil
+                    bulkError = "Jamf rejected this CSV: \(result.detail ?? "no detail provided"). Fix the file (see the template) and choose it again."
+                }
+            } catch {
+                // Validator unreachable (network/token): proceed on the local
+                // parse, but say we couldn't confirm with Jamf.
+                bulkParseResult = parsed
+                bulkError = "Couldn't reach Jamf's CSV validator (\(error.localizedDescription)) — proceeding with local checks only."
+            }
+        }
+    }
+
+    /// Fetches Jamf's live Inventory Preload CSV template and hands it to the
+    /// file exporter so the operator can save it and fill it in.
+    private func downloadTemplate() {
+        guard !isDownloadingTemplate else { return }
+        bulkError = nil
+        isDownloadingTemplate = true
+        Task { @MainActor in
+            defer { isDownloadingTemplate = false }
+            do {
+                let data = try await JamfPreStageService.shared.downloadCSVTemplate()
+                templateDocument = ExportDocument(data: data)
+                showTemplateExporter = true
+            } catch {
+                bulkError = "Couldn't download the template from Jamf: \(error.localizedDescription)"
             }
         }
     }
@@ -354,7 +450,7 @@ struct PreStageView: View {
                 }
                 do {
                     try await JamfPreStageService.shared.createPreloadRecord(
-                        serial: row.serialNumber, assetTag: row.assetTag
+                        serial: row.serialNumber, assetTag: row.assetTag, deviceType: row.deviceType
                     )
                     created += 1
                     consecutiveFailures = 0
@@ -719,44 +815,20 @@ struct PreStageView: View {
         )
     }
 
+    /// Native pop-up button. A custom-styled `Menu` here read as static text no
+    /// matter how much chrome was layered on, so this uses the real AppKit
+    /// pop-up control (same pattern as `PreStageAssignmentSheet`) — it draws
+    /// its own bezel and disclosure arrows, so it is unmistakably clickable.
     private var preStageMenu: some View {
-        Menu {
+        Picker("", selection: $selectedPreStage) {
+            Text("Select a PreStage…").tag(JamfPreStage?.none)
             ForEach(filteredPreStages) { prestage in
-                Button {
-                    selectedPreStage = prestage
-                } label: {
-                    if selectedPreStage?.id == prestage.id {
-                        Label(prestage.displayName, systemImage: "checkmark")
-                    } else {
-                        Text(prestage.displayName)
-                    }
-                }
+                Text(prestage.displayName).tag(JamfPreStage?.some(prestage))
             }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "shippingbox")
-                    .font(.system(size: 12, weight: .medium))
-                Text(selectedPreStage?.displayName ?? "Select a PreStage")
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-
-                Spacer()
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-            }
-            .foregroundColor(selectedPreStage != nil ? .white : .white.opacity(0.7))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .controlSize(.large)
         .disabled(isExecuting)
     }
 
