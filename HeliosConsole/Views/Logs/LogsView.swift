@@ -103,19 +103,18 @@ struct LogsView: View {
                     Button {
                         exportCSVToPasteboard()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: showingExportConfirmation ? "checkmark" : "square.and.arrow.up")
-                                .font(.system(size: 12))
+                        HStack(spacing: 8) {
+                            Image(systemName: showingExportConfirmation ? "checkmark" : "square.and.arrow.down")
+                                .font(.system(size: 13, weight: .semibold))
                             Text(showingExportConfirmation ? "Copied!" : "Export CSV")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 14, weight: .semibold))
                         }
-                        .foregroundColor(showingExportConfirmation ? .green : (isDark ? .white : .primary))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                        )
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(showingExportConfirmation ? Color.green : Color.blue)
+                        .cornerRadius(10)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(logService.logs.isEmpty)

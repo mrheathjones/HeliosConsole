@@ -378,6 +378,20 @@ struct MDMConfiguration: Codable {
         signIn?.entra?.effectiveProvisionJamfCredentials ?? true
     }
 
+    /// Whether the master client may create a per-user Jamf API client for an
+    /// operator who doesn't have one yet (assigning `requiredRoleName`, named
+    /// `<UPN> (<clientId>)`). Default true. See `AuthenticationSettings`.
+    var effectiveAutoCreateUserApiClient: Bool {
+        authentication?.effectiveAutoCreateUserApiClient ?? true
+    }
+
+    /// Which Jamf client the given call category authenticates as (per-user
+    /// for operator attribution, or the shared master client). Absent config
+    /// → `.master`. A `.user` result is fail-closed. See `CredentialRoutingSettings`.
+    func credentialSource(for scope: CredentialScope) -> CredentialSource {
+        authentication?.credentialSource(for: scope) ?? .master
+    }
+
     /// Whether the Entra sign-in flow is REQUIRED: true whenever the
     /// method is "entra", even when misconfigured
     /// (`isEntraSignInConfigured == false`). The email path must be

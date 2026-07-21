@@ -151,32 +151,40 @@ final class ComputerSearchService: ObservableObject {
     
     /// Get bearer token using user's API credentials
     private func getBearerToken() async throws -> String {
+        // Route per the deviceSearch scope. User → the shared per-user session
+        // (fail-closed); master → mint from the MDM master client below. This
+        // is what lets an org that never provisions per-user credentials run
+        // search (and device-detail loads) on the master client instead of
+        // hitting "no credentials".
+        if MDMConfigurationManager.shared.configuration.credentialSource(for: .deviceSearch) == .user {
+            return try await JamfUserSession.shared.bearerToken()
+        }
+
         // Check if we have a valid cached token
         if let token = cachedBearerToken,
            let expiration = tokenExpiration,
            expiration > Date().addingTimeInterval(60) {
             return token
         }
-        
-        // Get user's credentials from keychain
-        guard let credentials = keychain.loadJamfCredentials() else {
-            throw ComputerSearchError.noCredentials
-        }
-        
+
+        let config = MDMConfigurationManager.shared.configuration
+        let masterClientID = config.masterClientID
+        let masterClientSecret = config.masterClientSecret
+
         // Request new bearer token
         guard let url = URL(string: "\(jamfURL)/api/v1/oauth/token") else {
             throw ComputerSearchError.invalidURL
         }
-        
-        NSLog("🔐 ComputerSearchService: Getting bearer token using user API client")
-        
+
+        NSLog("🔐 ComputerSearchService: Getting bearer token using master API client")
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = NetworkTuning.connectionTimeout
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
-        
-        let bodyString = "grant_type=client_credentials&client_id=\(credentials.clientID)&client_secret=\(credentials.clientSecret)"
+
+        let bodyString = "grant_type=client_credentials&client_id=\(masterClientID)&client_secret=\(masterClientSecret)"
         request.httpBody = bodyString.data(using: .utf8)
         
         let (data, response) = try await URLSession.shared.data(for: request)

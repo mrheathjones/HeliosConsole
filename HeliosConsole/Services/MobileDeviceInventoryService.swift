@@ -187,15 +187,20 @@ final class MobileDeviceInventoryService: ObservableObject {
         visionOSCount = devices.filter { $0.platformType == .visionOS }.count
     }
     
-    /// Get bearer token using master API credentials from MDM configuration
+    /// Get bearer token for inventory loads. Routed per the `inventory` scope
+    /// (default master; per-user fail-closed when the profile asks).
     private func getBearerToken() async throws -> String {
+        if MDMConfigurationManager.shared.configuration.credentialSource(for: .inventory) == .user {
+            return try await JamfUserSession.shared.bearerToken()
+        }
+
         // Check if we have a valid cached token
         if let token = cachedBearerToken,
            let expiration = tokenExpiration,
            expiration > Date().addingTimeInterval(60) {
             return token
         }
-        
+
         // Get master API credentials from MDM configuration
         let config = MDMConfigurationManager.shared.configuration
         let masterClientID = config.masterClientID

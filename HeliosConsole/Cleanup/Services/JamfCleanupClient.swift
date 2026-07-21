@@ -17,15 +17,21 @@ actor JamfCleanupClient {
     private let clientSecret: String
     private let pageSize: Int
     private let session: URLSession
+    /// When true, all Cleanup calls (listing AND the stale-device deletes)
+    /// authenticate as the signed-in operator via `JamfUserSession` so Jamf's
+    /// audit attributes the deletes to the person, not the master client.
+    /// Resolved from the profile at construction (see CleanupViewModel).
+    private let attributeToUser: Bool
 
     private var accessToken: String?
     private var tokenExpiry: Date = .distantPast
 
-    init(baseURL: URL, clientID: String, clientSecret: String, pageSize: Int = 100) {
+    init(baseURL: URL, clientID: String, clientSecret: String, pageSize: Int = 100, attributeToUser: Bool = false) {
         self.baseURL = baseURL
         self.clientID = clientID
         self.clientSecret = clientSecret
         self.pageSize = max(1, min(pageSize, 200))
+        self.attributeToUser = attributeToUser
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = NetworkTuning.requestTimeout
         self.session = URLSession(configuration: config)
@@ -34,6 +40,11 @@ actor JamfCleanupClient {
     // MARK: - OAuth token lifecycle
 
     private func validToken() async throws -> String {
+        // Per-user attribution: delegate to the shared operator token
+        // (fail-closed if no per-user credential is provisioned).
+        if attributeToUser {
+            return try await JamfUserSession.shared.bearerToken()
+        }
         if let token = accessToken, Date() < tokenExpiry {
             return token
         }

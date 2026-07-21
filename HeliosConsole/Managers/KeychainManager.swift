@@ -119,27 +119,63 @@ class KeychainManager {
         return delete(key: Keys.entraRefreshToken)
     }
 
+    // MARK: - User identity (non-secret → UserDefaults, not Keychain)
+    //
+    // The signed-in user's email and display name are shown all over the UI
+    // and carry no security value. Storing them in the Keychain only bought
+    // an extra "HeliosConsole wants to use your confidential information"
+    // ACL prompt per item on every fresh/re-signed build — for data that is
+    // not confidential. They now live in UserDefaults. The accessors below
+    // keep the same names/signatures (call sites are unchanged) and migrate
+    // any value left in the Keychain by an older build on first read, then
+    // delete the orphaned Keychain item so the prompt stops for good.
+
+    private var defaults: UserDefaults { .standard }
+
+    @discardableResult
     func saveUserEmail(_ email: String) -> Bool {
-        return saveString(email, forKey: Keys.userEmail)
+        defaults.set(email, forKey: Keys.userEmail)
+        _ = delete(key: Keys.userEmail)   // clear any legacy Keychain copy
+        return true
     }
-    
+
     func loadUserEmail() -> String? {
-        return loadString(forKey: Keys.userEmail)
+        if let email = defaults.string(forKey: Keys.userEmail) { return email }
+        // One-time migration from a Keychain value written by an older build.
+        if let legacy = loadString(forKey: Keys.userEmail) {
+            defaults.set(legacy, forKey: Keys.userEmail)
+            _ = delete(key: Keys.userEmail)
+            return legacy
+        }
+        return nil
     }
-    
+
+    @discardableResult
     func deleteUserEmail() -> Bool {
+        defaults.removeObject(forKey: Keys.userEmail)
         return delete(key: Keys.userEmail)
     }
-    
+
+    @discardableResult
     func saveUserName(_ name: String) -> Bool {
-        return saveString(name, forKey: Keys.userName)
+        defaults.set(name, forKey: Keys.userName)
+        _ = delete(key: Keys.userName)
+        return true
     }
-    
+
     func loadUserName() -> String? {
-        return loadString(forKey: Keys.userName)
+        if let name = defaults.string(forKey: Keys.userName) { return name }
+        if let legacy = loadString(forKey: Keys.userName) {
+            defaults.set(legacy, forKey: Keys.userName)
+            _ = delete(key: Keys.userName)
+            return legacy
+        }
+        return nil
     }
-    
+
+    @discardableResult
     func deleteUserName() -> Bool {
+        defaults.removeObject(forKey: Keys.userName)
         return delete(key: Keys.userName)
     }
     

@@ -131,27 +131,9 @@ struct AnnouncementsView: View {
                         .buttonStyle(.plain)
                     }
                     
-                    Button {
+                    RefreshButton(isLoading: announcementService.isLoading) {
                         announcementService.refresh()
-                    } label: {
-                        HStack(spacing: 6) {
-                            if announcementService.isLoading {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            Text("Refresh")
-                        }
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(8)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(announcementService.isLoading)
                     
                     // Local file / debug menu
                     Menu {

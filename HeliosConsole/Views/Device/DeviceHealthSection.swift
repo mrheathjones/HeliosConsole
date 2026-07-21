@@ -64,8 +64,12 @@ struct DeviceHealthEvaluator {
         let facts = computer.scopeFacts()
 
         return HealthMetricType.allCases.map { metric in
+            // .deviceDetail: a site the admin carved out of the SCORECARD still
+            // shows its real per-metric value here. The exclusion only removes
+            // the device from the fleet numerator/denominator, and it should
+            // not blank out the device's own health page.
             let evaluation = HealthEvaluator.evaluate(
-                metric, computer: input, facts: facts, policy: policy
+                metric, computer: input, facts: facts, policy: policy, mode: .deviceDetail
             )
             return DeviceHealthMetricResult(
                 type: metric,
@@ -325,9 +329,26 @@ struct DeviceHealthSection: View {
     
     // MARK: - Coverage Status (Unified across Jamf and ABM sources)
     
-    /// Active ABM coverage (if using ABM API)
+    /// The ABM coverage record that drives the card's status.
+    ///
+    /// A device commonly carries BOTH a Limited Warranty and an AppleCare
+    /// agreement. Taking whichever ABM happened to return first meant an
+    /// expired limited warranty could mask valid AppleCare and paint the card
+    /// red. AppleCare always wins; within a tier a live plan beats an expired
+    /// one, and the latest end date breaks any remaining tie.
     private var activeCoverage: AppleCareCoverage? {
-        appleCareData.first { $0.isActive }
+        appleCareData
+            .filter { $0.isActive }
+            .max { coverageRank($0) < coverageRank($1) }
+    }
+
+    /// Sort key for `activeCoverage` — higher wins.
+    private func coverageRank(_ coverage: AppleCareCoverage) -> (Int, Int, Date) {
+        (
+            coverage.isAppleCarePlan ? 1 : 0,
+            coverage.isExpired ? 0 : 1,
+            coverage.endDate ?? .distantPast
+        )
     }
     
     /// Whether device has active coverage from any source
@@ -545,7 +566,13 @@ struct DeviceHealthSection: View {
                 displayStatus = .unknown
                 displayStatusLabel = "Unknown"
             } else if let active = activeCoverage {
-                if active.isExpiringSoon {
+                // Mirrors the tile's ladder exactly (expired → expiring → active);
+                // the missing expired case here used to let the popover claim
+                // "Active" while the tile behind it said "Expired".
+                if active.isExpired {
+                    displayStatus = .nonCompliant
+                    displayStatusLabel = "Expired"
+                } else if active.isExpiringSoon {
                     displayStatus = .nonCompliant
                     displayStatusLabel = "Expiring Soon"
                 } else {
@@ -956,7 +983,9 @@ struct DeviceHealthSection: View {
             if let endDate = coverage.endDate {
                 HStack(spacing: 4) {
                     if coverage.isExpired {
-                        Text("Expired")
+                        // Show WHEN it lapsed, matching the active branch — the
+                        // date is the useful part when triaging a claim.
+                        Text("Expired: \(formatDate(endDate))")
                             .font(.system(size: 10))
                             .foregroundColor(.red)
                     } else if coverage.isExpiringSoon, let days = coverage.daysRemaining {

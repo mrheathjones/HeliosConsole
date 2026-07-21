@@ -300,6 +300,84 @@
           "title": "Allow Remember Me",
           "description": "Allow the sign-in screen to remember the last operator.",
           "default": true
+        },
+        "attributeActionsToUser": {
+          "type": "boolean",
+          "title": "Attribute Actions to User (legacy)",
+          "description": "LEGACY coarse switch, superseded by Credential Routing below. When Credential Routing is absent, this still governs the action scopes: true routes MDM commands, Return to Service, sensitive reads, Move to Site, PreStage, and Cleanup to the per-user client; false routes them to master. Ignored for any scope Credential Routing sets explicitly. Leave unset when using Credential Routing."
+        },
+        "autoCreateUserApiClient": {
+          "type": "boolean",
+          "title": "Auto-Create Per-User API Client",
+          "description": "Allow the master API client to create a Jamf API client for the signed-in operator when they don't already have one, assigning it the role named in Jamf Pro > Required Role Name. New clients are named '<UPN> (<clientId>)' so the client id Jamf records in its audit log maps back to the person who ran the command; existing clients are renamed to match on next sign-in. Requires the master API role to hold Create/Read/Update API Integrations and Read API Roles. Default true — the built-in email sign-in flow depends on it. Set false to forbid Helios from ever minting API clients (operators without a pre-created client then cannot use any scope routed to 'user').",
+          "default": true
+        },
+        "credentialRouting": {
+          "type": "object",
+          "title": "Credential Routing",
+          "description": "Per-scope choice of which Jamf API client each category of call authenticates as: 'user' (the signed-in operator's per-user client, so Jamf's audit names the person) or 'master' (the shared MDM master client). Any scope left unset falls back to 'default'; if 'default' is also unset, the safe universal 'master' is used. A 'user' scope is FAIL CLOSED — the call errors if the operator has no provisioned per-user credential. Set everything to 'master' (or just leave this out) for orgs that do not grant operators their own Jamf API credentials.",
+          "properties": {
+            "default": {
+              "type": "string",
+              "title": "Default Source",
+              "description": "Fallback credential for any scope not set below. Unset = master.",
+              "enum": ["user", "master"]
+            },
+            "mdmCommands": {
+              "type": "string",
+              "title": "MDM Commands",
+              "description": "Lock, restart, shutdown, wipe, unlock account, blank push, remote desktop, Bluetooth, etc.",
+              "enum": ["user", "master"]
+            },
+            "returnToService": {
+              "type": "string",
+              "title": "Return to Service",
+              "description": "Erase command + Jamf record delete legs of Return to Service. (The Entra device-object delete always uses the Entra credential.)",
+              "enum": ["user", "master"]
+            },
+            "sensitiveReads": {
+              "type": "string",
+              "title": "Sensitive Reads",
+              "description": "Retrieving the LAPS local-admin password and the FileVault recovery key.",
+              "enum": ["user", "master"]
+            },
+            "moveToSite": {
+              "type": "string",
+              "title": "Move to Site",
+              "description": "Reassigning a device to a different Jamf site.",
+              "enum": ["user", "master"]
+            },
+            "prestage": {
+              "type": "string",
+              "title": "PreStage & Inventory Preload",
+              "description": "PreStage register/assign and Inventory Preload (including bulk CSV template download and validation).",
+              "enum": ["user", "master"]
+            },
+            "cleanup": {
+              "type": "string",
+              "title": "Cleanup",
+              "description": "Cleanup device listing and the stale-device deletes.",
+              "enum": ["user", "master"]
+            },
+            "deviceSearch": {
+              "type": "string",
+              "title": "Device Search",
+              "description": "Dashboard/menu-bar device search and device-detail loads. Route to master for orgs without per-user credentials so search still works. (The menu-bar companion always uses master regardless.)",
+              "enum": ["user", "master"]
+            },
+            "inventory": {
+              "type": "string",
+              "title": "Inventory",
+              "description": "Dashboard device counts and health-metric inventory loads.",
+              "enum": ["user", "master"]
+            },
+            "reports": {
+              "type": "string",
+              "title": "Reports",
+              "description": "Report data and device-detail drill-downs from report results.",
+              "enum": ["user", "master"]
+            }
+          }
         }
       }
     }

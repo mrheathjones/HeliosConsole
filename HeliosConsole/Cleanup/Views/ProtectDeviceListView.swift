@@ -189,14 +189,9 @@ struct ProtectDeviceListView: View {
                 .disabled(visibleDevices.isEmpty)
                 .controlSize(.small)
 
-            Button {
+            RefreshButton(isLoading: model.isLoading || isDeleting) {
                 Task { await model.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
             }
-            .buttonStyle(.plain)
-            .disabled(model.isLoading || isDeleting)
-            .help("Refresh")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

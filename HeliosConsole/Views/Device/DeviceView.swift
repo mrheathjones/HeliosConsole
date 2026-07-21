@@ -1271,37 +1271,9 @@ struct DeviceView: View {
             // Actions
             HStack(spacing: 12) {
                 // Refresh button
-                Button {
-                    Task {
-                        await loadFullDetails()
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        if isLoadingDetails {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .frame(width: 14, height: 14)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        Text("Refresh")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(.white.opacity(0.8))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.white.opacity(0.1))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
+                RefreshButton(isLoading: isLoadingDetails) {
+                    Task { await loadFullDetails() }
                 }
-                .buttonStyle(.plain)
-                .disabled(isLoadingDetails)
                 
                 // Actions menu with MDM commands. Strict fail-closed: when
                 // the access profile grants no device actions — or the
@@ -1578,9 +1550,16 @@ struct DeviceView: View {
                     showingCommandAlert = true
                 }
             } else {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                NSLog("❌ Bluetooth command failed: \(errorMessage)")
-                throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server returned status \(httpResponse.statusCode): \(errorMessage)"])
+                NSLog("❌ Bluetooth command failed: %@", String(data: data, encoding: .utf8) ?? "Unknown error")
+                throw NSError(
+                    domain: "DeviceView",
+                    code: httpResponse.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: JamfErrorFormatter.message(
+                        status: httpResponse.statusCode,
+                        body: data,
+                        fallbackAction: "change Bluetooth"
+                    )]
+                )
             }
             
         } catch {
@@ -1597,12 +1576,21 @@ struct DeviceView: View {
         }
     }
     
-    private func getBearerToken() async throws -> String {
+    /// Mints the Jamf token for a device operation. `scope` selects which
+    /// routing category applies — MDM commands, the Return-to-Service legs,
+    /// or the sensitive password/key reads — so each can be independently
+    /// attributed to the operator (per-user, fail-closed) or the master client.
+    private func getBearerToken(scope: CredentialScope = .mdmCommands) async throws -> String {
         let config = MDMConfigurationManager.shared.configuration
+
+        if config.credentialSource(for: scope) == .user {
+            return try await JamfUserSession.shared.bearerToken()
+        }
+
         let jamfURL = config.jamfURL
         let masterClientID = config.masterClientID
         let masterClientSecret = config.masterClientSecret
-        
+
         guard let tokenURL = URL(string: "\(jamfURL)/api/v1/oauth/token") else {
             throw NSError(domain: "DeviceView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid token URL"])
         }
@@ -1784,7 +1772,7 @@ struct DeviceView: View {
         var overallSuccess = true
 
         do {
-            let token = try await getBearerToken()
+            let token = try await getBearerToken(scope: .returnToService)
 
             // 1) Erase phase: queue the command (with PIN) and wait for the
             // device to acknowledge it.
@@ -1798,7 +1786,7 @@ struct DeviceView: View {
             // The ack wait can outlive the original bearer token — cleanup
             // uses a fresh one (falling back to the original if the refresh
             // fails; the delete then surfaces its own auth error).
-            let cleanupToken = acked ? ((try? await getBearerToken()) ?? token) : token
+            let cleanupToken = acked ? ((try? await getBearerToken(scope: .returnToService)) ?? token) : token
 
             // 2) Delete the Jamf record only after the erase is acknowledged,
             // and only when the profile hasn't disabled the step.
@@ -1986,7 +1974,15 @@ struct DeviceView: View {
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
             NSLog("❌ Erase command rejected: \(errorMessage)")
-            throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Erase command rejected (HTTP \(httpResponse.statusCode)): \(errorMessage)"])
+            throw NSError(
+                domain: "DeviceView",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: JamfErrorFormatter.message(
+                    status: httpResponse.statusCode,
+                    body: data,
+                    fallbackAction: "send the erase command"
+                )]
+            )
         }
 
         let uuid = Self.extractCommandUUID(from: data) ?? ""
@@ -2056,7 +2052,7 @@ struct DeviceView: View {
                     } else {
                         let code = (response as? HTTPURLResponse)?.statusCode ?? -1
                         NSLog("⚠️ Ack poll failed (HTTP \(code))")
-                        if code == 401, let fresh = try? await getBearerToken() {
+                        if code == 401, let fresh = try? await getBearerToken(scope: .returnToService) {
                             token = fresh
                             NSLog("🔑 Bearer token refreshed for ack polling")
                         }
@@ -2097,8 +2093,16 @@ struct DeviceView: View {
             throw NSError(domain: "DeviceView", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
         }
         guard httpResponse.statusCode == 204 || httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode): \(errorMessage)"])
+            NSLog("❌ Jamf record delete failed: %@", String(data: data, encoding: .utf8) ?? "Unknown error")
+            throw NSError(
+                domain: "DeviceView",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: JamfErrorFormatter.message(
+                    status: httpResponse.statusCode,
+                    body: data,
+                    fallbackAction: "delete the Jamf record"
+                )]
+            )
         }
         NSLog("🗑️ Deleted Jamf record id \(computerId)")
     }
@@ -2250,8 +2254,16 @@ struct DeviceView: View {
         }
         
         if !(200...299).contains(httpResponse.statusCode) {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw NSError(domain: "DeviceView", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server returned status \(httpResponse.statusCode): \(errorMessage)"])
+            NSLog("❌ MDM command failed: %@", String(data: data, encoding: .utf8) ?? "Unknown error")
+            throw NSError(
+                domain: "DeviceView",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: JamfErrorFormatter.message(
+                    status: httpResponse.statusCode,
+                    body: data,
+                    fallbackAction: "send this command"
+                )]
+            )
         }
     }
     
@@ -2281,9 +2293,9 @@ struct DeviceView: View {
         await MainActor.run { isExecutingCommand = true }
         
         do {
-            let token = try await getBearerToken()
+            let token = try await getBearerToken(scope: .sensitiveReads)
             let jamfURL = config.jamfURL
-            
+
             // Build the LAPS API URL
             guard let url = URL(string: "\(jamfURL)/api/v2/local-admin-password/\(managementId)/account/\(username)/password") else {
                 throw NSError(domain: "DeviceView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
@@ -2348,10 +2360,10 @@ struct DeviceView: View {
         await MainActor.run { isExecutingCommand = true }
         
         do {
-            let token = try await getBearerToken()
+            let token = try await getBearerToken(scope: .sensitiveReads)
             let config = MDMConfigurationManager.shared.configuration
             let jamfURL = config.jamfURL
-            
+
             // Build the FileVault API URL
             guard let url = URL(string: "\(jamfURL)/api/v3/computers-inventory/\(deviceId)/filevault") else {
                 throw NSError(domain: "DeviceView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])

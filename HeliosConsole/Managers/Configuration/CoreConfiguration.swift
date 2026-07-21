@@ -33,11 +33,97 @@ import Foundation
 ///
 /// Lives in the CORE domain — this is sign-in policy, so it belongs beside
 /// the `signIn` block rather than with branding in ui, where it used to sit.
+/// Which Jamf API client a given call authenticates as.
+enum CredentialSource: String {
+    /// The signed-in operator's per-user Jamf client (Jamf audit names them).
+    case user
+    /// The shared MDM-profile master client.
+    case master
+
+    /// Parse a profile string tolerantly; unknown/blank → nil (caller falls
+    /// back to the next precedence level, ultimately `.master`).
+    static func parse(_ raw: String?) -> CredentialSource? {
+        switch raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "user": return .user
+        case "master": return .master
+        default: return nil
+        }
+    }
+}
+
+/// The distinct Jamf call categories that can each be routed to `user` or
+/// `master` independently. Read categories (search/inventory/reports) are
+/// routable too so orgs that don't provision per-user credentials can push
+/// everything through the master client.
+enum CredentialScope: String {
+    case mdmCommands        // lock, restart, shutdown, wipe, unlock, blank push, etc.
+    case returnToService    // erase + Jamf record delete legs
+    case sensitiveReads     // LAPS local-admin password + FileVault recovery key
+    case moveToSite
+    case prestage           // PreStage register/assign + Inventory Preload
+    case cleanup            // stale/protect listing + deletes
+    case deviceSearch
+    case inventory          // dashboard counts + health metrics
+    case reports
+
+    /// Operator ACTIONS (and sensitive reads) the legacy `attributeActionsToUser`
+    /// flag governed before per-scope routing existed.
+    var isActionScope: Bool {
+        switch self {
+        case .mdmCommands, .returnToService, .sensitiveReads,
+             .moveToSite, .prestage, .cleanup:
+            return true
+        case .deviceSearch, .inventory, .reports:
+            return false
+        }
+    }
+}
+
+/// Per-scope master-vs-user credential routing. Every field is an optional
+/// "user"/"master" string so a profile sets only what it wants to override;
+/// anything unset falls through to `default`, then (for action scopes) the
+/// legacy flag, then `.master`.
+struct CredentialRoutingSettings: Codable {
+    var `default`: String?
+    var mdmCommands: String?
+    var returnToService: String?
+    var sensitiveReads: String?
+    var moveToSite: String?
+    var prestage: String?
+    var cleanup: String?
+    var deviceSearch: String?
+    var inventory: String?
+    var reports: String?
+
+    var resolvedDefault: CredentialSource? { CredentialSource.parse(`default`) }
+
+    /// The explicitly-configured source for a scope, or nil if that key is
+    /// absent/blank.
+    func explicitSource(for scope: CredentialScope) -> CredentialSource? {
+        let raw: String?
+        switch scope {
+        case .mdmCommands:     raw = mdmCommands
+        case .returnToService: raw = returnToService
+        case .sensitiveReads:  raw = sensitiveReads
+        case .moveToSite:      raw = moveToSite
+        case .prestage:        raw = prestage
+        case .cleanup:         raw = cleanup
+        case .deviceSearch:    raw = deviceSearch
+        case .inventory:       raw = inventory
+        case .reports:         raw = reports
+        }
+        return CredentialSource.parse(raw)
+    }
+}
+
 struct AuthenticationSettings: Codable {
     var requireBiometric: Bool?
     var allowBiometricSetup: Bool?
     var sessionTimeout: Int?
     var allowRememberMe: Bool?
+    var attributeActionsToUser: Bool?
+    var credentialRouting: CredentialRoutingSettings?
+    var autoCreateUserApiClient: Bool?
 
     var effectiveRequireBiometric: Bool { requireBiometric ?? false }
 
@@ -48,6 +134,34 @@ struct AuthenticationSettings: Codable {
     var effectiveSessionTimeoutMinutes: Int { max(0, sessionTimeout ?? 0) }
 
     var effectiveAllowRememberMe: Bool { allowRememberMe ?? true }
+
+    /// Whether the MASTER client may create a per-user Jamf API client (and
+    /// assign it `jamfPro.requiredRoleName`) when the signed-in operator does
+    /// not have one yet. Default **true** — the built-in email sign-in flow
+    /// depends on it. Set false to forbid Helios from ever minting API
+    /// clients: an operator without a pre-created client then cannot use any
+    /// scope routed to `user` (those calls fail closed).
+    ///
+    /// Newly created clients are named `<UPN> (<clientId>)` so the client id
+    /// Jamf records in its audit log maps back to the person who ran the
+    /// command.
+    var effectiveAutoCreateUserApiClient: Bool { autoCreateUserApiClient ?? true }
+
+    /// Resolves which Jamf client a scope authenticates as. Precedence:
+    /// 1. explicit per-scope routing key, 2. `credentialRouting.default`,
+    /// 3. the legacy `attributeActionsToUser` flag (action scopes only),
+    /// 4. `.master` (safe universal — always works without per-user creds).
+    ///
+    /// A `.user` result is **fail-closed**: the call throws if the operator
+    /// has no provisioned per-user credential (never silently uses master).
+    func credentialSource(for scope: CredentialScope) -> CredentialSource {
+        if let explicit = credentialRouting?.explicitSource(for: scope) { return explicit }
+        if let fallback = credentialRouting?.resolvedDefault { return fallback }
+        if scope.isActionScope, let legacy = attributeActionsToUser {
+            return legacy ? .user : .master
+        }
+        return .master
+    }
 }
 
 /// Managed connection & integration settings for Helios Console, delivered

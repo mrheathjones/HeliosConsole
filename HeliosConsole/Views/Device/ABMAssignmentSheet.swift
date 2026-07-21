@@ -601,7 +601,7 @@ struct ABMAssignmentSheet: View {
             }
 
             if permitted.count == 1, let current, permitted[0].id == current.id {
-                phase = .unavailable("The device is already assigned to \(current.serverName), the only MDM server your grant permits — there is nothing to change.")
+                phase = .unavailable("The device is already assigned to \(current.serverName) — there is nothing to change.")
                 return
             }
 

@@ -635,27 +635,51 @@ struct ReportsView: View {
     // MARK: - Tab Bar
     
     private var tabBar: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             ForEach(ReportsTab.allCases) { tab in
-                Button { withAnimation { selectedTab = tab } } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: tab.icon).font(.system(size: 14))
-                        Text(tab.title).font(.system(size: 14, weight: .medium))
-                        if tab == .saved && !savedReportsManager.savedReports.isEmpty {
-                            Text("\(savedReportsManager.savedReports.count)")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Capsule().fill(Color.purple))
-                        }
-                    }
-                    .foregroundColor(selectedTab == tab ? (isDark ? .white : .primary) : .gray)
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(selectedTab == tab ? (isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)) : Color.clear))
-                }.buttonStyle(.plain)
+                tabChip(for: tab)
             }
             Spacer()
         }.padding(.horizontal, 40).padding(.bottom, 16)
+    }
+
+    /// Capsule-bordered tab chip, mirroring `DevicesHomeView.tabChip` so the
+    /// Reports tab strip reads identically to the Devices one (accent-filled
+    /// pill with a stroke when selected).
+    private func tabChip(for tab: ReportsTab) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(tab.title)
+                    .font(.system(size: 12, weight: .medium))
+                if tab == .saved && !savedReportsManager.savedReports.isEmpty {
+                    Text("\(savedReportsManager.savedReports.count)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.purple))
+                }
+            }
+            .foregroundColor(isSelected ? .white : .gray)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color.accentColor
+                                     : (isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.05)))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.accentColor
+                                       : (isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.1)),
+                            lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
     
     // MARK: - Report Builder Content
@@ -2188,27 +2212,35 @@ struct ReportResultsView: View {
     private func fetchMobileDeviceDetail(id: String) async throws -> MobileDevice {
         let config = MDMConfigurationManager.shared.configuration
         let jamfURL = config.jamfURL
-        let masterClientID = config.masterClientID
-        let masterClientSecret = config.masterClientSecret
 
-        guard let tokenURL = URL(string: "\(jamfURL)/api/v1/oauth/token") else {
-            throw NSError(domain: "ReportResultsView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        // Routed per the `reports` scope: user → shared per-user token
+        // (fail-closed), else mint from the master client.
+        let token: String
+        if config.credentialSource(for: .reports) == .user {
+            token = try await JamfUserSession.shared.bearerToken()
+        } else {
+            let masterClientID = config.masterClientID
+            let masterClientSecret = config.masterClientSecret
+
+            guard let tokenURL = URL(string: "\(jamfURL)/api/v1/oauth/token") else {
+                throw NSError(domain: "ReportResultsView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+            }
+
+            var tokenRequest = URLRequest(url: tokenURL)
+            tokenRequest.httpMethod = "POST"
+            tokenRequest.setValue("application/json", forHTTPHeaderField: "accept")
+            tokenRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
+            tokenRequest.httpBody = "grant_type=client_credentials&client_id=\(masterClientID)&client_secret=\(masterClientSecret)".data(using: .utf8)
+
+            let (tokenData, tokenResponse) = try await URLSession.shared.data(for: tokenRequest)
+            guard let httpTokenResponse = tokenResponse as? HTTPURLResponse,
+                  (200...299).contains(httpTokenResponse.statusCode) else {
+                throw NSError(domain: "ReportResultsView", code: 401, userInfo: [NSLocalizedDescriptionKey: "Authentication failed"])
+            }
+
+            struct TokenResponse: Codable { let access_token: String }
+            token = try JSONDecoder().decode(TokenResponse.self, from: tokenData).access_token
         }
-
-        var tokenRequest = URLRequest(url: tokenURL)
-        tokenRequest.httpMethod = "POST"
-        tokenRequest.setValue("application/json", forHTTPHeaderField: "accept")
-        tokenRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
-        tokenRequest.httpBody = "grant_type=client_credentials&client_id=\(masterClientID)&client_secret=\(masterClientSecret)".data(using: .utf8)
-
-        let (tokenData, tokenResponse) = try await URLSession.shared.data(for: tokenRequest)
-        guard let httpTokenResponse = tokenResponse as? HTTPURLResponse,
-              (200...299).contains(httpTokenResponse.statusCode) else {
-            throw NSError(domain: "ReportResultsView", code: 401, userInfo: [NSLocalizedDescriptionKey: "Authentication failed"])
-        }
-
-        struct TokenResponse: Codable { let access_token: String }
-        let token = try JSONDecoder().decode(TokenResponse.self, from: tokenData).access_token
 
         let sections = [
             "GENERAL", "HARDWARE", "USER_AND_LOCATION", "PURCHASING", "SECURITY",
