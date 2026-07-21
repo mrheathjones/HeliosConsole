@@ -411,29 +411,9 @@ struct ABMLookupView: View {
             Spacer()
 
             // Refresh button — clears the cache and reloads
-            Button {
-                Task {
-                    await refresh()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    if isLoading {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    Text("Refresh")
-                }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
+            RefreshButton(isLoading: isLoading) {
+                Task { await refresh() }
             }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
         }
         .padding(.horizontal, 32)
         .padding(.vertical, 24)
