@@ -78,6 +78,13 @@ final class JamfSiteService: ObservableObject {
     }
 
     private func getBearerToken() async throws -> String {
+        // Attribution: Move to Site runs on the per-user credential
+        // (fail-closed) when the profile routes the `moveToSite` scope to
+        // the operator.
+        if MDMConfigurationManager.shared.configuration.credentialSource(for: .moveToSite) == .user {
+            return try await JamfUserSession.shared.bearerToken()
+        }
+
         if let token = cachedValidToken() {
             return token
         }

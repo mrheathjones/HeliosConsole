@@ -423,31 +423,30 @@ final class UnifiedDeviceSearchService: ObservableObject {
     
     /// Get bearer token using user's API credentials
     private func getBearerToken() async throws -> String {
-        // Check if we have a valid cached token
+        // Resolve the source: the menu bar companion forces master (it is
+        // self-sufficient and shares no Keychain with the main app); otherwise
+        // the `deviceSearch` scope decides. A user result delegates to the
+        // shared per-user session (fail-closed — no silent master fallback).
+        let source: CredentialSource = useMasterCredentials
+            ? .master
+            : configuration.credentialSource(for: .deviceSearch)
+        if source == .user {
+            return try await JamfUserSession.shared.bearerToken()
+        }
+
+        // Check if we have a valid cached (master) token
         if let token = cachedBearerToken,
            let expiration = tokenExpiration,
            expiration > Date().addingTimeInterval(60) {
             return token
         }
-        
-        // Resolve which API client to authenticate with.
-        let clientID: String
-        let clientSecret: String
-        if useMasterCredentials {
-            // Self-sufficient mode (menu bar): use the MDM master client.
-            clientID = configuration.masterClientID
-            clientSecret = configuration.masterClientSecret
-            guard !clientID.isEmpty, clientID != "your-master-client-id",
-                  !clientSecret.isEmpty, clientSecret != "your-master-client-secret" else {
-                throw NSError(domain: "UnifiedSearch", code: 401, userInfo: [NSLocalizedDescriptionKey: "No credentials available"])
-            }
-        } else {
-            // Per-user mode (main app): credentials from the Keychain.
-            guard let credentials = keychain.loadJamfCredentials() else {
-                throw NSError(domain: "UnifiedSearch", code: 401, userInfo: [NSLocalizedDescriptionKey: "No credentials available"])
-            }
-            clientID = credentials.clientID
-            clientSecret = credentials.clientSecret
+
+        // Master client from the MDM profile.
+        let clientID = configuration.masterClientID
+        let clientSecret = configuration.masterClientSecret
+        guard !clientID.isEmpty, clientID != "your-master-client-id",
+              !clientSecret.isEmpty, clientSecret != "your-master-client-secret" else {
+            throw NSError(domain: "UnifiedSearch", code: 401, userInfo: [NSLocalizedDescriptionKey: "No credentials available"])
         }
 
         // Request new bearer token

@@ -102,7 +102,8 @@ final class CleanupViewModel {
             baseURL: url,
             clientID: settings.jamfClientID,
             clientSecret: settings.jamfClientSecret,
-            pageSize: settings.pageSize
+            pageSize: settings.pageSize,
+            attributeToUser: MDMConfigurationManager.shared.configuration.credentialSource(for: .cleanup) == .user
         )
         jamfClient = client
         return client

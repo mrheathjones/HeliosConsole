@@ -14,12 +14,248 @@ struct JamfCredentials: Codable {
     let clientSecret: String
     let email: String
     let expiresAt: Date?
-    
+
     var isExpired: Bool {
         guard let expiresAt = expiresAt else {
             return false
         }
         return expiresAt < Date()
+    }
+}
+
+// MARK: - Jamf error formatting
+
+/// Turns Jamf Pro's JSON error envelope into something an operator can act on.
+///
+/// Jamf answers a rejected call with, e.g.:
+/// ```json
+/// { "httpStatus": 403, "errors": [ { "code": "INVALID_PRIVILEGE",
+///   "description": "User <clientId> not privileged for [SETTINGS]" } ] }
+/// ```
+/// Dumping that verbatim into an alert tells the operator nothing. This maps
+/// the common cases — above all a missing MDM command privilege — onto the
+/// exact Jamf privilege they need to be granted.
+enum JamfErrorFormatter {
+
+    /// MDM command type (as it appears in Jamf's `[BRACKETS]`) → the Jamf API
+    /// role privilege that authorizes it. Verified against a Jamf Pro
+    /// instance's `GET /api/v1/api-role-privileges`.
+    private static let commandPrivileges: [String: String] = [
+        "SETTINGS": "Send Computer Bluetooth Command",
+        "ENABLE_REMOTE_DESKTOP": "Send Computer Remote Desktop Command",
+        "DISABLE_REMOTE_DESKTOP": "Send Computer Remote Desktop Command",
+        "RESTART_DEVICE": "Send Computer Restart Command",
+        "SHUT_DOWN_DEVICE": "Send Computer Shut Down Command",
+        "ERASE_DEVICE": "Send Computer Remote Wipe Command",
+        "DEVICE_LOCK": "Send Computer Remote Lock Command",
+        "UNLOCK_USER_ACCOUNT": "Send Computer Unlock User Account Command",
+        "DELETE_USER": "Send Computer Delete User Account Command",
+    ]
+
+    /// A human-readable message for a failed Jamf response.
+    /// - Parameters:
+    ///   - status: HTTP status code.
+    ///   - body: Raw response body (may or may not be Jamf's JSON envelope).
+    ///   - fallbackAction: Short description of what was attempted, used when
+    ///     the body carries nothing useful (e.g. "send the restart command").
+    static func message(status: Int, body: Data?, fallbackAction: String? = nil) -> String {
+        let raw = body.flatMap { String(data: $0, encoding: .utf8) }?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if let parsed = parseEnvelope(raw, status: status) {
+            return parsed
+        }
+
+        // Not Jamf's envelope — say something useful about the status itself.
+        let action = fallbackAction.map { " while trying to \($0)" } ?? ""
+        switch status {
+        case 401:
+            return "Jamf Pro rejected the credentials\(action). Sign out and back in, then try again."
+        case 403:
+            return "Jamf Pro denied this request\(action) — your API role is missing a required privilege."
+        case 404:
+            return "Jamf Pro could not find the target of this request\(action)."
+        case 409:
+            return "Jamf Pro reported a conflict\(action) — the record changed while the update was being applied. Try again."
+        case 500...599:
+            return "Jamf Pro returned a server error (\(status))\(action). Try again shortly."
+        default:
+            let detail = raw.isEmpty ? "" : ": \(truncated(raw))"
+            return "Jamf Pro returned status \(status)\(action)\(detail)"
+        }
+    }
+
+    /// Parses Jamf's `{ httpStatus, errors: [{ code, description }] }` shape.
+    private static func parseEnvelope(_ raw: String, status: Int) -> String? {
+        guard let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errors = json["errors"] as? [[String: Any]],
+              let first = errors.first else {
+            return nil
+        }
+
+        let code = first["code"] as? String ?? ""
+        let description = (first["description"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if code == "INVALID_PRIVILEGE" {
+            // "User <clientId> not privileged for [SETTINGS]" → name the exact
+            // privilege to grant, plus the per-scope escape hatch.
+            if let commandType = bracketedToken(in: description) {
+                if let privilege = commandPrivileges[commandType.uppercased()] {
+                    return """
+                    Your Jamf API role isn't allowed to send the \(commandType) command.
+
+                    Ask a Jamf administrator to add the “\(privilege)” privilege to your API role \
+                    (plus “Send MDM command information in Jamf Pro API”), then sign out and back \
+                    in. Alternatively this action can be routed to the master credential.
+                    """
+                }
+                return """
+                Your Jamf API role isn't allowed to send the \(commandType) command.
+
+                Ask a Jamf administrator to grant the matching “Send Computer …” privilege for \
+                \(commandType) on your API role, then sign out and back in.
+                """
+            }
+            return """
+            Your Jamf API role is missing a privilege required for this action.
+
+            \(description.isEmpty ? "" : description)
+            """.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Any other coded Jamf error: lead with the description, keep the code
+        // for support, and drop the JSON scaffolding.
+        if !description.isEmpty {
+            return code.isEmpty ? description : "\(description)\n\n(Jamf error \(code), HTTP \(status))"
+        }
+        return code.isEmpty ? nil : "Jamf error \(code) (HTTP \(status))"
+    }
+
+    /// First `[TOKEN]` in a string — Jamf names the offending command type there.
+    private static func bracketedToken(in text: String) -> String? {
+        guard let open = text.firstIndex(of: "["),
+              let close = text[open...].firstIndex(of: "]"),
+              open < close else { return nil }
+        let token = text[text.index(after: open)..<close].trimmingCharacters(in: .whitespaces)
+        return token.isEmpty ? nil : token
+    }
+
+    private static func truncated(_ text: String, limit: Int = 300) -> String {
+        text.count <= limit ? text : String(text.prefix(limit)) + "…"
+    }
+}
+
+// MARK: - Per-user Jamf token provider
+
+enum JamfUserSessionError: LocalizedError {
+    /// No per-user credential is provisioned, so an action that must be
+    /// attributed to the operator cannot proceed (fail-closed).
+    case credentialsUnavailable
+    case invalidURL
+    case authenticationFailed(Int, String)
+
+    var errorDescription: String? {
+        switch self {
+        case .credentialsUnavailable:
+            return "This action is recorded against you in Jamf, but your personal Jamf credential isn't available yet. Sign out and back in to provision it, then try again."
+        case .invalidURL:
+            return "Invalid Jamf Pro URL."
+        case .authenticationFailed(let code, let message):
+            return "Could not obtain your per-user Jamf token (\(code)): \(message)"
+        }
+    }
+}
+
+/// Shared, cached source of a **per-user** Jamf bearer token, minted from the
+/// signed-in operator's Keychain credentials (`KeychainManager.loadJamfCredentials`).
+///
+/// User-initiated actions (MDM commands, delete, Move to Site, Return to
+/// Service, Cleanup, PreStage register/assign, Inventory Preload) authenticate
+/// through this so Jamf's own audit log attributes them to the operator instead
+/// of the shared master client — gated per scope by `credentialSource(for:)`.
+///
+/// Fail-closed: `bearerToken()` throws `.credentialsUnavailable` when no
+/// per-user credential exists. Callers must NOT silently fall back to master.
+final class JamfUserSession {
+    static let shared = JamfUserSession()
+    private init() {}
+
+    private let keychain = KeychainManager.shared
+    private let lock = NSLock()
+    private var cachedToken: String?
+    private var expiration: Date?
+
+    private var jamfURL: String { MDMConfigurationManager.shared.configuration.jamfURL }
+
+    /// True when a per-user credential exists to mint a token from.
+    var hasCredentials: Bool { keychain.loadJamfCredentials() != nil }
+
+    /// Drops the cached token — call on sign-out / credential rotation so the
+    /// next operator never reuses the previous one's bearer token.
+    func invalidate() {
+        lock.lock(); defer { lock.unlock() }
+        cachedToken = nil
+        expiration = nil
+    }
+
+    private func cachedValidToken() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        if let token = cachedToken, let exp = expiration, exp > Date().addingTimeInterval(60) {
+            return token
+        }
+        return nil
+    }
+
+    private func store(_ token: String, expiresIn: Int) {
+        lock.lock(); defer { lock.unlock() }
+        cachedToken = token
+        expiration = Date().addingTimeInterval(TimeInterval(expiresIn))
+    }
+
+    /// x-www-form-urlencoded escaping: unreserved characters only, so a
+    /// client id/secret containing '+', '&', or '=' can't corrupt the body.
+    private func formEncode(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    /// Returns a cached, or freshly minted, per-user bearer token.
+    /// Fail-closed: throws `.credentialsUnavailable` when the operator has no
+    /// provisioned per-user client.
+    func bearerToken() async throws -> String {
+        if let token = cachedValidToken() { return token }
+
+        guard let credentials = keychain.loadJamfCredentials() else {
+            throw JamfUserSessionError.credentialsUnavailable
+        }
+        guard let url = URL(string: "\(jamfURL)/api/v1/oauth/token") else {
+            throw JamfUserSessionError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = NetworkTuning.connectionTimeout
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "content-type")
+        request.httpBody = "grant_type=client_credentials&client_id=\(formEncode(credentials.clientID))&client_secret=\(formEncode(credentials.clientSecret))"
+            .data(using: .utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw JamfUserSessionError.authenticationFailed(-1, "No HTTP response")
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw JamfUserSessionError.authenticationFailed(http.statusCode,
+                String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+
+        struct TokenResponse: Codable { let access_token: String; let expires_in: Int }
+        let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
+        store(decoded.access_token, expiresIn: decoded.expires_in)
+        return decoded.access_token
     }
 }
 
@@ -34,7 +270,10 @@ enum JamfAPIError: Error, LocalizedError {
     case authenticationFailed
     case invalidEmailFormat
     case roleNotFound
-    
+    /// `authentication.autoCreateUserApiClient` is false and this operator has
+    /// no pre-created per-user API client, so Helios must not mint one.
+    case userClientCreationDisabled
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -57,6 +296,8 @@ enum JamfAPIError: Error, LocalizedError {
             return "Invalid email address format"
         case .roleNotFound:
             return "Required role not found in Jamf Pro"
+        case .userClientCreationDisabled:
+            return "You do not have a personal Jamf API client, and this Mac's configuration does not permit Helios to create one (autoCreateUserApiClient is off). Ask a Jamf administrator to create an API client for you, or enable automatic creation."
         }
     }
 }
@@ -173,6 +414,16 @@ class JamfAPIService {
     private var userRoleName: String {
         return configuration.requiredRoleName
     }
+
+    /// Display name for a per-user API client: `<UPN> (<clientId>)`.
+    ///
+    /// Jamf's audit log records the client id that performed an action, so
+    /// embedding the id in the name is what ties an audited action back to the
+    /// operator's UPN. The UPN stays the PREFIX so `searchCredentialByEmail`
+    /// (a `hasPrefix` match) keeps finding the client.
+    static func userClientDisplayName(email: String, clientId: String) -> String {
+        "\(email) (\(clientId))"
+    }
     
     // MARK: - Main Authentication Method
     /// Authenticates a user by email and creates/retrieves their API credentials
@@ -203,7 +454,24 @@ class JamfAPIService {
                     bearerToken: bearerToken
                 )
             }
-            
+
+            // Backfill the "<UPN> (<clientId>)" name on clients created before
+            // id-stamping existed, so their audited actions map to a person
+            // too. Non-fatal — this is an audit nicety, not a sign-in gate.
+            let expectedName = Self.userClientDisplayName(email: email, clientId: existingCredential.clientId)
+            if existingCredential.displayName != expectedName {
+                do {
+                    try await updateCredentialDisplayName(
+                        id: existingCredential.id,
+                        displayName: expectedName,
+                        bearerToken: bearerToken
+                    )
+                    NSLog("✅ Renamed existing API client to: %@", expectedName)
+                } catch {
+                    NSLog("⚠️ Could not rename existing API client for %@: %@", email, error.localizedDescription)
+                }
+            }
+
             // Check if we have the secret stored in Keychain
             let keychain = KeychainManager.shared
             if let storedCredentials = keychain.loadJamfCredentials(),
@@ -421,6 +689,13 @@ class JamfAPIService {
     /// Creates a new API credential for a user with the specified role
     /// Flow: 1) Create integration, 2) Enable it, 3) Generate client credentials
     private func createUserCredential(for email: String, roleName: String, bearerToken: String) async throws -> JamfCredentials {
+        // Single choke point for minting per-user clients (both the sign-in and
+        // refresh paths land here), so the profile toggle is enforced once.
+        guard configuration.effectiveAutoCreateUserApiClient else {
+            NSLog("⛔️ autoCreateUserApiClient is off — refusing to create a Jamf API client for %@", email)
+            throw JamfAPIError.userClientCreationDisabled
+        }
+
         // Step 1: Create the integration
         guard let createUrl = URL(string: "\(jamfURL)/api/v1/api-integrations") else {
             throw JamfAPIError.invalidURL
@@ -514,7 +789,27 @@ class JamfAPIService {
         }
         
         NSLog("✅ Generated client credentials")
-        
+
+        // Step 4: Stamp the client id into the display name — "<UPN> (<clientId>)".
+        // Jamf's audit log records the CLIENT ID that ran a command, so carrying
+        // the id in the name is what lets an auditor map that id back to a
+        // person. The id only exists after step 3, hence the rename.
+        //
+        // Non-fatal: the credential itself is already valid and usable, and
+        // failing here would strand a working client behind a failed sign-in.
+        // The email prefix is preserved so searchCredentialByEmail still matches.
+        do {
+            try await updateCredentialDisplayName(
+                id: integrationId,
+                displayName: Self.userClientDisplayName(email: email, clientId: clientId),
+                bearerToken: bearerToken
+            )
+            NSLog("✅ Named API client: %@", Self.userClientDisplayName(email: email, clientId: clientId))
+        } catch {
+            NSLog("⚠️ Could not stamp the client id into the API client name for %@ (audit mapping will be by email only): %@",
+                  email, error.localizedDescription)
+        }
+
         // Expiration from core jamfPro.userCredentialLifetimeDays (default 90)
         let lifetimeDays = MDMConfigurationManager.shared.configuration.userCredentialLifetimeDays
         let expirationDate = Calendar.current.date(byAdding: .day, value: lifetimeDays, to: Date())

@@ -536,6 +536,9 @@ class AuthViewModel: ObservableObject {
     func clearSession() {
         pendingEntraRefreshToken = nil
         keychain.clearAllAuthData()
+        // Drop any cached per-user Jamf bearer token so the next operator
+        // never inherits the previous one's attribution.
+        JamfUserSession.shared.invalidate()
         clearUserSession()
     }
 
