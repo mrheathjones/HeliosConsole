@@ -199,7 +199,9 @@ struct MobileDeviceView: View {
             
             // Actions
             HStack(spacing: 12) {
-                actionButton(icon: "arrow.clockwise", title: "Refresh")
+                // (No Refresh control here: this view is handed a fully-loaded
+                // immutable `device`, so there is nothing to reload in place —
+                // a dead placeholder button would be worse than none.)
 
                 // Fail-closed like the computer view: the menu renders only
                 // when the user's role grants at least one IMPLEMENTED mobile
@@ -313,28 +315,6 @@ struct MobileDeviceView: View {
                 .font(.system(size: 14))
         }
         .foregroundColor(.gray)
-    }
-    
-    private func actionButton(icon: String, title: String) -> some View {
-        Button {
-            // Action
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 16))
-                Text(title)
-                    .font(.system(size: 11))
-            }
-            .foregroundColor(.gray)
-            .frame(width: 60, height: 50)
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
     
     // MARK: - Section Sidebar

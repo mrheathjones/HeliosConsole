@@ -64,8 +64,11 @@ struct CleanupExportMenu: View {
                     }
                 }
             } label: {
-                Label(titleKey, systemImage: "square.and.arrow.up")
+                ExportButtonLabel(title: titleKey)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .fileExporter(
                 isPresented: $isExporting,
                 document: document,

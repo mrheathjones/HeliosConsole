@@ -141,14 +141,9 @@ struct StaleDeviceListView: View {
                 .disabled(visibleDevices.isEmpty)
                 .controlSize(.small)
 
-            Button {
+            RefreshButton(isLoading: model.isLoading) {
                 Task { await model.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
             }
-            .buttonStyle(.plain)
-            .disabled(model.isLoading)
-            .help("Refresh")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

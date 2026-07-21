@@ -242,36 +242,17 @@ struct CleanupDashboardView: View {
 
             staleDaysMenu
 
-            headerIconButton("arrow.clockwise", help: "Refresh", disabled: model.isLoading) {
+            RefreshButton(isLoading: model.isLoading) {
                 Task { await model.refresh() }
             }
         }
     }
 
-    private func headerIconButton(
-        _ systemName: String,
-        help: String,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.1))
-                    .frame(width: 32, height: 32)
-                Image(systemName: systemName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.4 : 1)
-        .help(help)
-    }
-
     private var staleDaysMenu: some View {
         Menu {
+            // Inline picker: the day options render directly in this one menu
+            // (with a checkmark on the current value) instead of behind a
+            // second "Stale after ▸" submenu.
             Picker("Stale after", selection: Binding(
                 get: { effectiveStaleDays },
                 set: { staleDaysStored = $0 }
@@ -280,6 +261,7 @@ struct CleanupDashboardView: View {
                     Text("\(days) days").tag(days)
                 }
             }
+            .pickerStyle(.inline)
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "clock.badge.questionmark")

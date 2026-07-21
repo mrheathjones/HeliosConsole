@@ -369,23 +369,9 @@ struct DeviceListView: View {
             .menuStyle(.borderlessButton)
             
             // Refresh button
-            Button {
+            RefreshButton(isLoading: isLoading) {
                 loadDevices(forceRefresh: true)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise")
-                    Text("Refresh")
-                }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
             }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
-            .help("Refresh device list")
         }
         .padding(.horizontal, 32)
         .padding(.vertical, 12)

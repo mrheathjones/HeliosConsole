@@ -366,18 +366,9 @@ struct HealthFilteredDeviceListView: View {
             .menuStyle(.borderlessButton)
             
             // Refresh button
-            Button {
+            RefreshButton(isLoading: isLoading) {
                 refreshDevices()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray)
-                    .frame(width: 36, height: 36)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(8)
             }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
         }
         .padding(.horizontal, 32)
         .padding(.vertical, 12)

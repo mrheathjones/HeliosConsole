@@ -168,6 +168,13 @@ struct DashboardContentView: View {
     
     // Track if we've loaded the inventory
     @State private var hasLoadedInventory: Bool = false
+
+    // Auto-refresh: driven by AppSettings.autoRefreshInterval (Off/1/5/15/30 min).
+    @ObservedObject private var settings = AppSettings.shared
+    /// When the dashboard counts were last (re)synced. Surfaced in the header.
+    @State private var lastRefreshed: Date?
+    /// True while a manual/auto refresh is fetching, to spin the Refresh button.
+    @State private var isRefreshing: Bool = false
     
     // Health metrics - computed from real inventory data
     private var healthMetrics: [HealthMetricData] {
@@ -226,6 +233,18 @@ struct DashboardContentView: View {
         }
         .task {
             await loadComputerInventory()
+        }
+        // Auto-refresh loop. `.task(id:)` cancels and restarts whenever the
+        // interval changes, so flipping the Settings segmented control takes
+        // effect immediately. Interval 0 ("Off") returns without scheduling.
+        .task(id: settings.autoRefreshInterval) {
+            let interval = settings.autoRefreshInterval
+            guard interval > 0 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Double(interval)))
+                if Task.isCancelled { break }
+                await refreshInventory()
+            }
         }
         .onChange(of: computerCache.totalCount) { _, newValue in
             // Update macOS count when cache changes
@@ -292,28 +311,46 @@ struct DashboardContentView: View {
             }
             
             Spacer()
-            
-            // Refresh button
-            Button {
-                // TODO: Implement refresh action
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise")
-                    Text("Refresh")
+
+            // Last-refresh indicator + Refresh button
+            HStack(spacing: 12) {
+                lastRefreshedLabel
+
+                RefreshButton(isLoading: isRefreshing) {
+                    Task { await refreshInventory() }
                 }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 40)
         .padding(.top, 24)
         .padding(.bottom, 16)
         .background(Color.black.opacity(0.3))
+    }
+
+    /// Shows when the dashboard last synced, plus the active auto-refresh
+    /// cadence when one is set. Times update passively as `lastRefreshed`
+    /// changes; the relative string is recomputed on each render.
+    @ViewBuilder
+    private var lastRefreshedLabel: some View {
+        if let lastRefreshed {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("Updated \(lastRefreshed.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                if settings.autoRefreshInterval > 0 {
+                    Text("Auto-refresh every \(autoRefreshDescription)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+            }
+            .monospacedDigit()
+        }
+    }
+
+    /// Human label for the current auto-refresh interval (seconds → "1 min").
+    private var autoRefreshDescription: String {
+        let minutes = settings.autoRefreshInterval / 60
+        return minutes == 1 ? "1 min" : "\(minutes) min"
     }
     
     // MARK: - Toolbar Section
@@ -830,57 +867,82 @@ struct DashboardContentView: View {
     
     // MARK: - Actions
     
+    /// Manual/auto refresh entry point: always bypasses the cache fast-paths
+    /// and pulls fresh inventory, spinning the header Refresh button while it
+    /// runs. Guarded so overlapping taps/timers can't stack fetches.
     @MainActor
-    private func loadComputerInventory() async {
-        // Use initial counts if provided (from loading screen)
-        if initialDeviceCounts.total > 0 && !hasLoadedInventory {
-            deviceCounts[.macOS] = initialDeviceCounts.macOS
-            deviceCounts[.iOS] = initialDeviceCounts.iOS
-            deviceCounts[.iPadOS] = initialDeviceCounts.iPadOS
-            deviceCounts[.visionOS] = initialDeviceCounts.visionOS
-            hasLoadedInventory = true
-            
-            // Calculate health metrics from cached data
-            healthCalculator.recalculateMetrics()
-            
-            NSLog("📦 Dashboard: Using initial device counts - macOS: %d, iOS: %d, iPadOS: %d, visionOS: %d",
-                  initialDeviceCounts.macOS, initialDeviceCounts.iOS, initialDeviceCounts.iPadOS, initialDeviceCounts.visionOS)
-            return
-        }
-        
-        // Skip if already loaded and caches are valid
-        if hasLoadedInventory && computerCache.hasCachedData && mobileCache.hasCachedData {
-            deviceCounts[.macOS] = computerCache.totalCount
-            deviceCounts[.iOS] = mobileCache.iOSCount
-            deviceCounts[.iPadOS] = mobileCache.iPadOSCount
-            deviceCounts[.visionOS] = mobileCache.visionOSCount
-            
-            // Ensure health metrics are calculated
-            if healthCalculator.healthMetrics.isEmpty {
+    private func refreshInventory() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        await loadComputerInventory(forceRefresh: true)
+        isRefreshing = false
+    }
+
+    @MainActor
+    private func loadComputerInventory(forceRefresh: Bool = false) async {
+        // A forced refresh skips every cache/initial-count fast path and goes
+        // straight to the network fetch below.
+        if !forceRefresh {
+            // Use initial counts if provided (from loading screen)
+            if initialDeviceCounts.total > 0 && !hasLoadedInventory {
+                deviceCounts[.macOS] = initialDeviceCounts.macOS
+                deviceCounts[.iOS] = initialDeviceCounts.iOS
+                deviceCounts[.iPadOS] = initialDeviceCounts.iPadOS
+                deviceCounts[.visionOS] = initialDeviceCounts.visionOS
+                hasLoadedInventory = true
+
+                // Calculate health metrics from cached data
                 healthCalculator.recalculateMetrics()
+                lastRefreshed = Date()
+
+                NSLog("📦 Dashboard: Using initial device counts - macOS: %d, iOS: %d, iPadOS: %d, visionOS: %d",
+                      initialDeviceCounts.macOS, initialDeviceCounts.iOS, initialDeviceCounts.iPadOS, initialDeviceCounts.visionOS)
+                return
             }
-            
-            NSLog("📦 Dashboard: Using cached device counts")
-            return
+
+            // Skip if already loaded and caches are valid
+            if hasLoadedInventory && computerCache.hasCachedData && mobileCache.hasCachedData {
+                deviceCounts[.macOS] = computerCache.totalCount
+                deviceCounts[.iOS] = mobileCache.iOSCount
+                deviceCounts[.iPadOS] = mobileCache.iPadOSCount
+                deviceCounts[.visionOS] = mobileCache.visionOSCount
+
+                // Ensure health metrics are calculated
+                if healthCalculator.healthMetrics.isEmpty {
+                    healthCalculator.recalculateMetrics()
+                }
+                lastRefreshed = Date()
+
+                NSLog("📦 Dashboard: Using cached device counts")
+                return
+            }
         }
-        
-        NSLog("📥 Dashboard: Loading device inventory...")
-        
+
+        NSLog(forceRefresh ? "🔄 Dashboard: Force-refreshing device inventory..."
+                           : "📥 Dashboard: Loading device inventory...")
+
         // Fetch both in parallel
-        async let computersTask: () = computerInventoryService.fetchAllComputers()
-        async let mobilesTask: () = mobileDeviceService.fetchAllDevices()
-        
+        async let computersTask: () = computerInventoryService.fetchAllComputers(forceRefresh: forceRefresh)
+        async let mobilesTask: () = mobileDeviceService.fetchAllDevices(forceRefresh: forceRefresh)
+
         _ = await (computersTask, mobilesTask)
-        
+
         // Update counts
         deviceCounts[.macOS] = computerInventoryService.totalCount
         deviceCounts[.iOS] = mobileDeviceService.iOSCount
         deviceCounts[.iPadOS] = mobileDeviceService.iPadOSCount
         deviceCounts[.visionOS] = mobileDeviceService.visionOSCount
         hasLoadedInventory = true
-        
+
+        // A forced refresh may not change cache identity, so recalc explicitly
+        // rather than relying solely on the cache observers.
+        if forceRefresh {
+            healthCalculator.recalculateMetrics()
+        }
+        lastRefreshed = Date()
+
         // Health metrics are automatically calculated via cache observers in HealthMetricsCalculator
-        
+
         NSLog("✅ Dashboard: Loaded device counts - macOS: %d, iOS: %d, iPadOS: %d, visionOS: %d",
               deviceCounts[.macOS] ?? 0, deviceCounts[.iOS] ?? 0, deviceCounts[.iPadOS] ?? 0, deviceCounts[.visionOS] ?? 0)
     }

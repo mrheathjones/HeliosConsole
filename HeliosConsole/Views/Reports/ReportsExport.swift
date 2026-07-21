@@ -230,18 +230,7 @@ struct ReportsExportMenu: View {
         Button {
             showFormats = true
         } label: {
-            HStack(spacing: 8) {
-                if isRendering {
-                    ProgressView().scaleEffect(0.7).tint(.white)
-                } else {
-                    Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold))
-                }
-                Text("Export").font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 20).padding(.vertical, 10)
-            .background(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
-            .cornerRadius(10)
+            ExportButtonLabel(isBusy: isRendering)
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(isRendering)
@@ -276,18 +265,7 @@ struct ReportsExportMenu: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                if isRendering {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: "square.and.arrow.up").font(.system(size: 12))
-                }
-                Text("Export").font(.system(size: 14, weight: .medium))
-            }
-            .foregroundColor(isDark ? .white : .primary)
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-            .cornerRadius(10)
+            ExportButtonLabel(isBusy: isRendering)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
