@@ -64,6 +64,14 @@ struct AppleCareCoverage: Codable, Identifiable {
         guard let days = daysRemaining else { return false }
         return days < 0
     }
+
+    /// True when this record is an AppleCare agreement rather than the bundled
+    /// limited warranty. ABM ships no typed field for this — `description` is
+    /// the only discriminator ("AppleCare+", "AppleCare Protection Plan", …
+    /// versus "Limited Warranty") — so the plan type is inferred from it.
+    var isAppleCarePlan: Bool {
+        description.range(of: "applecare", options: .caseInsensitive) != nil
+    }
 }
 
 struct AppleCareCoverageResponse: Codable {

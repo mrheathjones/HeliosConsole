@@ -221,10 +221,24 @@ struct HealthPolicy {
         case cardDisabled
         case cardUnconfigured
         case notOnCardPlatform
-        case excludedByExcept(FeaturesConfiguration.ScopeSelector)
-        case untargeted
+        /// Carved out by `except`. The card is carried so the device-detail
+        /// view can still evaluate the real value against it (the fleet
+        /// scorecard ignores the card and reports `.excluded`).
+        case excludedByExcept(FeaturesConfiguration.ScopeSelector, card: Card)
+        /// No target covered this device. Card carried for the same reason.
+        case untargeted(card: Card)
         /// Group selectors are in play but group data was never fetched.
         case groupDataUnavailable
+    }
+
+    /// Why a scope is being resolved. The fleet scorecard and a single device's
+    /// health section share every requirement rule but differ on ONE thing:
+    /// whether a site the admin excluded from the score should still show its
+    /// real value. `.deviceDetail` evaluates it anyway; `.aggregate` keeps the
+    /// device out of the numerator, denominator and drill-down lists.
+    enum ScopeMode {
+        case aggregate
+        case deviceDetail
     }
 
     static func current() -> HealthPolicy {
@@ -266,7 +280,7 @@ struct HealthPolicy {
 
         for selector in card.effectiveExcept
         where selector.matches(siteId: facts.siteID, groupIDs: facts.groupIDs, isMobile: facts.isMobile) {
-            return .excludedByExcept(selector)
+            return .excludedByExcept(selector, card: card)
         }
 
         // A card selecting by group cannot be evaluated without group data: every
@@ -280,7 +294,7 @@ struct HealthPolicy {
 
         return card.covers(siteId: facts.siteID, groupIDs: facts.groupIDs, isMobile: facts.isMobile)
             ? .inScope(card: card)
-            : .untargeted
+            : .untargeted(card: card)
     }
 
     /// Verdict for a device no target covered.
@@ -412,20 +426,28 @@ enum HealthEvaluator {
     private static func scopeOutcome(
         _ metric: HealthMetricType,
         _ resolution: HealthPolicy.ScopeResolution,
-        _ policy: HealthPolicy
+        _ policy: HealthPolicy,
+        _ mode: HealthPolicy.ScopeMode
     ) -> (evaluation: HealthEvaluation?, card: HealthPolicy.Card?) {
         switch resolution {
         case .inScope(let card):
             return (nil, card)
 
+        // Genuinely unevaluatable: there is no standard to measure against, so
+        // these stay .excluded even on a device page.
         case .cardDisabled, .cardUnconfigured, .notOnCardPlatform:
             return (HealthEvaluation(metric: metric, verdict: .excluded), nil)
 
-        case .excludedByExcept(let selector):
+        case .excludedByExcept(let selector, let card):
+            // A device page shows the device's REAL value even for a site the
+            // admin carved out of the score — the exclusion is a scoring
+            // decision, not a reason to hide the device's own data.
+            if mode == .deviceDetail { return (nil, card) }
             return (HealthEvaluation(metric: metric, verdict: .excluded,
                                      causes: [.excludedBySite(selector.label)]), nil)
 
-        case .untargeted:
+        case .untargeted(let card):
+            if mode == .deviceDetail { return (nil, card) }
             let verdict = policy.untargetedVerdict(for: metric)
             return (HealthEvaluation(
                 metric: metric, verdict: verdict,
@@ -450,9 +472,10 @@ enum HealthEvaluator {
         _ metric: HealthMetricType,
         computer input: ComputerHealthInput,
         facts: DeviceScopeFacts,
-        policy: HealthPolicy
+        policy: HealthPolicy,
+        mode: HealthPolicy.ScopeMode = .aggregate
     ) -> HealthEvaluation {
-        let (short, resolved) = scopeOutcome(metric, policy.resolveScope(for: metric, facts: facts), policy)
+        let (short, resolved) = scopeOutcome(metric, policy.resolveScope(for: metric, facts: facts), policy, mode)
         if let short { return short }
         guard let card = resolved else {
             return HealthEvaluation(metric: metric, verdict: .excluded)
@@ -666,9 +689,10 @@ enum HealthEvaluator {
         _ metric: HealthMetricType,
         mobile input: MobileHealthInput,
         facts: DeviceScopeFacts,
-        policy: HealthPolicy
+        policy: HealthPolicy,
+        mode: HealthPolicy.ScopeMode = .aggregate
     ) -> HealthEvaluation {
-        let (short, resolved) = scopeOutcome(metric, policy.resolveScope(for: metric, facts: facts), policy)
+        let (short, resolved) = scopeOutcome(metric, policy.resolveScope(for: metric, facts: facts), policy, mode)
         if let short { return short }
         guard let card = resolved else {
             return HealthEvaluation(metric: metric, verdict: .excluded)
