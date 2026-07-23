@@ -122,6 +122,18 @@
             "GROUP_MEMBERSHIPS"
           ],
           "description": "Inventory sections fetched and rendered by the detail views. Removing a section blanks the matching UI. Empty list = default list."
+        },
+        "showDeviceHistory": {
+          "type": "boolean",
+          "title": "Show Device History",
+          "default": false,
+          "description": "Surface the per-device History section (Jamf Policy Logs + MDM command history from the Classic computerhistory endpoint). Default off."
+        },
+        "historyPageSize": {
+          "type": "integer",
+          "title": "History Page Size",
+          "default": 25,
+          "description": "Rows shown per page in the device History section (Policy Logs / Management History). Minimum 1."
         }
       }
     },

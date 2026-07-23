@@ -24,6 +24,12 @@ struct DeviceView: View {
     @State private var fullComputer: Computer?
     @State private var isLoadingDetails: Bool = false
     @State private var loadError: String?
+
+    // Device history (Jamf Policy Logs + MDM command history). Lazy-loaded the
+    // first time the History section is opened.
+    @State private var history: ComputerHistory?
+    @State private var isLoadingHistory: Bool = false
+    @State private var historyError: String?
     
     // MARK: - Search State for Each Section
     @State private var profilesSearchText: String = ""
@@ -1188,8 +1194,26 @@ struct DeviceView: View {
         }
     }
     
+    /// Lazy-load Policy Logs + MDM command history for this device. Skips work
+    /// if already loaded (unless `force`, used by the Retry button).
+    @MainActor
+    private func loadHistory(force: Bool = false) async {
+        if !force, history != nil { return }
+
+        isLoadingHistory = true
+        historyError = nil
+        do {
+            let service = ComputerHistoryService()
+            history = try await service.fetchHistory(id: computer.id)
+        } catch {
+            historyError = error.localizedDescription
+            NSLog("❌ DeviceView: Failed to load history: %@", error.localizedDescription)
+        }
+        isLoadingHistory = false
+    }
+
     // MARK: - Device Header
-    
+
     private var deviceHeader: some View {
         HStack(spacing: 20) {
             // Circle back button
@@ -2573,7 +2597,7 @@ struct DeviceView: View {
     private var sectionSidebar: some View {
         ScrollView {
             VStack(spacing: 4) {
-                ForEach(DeviceSection.allCases, id: \.self) { section in
+                ForEach(visibleSections, id: \.self) { section in
                     sectionButton(section)
                 }
             }
@@ -2581,6 +2605,20 @@ struct DeviceView: View {
         }
         .frame(width: 270)
         .background(Color.black.opacity(0.2))
+    }
+
+    /// Sections shown in the sidebar. History is gated behind the
+    /// `features.computers.showDeviceHistory` flag (default off); everything
+    /// else is always visible.
+    private var visibleSections: [DeviceSection] {
+        DeviceSection.allCases.filter { section in
+            switch section {
+            case .history:
+                return configManager.configuration.features?.effectiveComputers.effectiveShowDeviceHistory ?? false
+            default:
+                return true
+            }
+        }
     }
     
     private func sectionButton(_ section: DeviceSection) -> some View {
@@ -2691,6 +2729,15 @@ struct DeviceView: View {
             managementSection
         case .logs:
             deviceLogsSection
+        case .history:
+            DeviceHistorySectionView(
+                history: history,
+                isLoading: isLoadingHistory,
+                errorMessage: historyError,
+                pageSize: configManager.configuration.features?.effectiveComputers.effectiveHistoryPageSize ?? 25,
+                onRetry: { Task { await loadHistory(force: true) } }
+            )
+            .task { await loadHistory() }
         }
     }
     
@@ -4894,7 +4941,8 @@ enum DeviceSection: String, CaseIterable {
     case extensionAttributes
     case management
     case logs
-    
+    case history
+
     var title: String {
         switch self {
         case .overview: return "Overview"
@@ -4914,9 +4962,10 @@ enum DeviceSection: String, CaseIterable {
         case .extensionAttributes: return "Extension Attributes"
         case .management: return "Management"
         case .logs: return "Action Logs"
+        case .history: return "History"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .overview: return "square.grid.2x2"
@@ -4936,6 +4985,7 @@ enum DeviceSection: String, CaseIterable {
         case .extensionAttributes: return "list.bullet.rectangle"
         case .management: return "gearshape.2"
         case .logs: return "doc.text.magnifyingglass"
+        case .history: return "clock.arrow.circlepath"
         }
     }
 }

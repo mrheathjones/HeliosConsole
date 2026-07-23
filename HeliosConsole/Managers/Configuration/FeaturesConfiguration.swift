@@ -252,12 +252,23 @@ struct FeaturesConfiguration: Codable {
         let enableReports: Bool?
         let inventoryRefreshInterval: Int?
         let inventorySections: [String]?
+        /// Opt-in: surface the per-device "History" section (Jamf Policy Logs +
+        /// MDM command history, from the Classic `computerhistory` endpoint).
+        /// Defaults OFF — enable per org that wants it.
+        let showDeviceHistory: Bool?
+        /// Rows shown per page in the History section (Policy Logs / Management
+        /// History). Client-side paging over the full fetched record.
+        let historyPageSize: Int?
 
         var effectiveEnabled: Bool { enabled ?? true }
         var effectiveFetchInventory: Bool { fetchInventory ?? true }
         var effectiveShowDashboardCard: Bool { showDashboardCard ?? true }
         var effectiveEnableReports: Bool { enableReports ?? true }
         var effectiveInventoryRefreshInterval: Int { inventoryRefreshInterval ?? 15 }
+        var effectiveShowDeviceHistory: Bool { showDeviceHistory ?? false }
+        /// Clamped to at least 1 — a 0/negative page size would divide-by-zero
+        /// the pagination math.
+        var effectiveHistoryPageSize: Int { max(1, historyPageSize ?? 25) }
         /// Configured sections, or the built-in list when the key is absent
         /// OR empty — an empty section list would break every detail view.
         var effectiveInventorySections: [String] {
@@ -304,7 +315,8 @@ struct FeaturesConfiguration: Codable {
         static let empty = ComputersSettings(
             enabled: nil, fetchInventory: nil, showDashboardCard: nil,
             enableReports: nil,
-            inventoryRefreshInterval: nil, inventorySections: nil
+            inventoryRefreshInterval: nil, inventorySections: nil,
+            showDeviceHistory: nil, historyPageSize: nil
         )
     }
 
