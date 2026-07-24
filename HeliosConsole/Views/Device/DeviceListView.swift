@@ -122,18 +122,7 @@ struct DeviceListView: View {
         }
         
         // Apply sorting
-        return filtered.sorted { first, second in
-            switch sortOrder {
-            case .nameAscending:
-                return first.name.localizedCompare(second.name) == .orderedAscending
-            case .nameDescending:
-                return first.name.localizedCompare(second.name) == .orderedDescending
-            case .lastCheckIn:
-                return (first.lastCheckIn ?? Date.distantPast) > (second.lastCheckIn ?? Date.distantPast)
-            case .serialNumber:
-                return first.serialNumber.localizedCompare(second.serialNumber) == .orderedAscending
-            }
-        }
+        return filtered.sorted(by: sortOrder.comparator)
     }
     
     private var totalPages: Int {
@@ -337,23 +326,41 @@ struct DeviceListView: View {
             .menuStyle(.borderlessButton)
             
             Menu {
-                ForEach(DeviceSortOrder.allCases) { order in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            sortOrder = order
+                Section("Sort By") {
+                    ForEach(DeviceSortField.allCases) { field in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                sortOrder = sortOrder.selecting(field)
+                            }
+                        } label: {
+                            HStack {
+                                Text(field.title)
+                                if sortOrder.field == field {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
-                    } label: {
-                        HStack {
-                            Text(order.title)
-                            if sortOrder == order {
-                                Image(systemName: "checkmark")
+                    }
+                }
+                Section("Order") {
+                    ForEach(DeviceSortDirection.allCases) { direction in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                sortOrder.direction = direction
+                            }
+                        } label: {
+                            HStack {
+                                Text(direction.title(for: sortOrder.field))
+                                if sortOrder.direction == direction {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Image(systemName: sortOrder.direction.symbolName)
                         .font(.system(size: 12))
                     Text(sortOrder.title)
                         .font(.system(size: 13, weight: .medium))
@@ -848,33 +855,7 @@ struct DeviceListView: View {
     }
     
     private func sortDevices(_ deviceList: [DeviceListItem]) -> [DeviceListItem] {
-        deviceList.sorted { first, second in
-            switch sortOrder {
-            case .nameAscending:
-                return first.name.localizedCompare(second.name) == .orderedAscending
-            case .nameDescending:
-                return first.name.localizedCompare(second.name) == .orderedDescending
-            case .lastCheckIn:
-                let firstDate = first.lastCheckIn ?? Date.distantPast
-                let secondDate = second.lastCheckIn ?? Date.distantPast
-                return firstDate > secondDate
-            case .serialNumber:
-                return first.serialNumber.localizedCompare(second.serialNumber) == .orderedAscending
-            }
-        }
-    }
-    
-    private func sortOrderToAPIParams(_ order: DeviceSortOrder) -> (String, String) {
-        switch order {
-        case .nameAscending:
-            return ("general.name", "asc")
-        case .nameDescending:
-            return ("general.name", "desc")
-        case .lastCheckIn:
-            return ("general.lastContactTime", "desc")
-        case .serialNumber:
-            return ("hardware.serialNumber", "asc")
-        }
+        deviceList.sorted(by: sortOrder.comparator)
     }
     
 }

@@ -113,18 +113,7 @@ struct HealthFilteredDeviceListView: View {
         }
         
         // Apply sorting
-        return filtered.sorted { first, second in
-            switch sortOrder {
-            case .nameAscending:
-                return first.name.localizedCompare(second.name) == .orderedAscending
-            case .nameDescending:
-                return first.name.localizedCompare(second.name) == .orderedDescending
-            case .lastCheckIn:
-                return (first.lastCheckIn ?? Date.distantPast) > (second.lastCheckIn ?? Date.distantPast)
-            case .serialNumber:
-                return first.serialNumber.localizedCompare(second.serialNumber) == .orderedAscending
-            }
-        }
+        return filtered.sorted(by: sortOrder.comparator)
     }
     
     private var totalPages: Int {
@@ -305,21 +294,37 @@ struct HealthFilteredDeviceListView: View {
             
             // Sort menu
             Menu {
-                ForEach(DeviceSortOrder.allCases) { order in
-                    Button {
-                        sortOrder = order
-                    } label: {
-                        HStack {
-                            Text(order.title)
-                            if sortOrder == order {
-                                Image(systemName: "checkmark")
+                Section("Sort By") {
+                    ForEach(DeviceSortField.allCases) { field in
+                        Button {
+                            sortOrder = sortOrder.selecting(field)
+                        } label: {
+                            HStack {
+                                Text(field.title)
+                                if sortOrder.field == field {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("Order") {
+                    ForEach(DeviceSortDirection.allCases) { direction in
+                        Button {
+                            sortOrder.direction = direction
+                        } label: {
+                            HStack {
+                                Text(direction.title(for: sortOrder.field))
+                                if sortOrder.direction == direction {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Image(systemName: sortOrder.direction.symbolName)
                         .font(.system(size: 12))
                     Text(sortOrder.title)
                         .font(.system(size: 13, weight: .medium))

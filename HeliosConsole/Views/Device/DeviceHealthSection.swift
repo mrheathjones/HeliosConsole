@@ -239,13 +239,16 @@ struct DeviceHealthSection: View {
                 overallHealthBadge
             }
             
-            // Health metrics grid
-            HStack(spacing: 12) {
+            // Health metrics grid. minHeight (not a hard height) so the row grows
+            // to fit its content instead of overflowing a 100pt box — an
+            // overflowing card gets centre-aligned and reads as misaligned.
+            HStack(alignment: .top, spacing: 12) {
                 ForEach(healthResults) { result in
                     healthMetricCard(result)
                 }
             }
-            .frame(height: 100)
+            .frame(minHeight: 100)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(20)
         .background(
@@ -481,6 +484,9 @@ struct DeviceHealthSection: View {
         let reasonCount = result.reasons.count
         
         return VStack(alignment: .center, spacing: 6) {
+            // Badge row always reserves its height. Without this, a card with no
+            // count badge (Coverage, or any compliant metric) loses 18pt of
+            // content height and ends up shorter than its neighbours.
             HStack {
                 Spacer()
                 // Count badge for non-compliant cards with reasons
@@ -495,6 +501,7 @@ struct DeviceHealthSection: View {
                         )
                 }
             }
+            .frame(height: 18)
             
             // Status icon
             Image(systemName: displayStatus.icon)

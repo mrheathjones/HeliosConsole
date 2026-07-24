@@ -74,6 +74,11 @@ struct DeviceView: View {
     @State private var commandResult: CommandResult?
     @State private var showingCommandAlert: Bool = false
     @State private var showingActionConfirmation: Bool = false
+    /// First stage for destructive actions (Erase Device / Return to Service):
+    /// a plain-language danger warning shown BEFORE the typed-ERASE
+    /// acknowledgement, so the stakes and the specifics are two deliberate
+    /// steps rather than one dialog the operator can click through.
+    @State private var showingDestructiveWarning: Bool = false
     @State private var pendingAction: DeviceAction?
     /// Typed confirmation for destructive actions (operator must type ERASE).
     @State private var confirmationText: String = ""
@@ -199,6 +204,9 @@ struct DeviceView: View {
             
             // Command result overlay
             commandResultOverlay
+
+            // Destructive-action danger warning (stage 1 for erase/RTS)
+            destructiveWarningOverlay
 
             // Action confirmation overlay
             actionConfirmationOverlay
@@ -555,8 +563,139 @@ struct DeviceView: View {
         }
     }
     
+    // MARK: - Destructive Action Warning Overlay (stage 1 of 2)
+
+    /// Stage 1 for Erase Device / Return to Service: states the damage in
+    /// plain language and names the target, with no confirm control other
+    /// than an explicit acknowledgement button. Clearing it opens the
+    /// typed-ERASE dialog (stage 2), which carries the per-action specifics.
+    @ViewBuilder
+    private var destructiveWarningOverlay: some View {
+        if showingDestructiveWarning, let action = pendingAction,
+           let warning = action.dangerWarning {
+            ZStack {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            dismissActionConfirmation()
+                        }
+                    }
+
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.red.opacity(0.15))
+                                .frame(width: 64, height: 64)
+
+                            Image(systemName: "exclamationmark.octagon.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.red)
+                        }
+
+                        Text("Destructive Action")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundColor(.red)
+
+                        Text(ActionBranding.confirmationTitle(for: action))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 24)
+                    .padding(.bottom, 16)
+                    .padding(.horizontal, 24)
+
+                    Text(warning)
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 16)
+
+                    // Name the target explicitly — wrong-device is the most
+                    // likely way this action goes wrong.
+                    VStack(spacing: 4) {
+                        Text(displayComputer.displayName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+
+                        if let serial = displayComputer.serialNumber {
+                            Text(serial)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.red.opacity(0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.red.opacity(0.25), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+
+                    HStack(spacing: 0) {
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                dismissActionConfirmation()
+                            }
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .background(Color.white.opacity(0.1))
+                            .frame(height: 50)
+
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showingDestructiveWarning = false
+                                showingActionConfirmation = true
+                            }
+                        } label: {
+                            Text("I Understand — Continue")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(width: 380)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(white: 0.12))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.red.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 30)
+            }
+        }
+    }
+
     // MARK: - Action Confirmation Overlay
-    
+
     @ViewBuilder
     private var actionConfirmationOverlay: some View {
         if showingActionConfirmation, let action = pendingAction {
@@ -570,43 +709,89 @@ struct DeviceView: View {
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(.easeOut(duration: 0.2)) {
-                            showingActionConfirmation = false
-                            pendingAction = nil
-                            confirmationText = ""
+                            dismissActionConfirmation()
                         }
                     }
 
                 VStack(spacing: 0) {
-                    // Warning header
+                    // Warning header. Destructive actions carry the same red
+                    // treatment as the stage-1 danger warning — octagon, red
+                    // heading, red card border — so the severity doesn't drop
+                    // off between the two steps of one flow.
                     VStack(spacing: 12) {
                         ZStack {
                             Circle()
                                 .fill(action.iconColor.opacity(0.15))
-                                .frame(width: 56, height: 56)
-                            
-                            Image(systemName: (action.isDestructive || action.isWarning) ? "exclamationmark.triangle.fill" : action.icon)
-                                .font(.system(size: 28))
+                                .frame(width: action.isDestructive ? 64 : 56,
+                                       height: action.isDestructive ? 64 : 56)
+
+                            Image(systemName: destructiveConfirmIcon(for: action))
+                                .font(.system(size: action.isDestructive ? 32 : 28))
                                 .foregroundColor(action.iconColor)
                         }
-                        
-                        Text(action.title)
-                            .font(.system(size: 18, weight: .semibold))
+
+                        if action.isDestructive {
+                            Text("Destructive Action")
+                                .font(.system(size: 19, weight: .bold))
+                                .foregroundColor(.red)
+                        }
+
+                        // Titled with the ui-domain label override so a renamed
+                        // action reads the same here as in the menu. Only the
+                        // name follows the override — the body copy below and
+                        // the typed-ERASE gate stay built-in.
+                        Text(ActionBranding.confirmationTitle(for: action))
+                            .font(.system(size: action.isDestructive ? 15 : 18,
+                                          weight: .semibold))
                             .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
                     }
                     .padding(.top, 24)
                     .padding(.bottom, 16)
-                    
+                    .padding(.horizontal, 24)
+
                     Text(confirmationMessage(for: action))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 8)
-                    
-                    Text(displayComputer.displayName)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
-                        .padding(.bottom, action.isDestructive ? 16 : 24)
+                        .padding(.bottom, action.isDestructive ? 16 : 8)
+
+                    if action.isDestructive {
+                        // Same red target card as stage 1 — the operator sees
+                        // exactly which Mac they are erasing at both steps.
+                        VStack(spacing: 4) {
+                            Text(displayComputer.displayName)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+
+                            if let serial = displayComputer.serialNumber {
+                                Text(serial)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.red.opacity(0.08))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.red.opacity(0.25), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 20)
+                    } else {
+                        Text(displayComputer.displayName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding(.bottom, 24)
+                    }
 
                     // Typed confirmation for destructive actions.
                     if action.isDestructive {
@@ -641,9 +826,7 @@ struct DeviceView: View {
                     HStack(spacing: 0) {
                         Button {
                             withAnimation(.easeOut(duration: 0.2)) {
-                                showingActionConfirmation = false
-                                pendingAction = nil
-                                confirmationText = ""
+                                dismissActionConfirmation()
                             }
                         } label: {
                             Text("Cancel")
@@ -661,9 +844,7 @@ struct DeviceView: View {
                         Button {
                             let actionToExecute = action
                             withAnimation(.easeOut(duration: 0.2)) {
-                                showingActionConfirmation = false
-                                pendingAction = nil
-                                confirmationText = ""
+                                dismissActionConfirmation()
                             }
                             Task { await executeAction(actionToExecute) }
                         } label: {
@@ -677,7 +858,9 @@ struct DeviceView: View {
                         .disabled(!canConfirm)
                     }
                 }
-                .frame(width: 320)
+                // Destructive dialogs match stage 1's width and red border so
+                // the two steps read as one flow rather than two dialogs.
+                .frame(width: action.isDestructive ? 380 : 320)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
                         .fill(Color(white: 0.12))
@@ -685,13 +868,23 @@ struct DeviceView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(action.isDestructive ? Color.red.opacity(0.35) : Color.white.opacity(0.1),
+                                lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.5), radius: 30)
             }
         }
     }
-    
+
+    /// Header symbol for the confirmation dialog: destructive actions get the
+    /// stage-1 octagon, other warnings the triangle, everything else its own
+    /// action icon.
+    private func destructiveConfirmIcon(for action: DeviceAction) -> String {
+        if action.isDestructive { return "exclamationmark.octagon.fill" }
+        if action.isWarning { return "exclamationmark.triangle.fill" }
+        return action.icon
+    }
+
     /// Return to Service's confirmation copy is composed from the steps that
     /// will actually run — it never promises a disabled or unconfigured step.
     /// All other actions use their built-in copy. The typed-name confirmation
@@ -784,7 +977,22 @@ struct DeviceView: View {
             pendingRTSEntraConfigured = configManager.configuration.isEntraConfigured
         }
         pendingAction = action
-        showingActionConfirmation = true
+        // Destructive actions get the danger warning first; the typed-ERASE
+        // acknowledgement only opens once the operator clears that stage.
+        if action.isDestructive && action.dangerWarning != nil {
+            showingDestructiveWarning = true
+        } else {
+            showingActionConfirmation = true
+        }
+    }
+
+    /// Clears every stage of the destructive-action flow. Used by Cancel and
+    /// by the scrim tap so no stage can be left armed behind another.
+    private func dismissActionConfirmation() {
+        showingDestructiveWarning = false
+        showingActionConfirmation = false
+        pendingAction = nil
+        confirmationText = ""
     }
 
     private func executeAction(_ action: DeviceAction) async {
@@ -2747,33 +2955,31 @@ struct DeviceView: View {
         VStack(alignment: .leading, spacing: 24) {
             sectionHeader("Overview", icon: "square.grid.2x2")
             
-            // Quick Stats - Row 1
-            HStack(spacing: 16) {
-                overviewStatCard(
-                    title: "Last Check-in",
-                    value: formatDate(displayComputer.general?.reportDate) ?? "N/A",
-                    icon: "clock.fill",
-                    color: .blue
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // Battery Health card
-                batteryHealthCard
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // Storage card with bar graph
-                storageCard
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // IP Address card
-                ipAddressCard
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // Available Updates card
-                availableUpdatesCard
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Quick Stats. Cards always stretch to fill the full section width;
+            // when the window gets too narrow for a row to hold them at a
+            // legible 190pt, ViewThatFits drops to the next arrangement rather
+            // than squeezing. (An adaptive LazyVGrid can't do this — with only
+            // five items a wide window leaves the trailing columns empty.)
+            ViewThatFits(in: .horizontal) {
+                quickStatRow(0..<5)
+
+                VStack(spacing: 16) {
+                    quickStatRow(0..<3)
+                    quickStatRow(3..<5)
+                }
+
+                VStack(spacing: 16) {
+                    quickStatRow(0..<2)
+                    quickStatRow(2..<4)
+                    quickStatRow(4..<5)
+                }
+
+                VStack(spacing: 16) {
+                    ForEach(0..<5, id: \.self) { index in
+                        quickStatRow(index..<(index + 1))
+                    }
+                }
             }
-            .frame(height: 170)
             
             // Device Health Section
             DeviceHealthSection(computer: displayComputer)
@@ -2811,8 +3017,45 @@ struct DeviceView: View {
         }
     }
     
+    // MARK: - Quick Stat Row Layout
+
+    /// One row of quick-stat cards. Each card carries a 190pt `minWidth` so the
+    /// row's ideal width reflects what it needs to stay legible — that's what
+    /// `ViewThatFits` measures — while `maxWidth: .infinity` makes the cards
+    /// share whatever width the row is actually given.
+    private func quickStatRow(_ range: Range<Int>) -> some View {
+        HStack(spacing: 16) {
+            ForEach(Array(range), id: \.self) { index in
+                quickStatCard(index)
+                    .frame(minWidth: 190, maxWidth: .infinity)
+            }
+        }
+        .frame(height: 170)
+    }
+
+    @ViewBuilder
+    private func quickStatCard(_ index: Int) -> some View {
+        switch index {
+        case 0:
+            overviewStatCard(
+                title: "Last Check-in",
+                value: formatDate(displayComputer.general?.reportDate) ?? "N/A",
+                icon: "clock.fill",
+                color: .blue
+            )
+        case 1:
+            batteryHealthCard
+        case 2:
+            storageCard
+        case 3:
+            ipAddressCard
+        default:
+            availableUpdatesCard
+        }
+    }
+
     // MARK: - Battery Health Card
-    
+
     private var batteryHealthCard: some View {
         let batteryHealth = displayComputer.hardware?.batteryHealth
         let batteryCapacity = displayComputer.hardware?.batteryCapacityPercent
@@ -2860,7 +3103,7 @@ struct DeviceView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.6)
             
             if hasBattery, let health = displayComputer.hardware?.batteryHealth {
                 Text(formatBatteryHealth(health))
@@ -2873,6 +3116,9 @@ struct DeviceView: View {
             Text("Battery Health")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(
@@ -2952,7 +3198,7 @@ struct DeviceView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.6)
             } else {
                 Text("N/A")
                     .font(.system(size: 18, weight: .semibold))
@@ -2987,6 +3233,9 @@ struct DeviceView: View {
             Text("Available Storage")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(
@@ -3062,13 +3311,16 @@ struct DeviceView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.6)
             
             Spacer()
             
             Text("IP Address")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(
@@ -3135,13 +3387,16 @@ struct DeviceView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.6)
             
             Spacer()
             
             Text("Updates")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(
@@ -3223,13 +3478,16 @@ struct DeviceView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.6)
             
             Spacer()
             
             Text(title)
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(
@@ -3242,7 +3500,7 @@ struct DeviceView: View {
                 .stroke(Color.white.opacity(0.05), lineWidth: 1)
         )
     }
-    
+
     // MARK: - Hardware Section
     
     private var hardwareSection: some View {

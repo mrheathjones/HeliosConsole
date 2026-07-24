@@ -422,76 +422,122 @@ struct ABMLookupView: View {
 
     // MARK: - Toolbar Section
 
+    /// The toolbar never compresses its controls: `ViewThatFits` picks the
+    /// widest arrangement that fits intact, then progressively stacks rows as
+    /// the window narrows. Every leaf is `.fixedSize()`d so SwiftUI can't
+    /// "solve" a tight layout by squeezing chip labels into vertical text.
     private var toolbarSection: some View {
-        HStack(spacing: 16) {
-            // Assignment filter chips
-            HStack(spacing: 8) {
-                ForEach(ABMAssignmentFilter.allCases) { filter in
-                    filterChip(
-                        title: filter.title,
-                        count: count(for: filter),
-                        isSelected: assignmentFilter == filter,
-                        color: filter.color
-                    ) {
-                        assignmentFilter = filter
-                    }
+        ViewThatFits(in: .horizontal) {
+            // Widest: one row — chips, menus, count, search.
+            HStack(spacing: 16) {
+                filterChipsRow
+                serverFilterMenu
+                deviceTypeFilterMenu
+                Spacer(minLength: 12)
+                resultsCountLabel
+                searchField.frame(width: 280)
+            }
+
+            // Medium: filters on one row, full-width search below.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 16) {
+                    filterChipsRow
+                    serverFilterMenu
+                    deviceTypeFilterMenu
+                    Spacer(minLength: 12)
+                    resultsCountLabel
                 }
+                searchField
             }
 
-            // MDM server filter menu
-            serverFilterMenu
-
-            // Device-type filter menu
-            deviceTypeFilterMenu
-
-            Spacer()
-
-            // Results count
-            if hasActiveFilters {
-                Text("\(filteredDevices.count) of \(cache.devices.count) shown")
-                    .font(.system(size: 13))
-                    .foregroundColor(.gray)
-            }
-
-            // Search bar
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray)
-
-                TextField("", text: $searchText, prompt: Text("Search serial, model, asset tag...")
-                    .foregroundColor(.gray.opacity(0.6)))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white)
-                    .focused($isSearchFocused)
-
-                if !searchText.isEmpty {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            searchText = ""
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                    }
-                    .buttonStyle(.plain)
+            // Narrow: chips, then menus + count, then search.
+            VStack(alignment: .leading, spacing: 10) {
+                filterChipsRow
+                HStack(spacing: 10) {
+                    serverFilterMenu
+                    deviceTypeFilterMenu
+                    Spacer(minLength: 12)
+                    resultsCountLabel
                 }
+                searchField
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(width: 280)
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSearchFocused ? Color.blue.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
-            )
+
+            // Narrowest: one control per row.
+            VStack(alignment: .leading, spacing: 10) {
+                filterChipsRow
+                serverFilterMenu
+                deviceTypeFilterMenu
+                resultsCountLabel
+                searchField
+            }
         }
         .padding(.horizontal, 32)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.15))
+    }
+
+    private var filterChipsRow: some View {
+        HStack(spacing: 8) {
+            ForEach(ABMAssignmentFilter.allCases) { filter in
+                filterChip(
+                    title: filter.title,
+                    count: count(for: filter),
+                    isSelected: assignmentFilter == filter,
+                    color: filter.color
+                ) {
+                    assignmentFilter = filter
+                }
+            }
+        }
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var resultsCountLabel: some View {
+        if hasActiveFilters {
+            Text("\(filteredDevices.count) of \(cache.devices.count) shown")
+                .font(.system(size: 13))
+                .foregroundColor(.gray)
+                .lineLimit(1)
+                .fixedSize()
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray)
+
+            TextField("", text: $searchText, prompt: Text("Search serial, model, asset tag...")
+                .foregroundColor(.gray.opacity(0.6)))
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .focused($isSearchFocused)
+                .frame(minWidth: 140)
+
+            if !searchText.isEmpty {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        searchText = ""
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSearchFocused ? Color.blue.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+        )
     }
 
     private var serverFilterMenu: some View {
@@ -584,9 +630,13 @@ struct ABMLookupView: View {
             HStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .fixedSize()
 
                 Text("\(count)")
                     .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(isSelected ? Color.white.opacity(0.3) : color.opacity(0.2))

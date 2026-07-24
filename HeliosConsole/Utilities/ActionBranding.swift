@@ -29,6 +29,23 @@ enum ActionBranding {
         return action.menuLabel
     }
 
+    /// The heading for `action`'s confirmation dialogs. Uses the same
+    /// displayName override as the menu so a renamed action reads
+    /// consistently end to end ("Reimage" in the menu → "Reimage" on the
+    /// dialog), falling back to the action's built-in `title`.
+    ///
+    /// Only the NAME is overridable here. The dialog BODY — the copy that
+    /// spells out what the action destroys, and the typed-ERASE gate — stays
+    /// built-in, so a cosmetic rename can never soften the safety warning.
+    static func confirmationTitle(for action: DeviceAction) -> String {
+        let override = MDMConfigurationManager.shared.configuration
+            .deviceActionLabelOverride(id: action.id)
+        if let displayName = override?.displayName, !displayName.isEmpty {
+            return displayName
+        }
+        return action.title
+    }
+
     /// The SF Symbol name for `action`: the ui-domain `deviceActionLabels`
     /// icon override (free-form symbol string) when a non-empty one is
     /// delivered, otherwise the action's built-in `menuIcon`.

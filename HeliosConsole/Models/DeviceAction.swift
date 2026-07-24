@@ -229,6 +229,21 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         }
     }
 
+    /// First-stage warning copy for destructive actions. Shown BEFORE the
+    /// typed-ERASE acknowledgement dialog so the operator meets the stakes
+    /// once in plain language, then confirms the specifics separately.
+    /// Deliberately NOT profile-overridable, same rule as `message`.
+    var dangerWarning: String? {
+        switch self {
+        case .wipe:
+            return "Every file, account, and setting on this Mac will be permanently destroyed. Nothing is backed up first, the data cannot be recovered, and the command cannot be recalled once the device receives it.\n\nThe Mac will restart to Setup Assistant and be unusable until it is set up again."
+        case .returnToService:
+            return "Every file, account, and setting on this Mac will be permanently destroyed, and the device's management records will be removed. Nothing is backed up first, the data cannot be recovered, and the command cannot be recalled once the device receives it.\n\nThe Mac will restart to Setup Assistant and must re-enroll before it can be managed again."
+        default:
+            return nil
+        }
+    }
+
     var isDestructive: Bool {
         switch self {
         case .wipe, .returnToService: return true
