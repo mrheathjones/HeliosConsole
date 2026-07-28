@@ -40,9 +40,13 @@ struct DeviceView: View {
     @State private var extensionAttributesSearchText: String = ""
     
     // MARK: - Filter State
-    // Local Accounts filters (default ON to show only Admin/FileVault users)
+    // Local Accounts tag filters. Each chip is a tag: an account shows only if
+    // one of its tags is selected, so no selection means no accounts. System
+    // accounts start deselected to keep service users out of the way.
     @State private var filterAdminAccounts: Bool = true
+    @State private var filterStandardAccounts: Bool = true
     @State private var filterFileVaultAccounts: Bool = true
+    @State private var filterSystemAccounts: Bool = false
     
     // Groups filters
     @State private var filterSmartGroups: Bool = true
@@ -3933,8 +3937,10 @@ struct DeviceView: View {
                 // Filter toggles
                 HStack(spacing: 12) {
                     filterToggle(label: "Admin", isOn: $filterAdminAccounts, color: .orange)
+                    filterToggle(label: "Standard", isOn: $filterStandardAccounts, color: .blue)
                     filterToggle(label: "FileVault", isOn: $filterFileVaultAccounts, color: .purple)
-                    
+                    filterToggle(label: "System", isOn: $filterSystemAccounts, color: .teal)
+
                     Spacer()
                     
                     // Show count of filtered vs total
@@ -3953,12 +3959,19 @@ struct DeviceView: View {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                             .font(.system(size: 32))
                             .foregroundColor(.gray.opacity(0.5))
-                        Text("No accounts match filters")
+                        Text(hasSelectedAccountTags ? "No accounts match filters" : "No filtered users")
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
-                        Button("Clear Filters") {
-                            filterAdminAccounts = false
-                            filterFileVaultAccounts = false
+                        if !hasSelectedAccountTags {
+                            Text("Select a tag above to show accounts")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray.opacity(0.7))
+                        }
+                        Button("Select All Tags") {
+                            filterAdminAccounts = true
+                            filterStandardAccounts = true
+                            filterFileVaultAccounts = true
+                            filterSystemAccounts = true
                         }
                         .font(.system(size: 12))
                         .foregroundColor(.blue)
@@ -3999,14 +4012,27 @@ struct DeviceView: View {
         .onChange(of: filterAdminAccounts) { _, _ in
             localAccountsPage = 1
         }
+        .onChange(of: filterStandardAccounts) { _, _ in
+            localAccountsPage = 1
+        }
         .onChange(of: filterFileVaultAccounts) { _, _ in
             localAccountsPage = 1
         }
+        .onChange(of: filterSystemAccounts) { _, _ in
+            localAccountsPage = 1
+        }
     }
-    
+
+    /// False when every tag chip is deselected — nothing can match, and the
+    /// empty state says so rather than pretending a filter excluded everything.
+    private var hasSelectedAccountTags: Bool {
+        filterAdminAccounts || filterStandardAccounts
+            || filterFileVaultAccounts || filterSystemAccounts
+    }
+
     private func filteredLocalAccounts(from accounts: [LocalUserAccount]) -> [LocalUserAccount] {
         var result = accounts
-        
+
         // Apply search filter
         if !localAccountsSearchText.isEmpty {
             result = result.filter {
@@ -4014,63 +4040,69 @@ struct DeviceView: View {
                 ($0.username ?? "").localizedCaseInsensitiveContains(localAccountsSearchText)
             }
         }
-        
-        // Apply Admin/FileVault filters (if any filter is active)
-        if filterAdminAccounts || filterFileVaultAccounts {
-            result = result.filter { account in
-                let isAdmin = account.admin == true
-                let hasFileVault = account.fileVault2Enabled == true
-                
-                if filterAdminAccounts && filterFileVaultAccounts {
-                    return isAdmin || hasFileVault
-                } else if filterAdminAccounts {
-                    return isAdmin
-                } else if filterFileVaultAccounts {
-                    return hasFileVault
-                }
-                return true
+
+        // Every chip is a tag, and an account shows only while one of its own
+        // tags is selected. Deselecting a chip always hides those accounts —
+        // there is no "nothing selected means everything" escape hatch.
+        result = result.filter { account in
+            let matchesType: Bool
+            switch account.accountType {
+            case .admin: matchesType = filterAdminAccounts
+            case .standard: matchesType = filterStandardAccounts
+            case .system: matchesType = filterSystemAccounts
             }
+
+            return matchesType
+                || (filterFileVaultAccounts && account.fileVault2Enabled == true)
         }
-        
+
+
         return result
     }
     
+    /// Icon + color for an account's type, matching its tag chip.
+    private func accountTypeStyle(_ type: LocalUserAccount.AccountType) -> (label: String, icon: String, color: Color) {
+        switch type {
+        case .admin:    return ("Admin", "person.badge.key.fill", .orange)
+        case .standard: return ("Standard", "person.fill", .blue)
+        case .system:   return ("System", "gearshape.fill", .teal)
+        }
+    }
+
+    private func accountTag(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.2))
+            .cornerRadius(4)
+    }
+
     private func localAccountRow(_ account: LocalUserAccount) -> some View {
-        HStack(spacing: 16) {
+        let type = accountTypeStyle(account.accountType)
+
+        return HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(account.admin == true ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1))
+                    .fill(type.color.opacity(0.1))
                     .frame(width: 44, height: 44)
-                
-                Image(systemName: account.admin == true ? "person.badge.key.fill" : "person.fill")
+
+                Image(systemName: type.icon)
                     .font(.system(size: 18))
-                    .foregroundColor(account.admin == true ? .orange : .blue)
+                    .foregroundColor(type.color)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(account.fullName ?? account.username ?? "Unknown")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white)
-                    
-                    if account.admin == true {
-                        Text("Admin")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.2))
-                            .cornerRadius(4)
-                    }
-                    
+
+                    accountTag(type.label, color: type.color)
+
                     if account.fileVault2Enabled == true {
-                        Text("FileVault")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.purple)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.purple.opacity(0.2))
-                            .cornerRadius(4)
+                        accountTag("FileVault", color: .purple)
                     }
                 }
                 

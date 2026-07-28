@@ -162,6 +162,49 @@ struct LocalUserAccount: Codable, Hashable, Sendable, Identifiable {
     let azureActiveDirectoryId: String?
 }
 
+extension LocalUserAccount {
+    /// Home directories macOS assigns to accounts that never log in interactively.
+    private static let systemHomeDirectories: Set<String> = ["/var/empty", "/dev/null", "/var/root"]
+
+    /// True for macOS service/system accounts (root, daemon, `_`-prefixed service users, Guest).
+    ///
+    /// macOS reserves UIDs below 500 for the system; human accounts start at 501. Jamf reports
+    /// the UID as a string, and accounts with negative UIDs (`nobody` = -2) come back either
+    /// signed or as their unsigned 32-bit form.
+    var isSystemAccount: Bool {
+        if let username, username.hasPrefix("_") { return true }
+
+        if let raw = uid?.trimmingCharacters(in: .whitespaces), let numeric = Int(raw) {
+            if numeric < 500 { return true }
+            if numeric > Int(Int32.max) { return true }  // -1 / -2 wrapped to unsigned
+        }
+
+        if let home = homeDirectory, Self.systemHomeDirectories.contains(home) { return true }
+
+        return false
+    }
+
+    /// The account's primary type. Every account is exactly one of these, so the
+    /// Local Accounts tags form a complete, non-overlapping set: selecting all of
+    /// them shows every account, selecting none shows nothing.
+    ///
+    /// System classification wins over admin — `root` is admin-flagged but is a
+    /// system account, and surfacing it under the Admin tag would defeat the
+    /// point of being able to hide service accounts.
+    enum AccountType {
+        case system
+        case admin
+        case standard
+    }
+
+    /// Jamf leaves `admin` nil on some records, so anything not positively
+    /// flagged as admin counts as standard.
+    var accountType: AccountType {
+        if isSystemAccount { return .system }
+        return admin == true ? .admin : .standard
+    }
+}
+
 // MARK: - Purchasing
 
 struct Purchasing: Codable, Hashable, Sendable {
