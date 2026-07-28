@@ -362,7 +362,8 @@ struct FeaturesConfiguration: Codable {
         /// the pagination math.
         var effectiveHistoryPageSize: Int { max(1, historyPageSize ?? 25) }
         /// Configured sections, or the built-in list when the key is absent
-        /// OR empty — an empty section list would break every detail view.
+        /// OR empty — an empty section list would break the device list and
+        /// every health metric.
         var effectiveInventorySections: [String] {
             guard let inventorySections, !inventorySections.isEmpty else {
                 return Self.defaultInventorySections
@@ -384,8 +385,18 @@ struct FeaturesConfiguration: Codable {
             )
         }
 
-        /// Must stay in sync with the sections the detail views actually
-        /// render (and the schema default in Helios_Features_SCHEMA.json).
+        /// Sections for the BULK fetch — the device list, health metrics, and
+        /// My Devices. This list does NOT bound what Device Detail can show:
+        /// DeviceView refetches a single computer with every section via
+        /// `ComputerSearchService.fetchComputerById`, so the detail-only
+        /// sections (LOCAL_USER_ACCOUNTS, CERTIFICATES, PRINTERS, SERVICES)
+        /// are deliberately absent here — pulling them for the whole fleet
+        /// costs far more than fetching them once when a device is opened.
+        ///
+        /// Must stay in sync with the schema default in
+        /// Helios_Features_SCHEMA.json and with the sections the health
+        /// metrics read: a metric whose section is missing reports
+        /// Non-Compliant rather than unknown.
         static let defaultInventorySections = [
             "GENERAL", "HARDWARE", "OPERATING_SYSTEM", "USER_AND_LOCATION",
             "DISK_ENCRYPTION", "SECURITY", "APPLICATIONS", "SOFTWARE_UPDATES",
@@ -453,6 +464,9 @@ struct FeaturesConfiguration: Codable {
 
         /// Must stay in sync with the sections the detail views actually
         /// render (and the schema default in Helios_Features_SCHEMA.json).
+        /// Unlike computers, mobile detail views render straight from this
+        /// fetch — there is no per-device refetch — so every section
+        /// MobileDeviceView shows has to be listed here.
         static let defaultInventorySections = [
             "GENERAL", "HARDWARE", "USER_AND_LOCATION", "SECURITY",
             "NETWORK", "PURCHASING", "APPLICATIONS", "CERTIFICATES",

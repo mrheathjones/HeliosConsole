@@ -1377,8 +1377,15 @@ struct DeviceView: View {
     
     @MainActor
     private func loadFullDetails() async {
-        // Check if we already have full details (applications is a good indicator)
-        if computer.applications != nil && !(computer.applications?.isEmpty ?? true) {
+        // Skip the fetch only when this computer clearly came from the detail
+        // endpoint. APPLICATIONS alone is NOT proof: the bulk inventory fetch
+        // uses features.computers.inventorySections, which commonly includes
+        // APPLICATIONS but not the detail-only sections below — skipping on
+        // apps alone leaves those sections permanently empty in this view.
+        let hasDetailOnlySections = computer.localUserAccounts != nil
+            && computer.certificates != nil
+            && computer.printers != nil
+        if hasDetailOnlySections, !(computer.applications?.isEmpty ?? true) {
             NSLog("📱 DeviceView: Already have full details for %@", computer.displayName)
             return
         }
