@@ -120,7 +120,7 @@ struct UserCapabilities: Equatable {
         var seen: Set<String> = []
         var ordered: [String] = []
         ordered.reserveCapacity(modules.count)
-        for module in modules where seen.insert(module).inserted {
+        for module in modules.map(Self.canonicalModuleID) where seen.insert(module).inserted {
             ordered.append(module)
         }
         self.modules = ordered
@@ -145,6 +145,20 @@ struct UserCapabilities: Equatable {
         self.returnToServiceOptions = returnToServiceOptions
         self.allowExport = allowExport
         self.allowScorecardDiagnostics = allowScorecardDiagnostics
+    }
+
+    /// Maps a module id delivered by a profile onto the id this build routes
+    /// on. Exists for exactly one case: `myDevice` was documented as a
+    /// RESERVED id (accepted but inert) before the module shipped, so profiles
+    /// authored against those docs are already in the field granting it. The
+    /// shipped id is `myDevices`; folding the singular into it means those
+    /// profiles light the module up instead of silently granting nothing.
+    ///
+    /// Not a general aliasing mechanism — every other unknown id must keep
+    /// falling through to "skipped, logged", which is what lets a newer
+    /// profile deploy safely to an older build.
+    static func canonicalModuleID(_ id: String) -> String {
+        id == "myDevice" ? "myDevices" : id
     }
 
     /// The fail-closed value: grants nothing at all. Used before

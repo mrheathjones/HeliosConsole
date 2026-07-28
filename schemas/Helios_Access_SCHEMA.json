@@ -36,13 +36,14 @@
           "modules": {
             "type": "array",
             "title": "Modules (sidebar / route ids)",
-            "description": "Sidebar module ids this role may see and open. Absent or empty = none. Array order IS the sidebar order (except `settings`, which is pinned below the divider). Multi-role users get one merged list, walked in the order roles are authored here, first appearance wins. Unknown ids are skipped, so newer profiles deploy safely to older builds. Pair `cleanup` with cleanupActions below to make that module useful.",
+            "description": "Sidebar module ids this role may see and open. Absent or empty = none. Array order IS the sidebar order (except `settings`, which is pinned below the divider). Multi-role users get one merged list, walked in the order roles are authored here, first appearance wins. Unknown ids are skipped, so newer profiles deploy safely to older builds. Pair `cleanup` with cleanupActions below to make that module useful. `myDevices` is the read-only self-service view of the signed-in user's OWN devices \u2014 it grants no actions and is safe to give to everyone; the legacy `myDevice` spelling from the pre-release docs is accepted and treated as `myDevices`.",
             "items": {
               "type": "string",
               "title": "Module ID",
               "enum": [
                 "dashboard",
                 "devices",
+                "myDevices",
                 "announcements",
                 "logs",
                 "reports",

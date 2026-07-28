@@ -49,6 +49,7 @@ Views/           — All SwiftUI views organized by feature
   Authentication/  — Welcome, login, biometric flows
   Dashboard/       — Health scorecard, device counts, search
   Device/          — Device lists and detail views
+  MyDevices/       — Read-only self-service view of the signed-in user's own devices
   Sidebar/         — Navigation sidebar
   Components/      — Shared UI components
   Announcement/    — Announcement feed

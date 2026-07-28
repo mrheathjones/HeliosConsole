@@ -63,6 +63,9 @@
 		F043 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S043 /* DeviceListView.swift */; };
 		F044 /* DeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S044 /* DeviceView.swift */; };
 		F902 /* DeviceHistorySectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S902 /* DeviceHistorySectionView.swift */; };
+		F910 /* MyDevicesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S910 /* MyDevicesService.swift */; };
+		F911 /* LocalDeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = S911 /* LocalDeviceIdentity.swift */; };
+		F912 /* MyDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S912 /* MyDevicesView.swift */; };
 		F045 /* HealthFilteredDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = S045 /* HealthFilteredDeviceListView.swift */; };
 		FABM1 /* DevicesHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM1 /* DevicesHomeView.swift */; };
 		FABM2 /* ABMLookupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SABM2 /* ABMLookupView.swift */; };
@@ -215,6 +218,9 @@
 		S043 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		S044 /* DeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceView.swift; sourceTree = "<group>"; };
 		S902 /* DeviceHistorySectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceHistorySectionView.swift; sourceTree = "<group>"; };
+		S910 /* MyDevicesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyDevicesService.swift; sourceTree = "<group>"; };
+		S911 /* LocalDeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDeviceIdentity.swift; sourceTree = "<group>"; };
+		S912 /* MyDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyDevicesView.swift; sourceTree = "<group>"; };
 		S045 /* HealthFilteredDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthFilteredDeviceListView.swift; sourceTree = "<group>"; };
 		SABM1 /* DevicesHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesHomeView.swift; sourceTree = "<group>"; };
 		SABM2 /* ABMLookupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABMLookupView.swift; sourceTree = "<group>"; };
@@ -389,6 +395,7 @@
 				S017 /* ComputerSearchService.swift */,
 				S900 /* ComputerHistoryModels.swift */,
 				S901 /* ComputerHistoryService.swift */,
+				S910 /* MyDevicesService.swift */,
 				S018 /* HealthMetricsCalculator.swift */,
 				S251 /* HealthEvaluator.swift */,
 				S019 /* JamfAPIService.swift */,
@@ -410,6 +417,7 @@
 			children = (
 				S025 /* DeviceIconProvider.swift */,
 				SABM6 /* ActionBranding.swift */,
+				S911 /* LocalDeviceIdentity.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -429,6 +437,7 @@
 				GRP011 /* Sidebar */,
 				GRP012 /* Dashboard */,
 				GRP013 /* Device */,
+				GRP_MYDEV /* MyDevices */,
 				GRP014 /* Announcement */,
 				GRP015 /* Reports */,
 				GRP016 /* Settings */,
@@ -472,6 +481,14 @@
 				S040 /* DashboardView.swift */,
 			);
 			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		GRP_MYDEV /* MyDevices */ = {
+			isa = PBXGroup;
+			children = (
+				S912 /* MyDevicesView.swift */,
+			);
+			path = MyDevices;
 			sourceTree = "<group>";
 		};
 		GRP013 /* Device */ = {
@@ -837,6 +854,9 @@
 				F043 /* DeviceListView.swift in Sources */,
 				F044 /* DeviceView.swift in Sources */,
 				F902 /* DeviceHistorySectionView.swift in Sources */,
+				F910 /* MyDevicesService.swift in Sources */,
+				F911 /* LocalDeviceIdentity.swift in Sources */,
+				F912 /* MyDevicesView.swift in Sources */,
 				F045 /* HealthFilteredDeviceListView.swift in Sources */,
 				FABM1 /* DevicesHomeView.swift in Sources */,
 				FABM2 /* ABMLookupView.swift in Sources */,
@@ -998,7 +1018,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 89;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1026,7 +1046,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 89;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1054,7 +1074,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 89;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1084,7 +1104,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 89;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TEAMIDXXXXXX;
 				ENABLE_HARDENED_RUNTIME = YES;

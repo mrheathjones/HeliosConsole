@@ -138,6 +138,8 @@ struct DashboardView: View {
                         .environmentObject(deepLinkRouter)
                         .id(devicesResetTrigger)
                 }
+            case .myDevices:
+                gated(.myDevices) { MyDevicesView(isInNestedView: $isInNestedView) }
             case .announcements:
                 gated(.announcements) { AnnouncementsView() }
             case .logs:

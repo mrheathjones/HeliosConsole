@@ -104,6 +104,7 @@
             "enum": [
               "dashboard",
               "devices",
+              "myDevices",
               "announcements",
               "logs",
               "reports",

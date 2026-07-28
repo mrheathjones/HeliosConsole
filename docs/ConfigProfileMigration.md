@@ -233,7 +233,7 @@ roles = (
 | Key | Type | Absent = | Valid ids |
 |---|---|---|---|
 | `name` | string | **entry SKIPPED** (see below) | **Admin-chosen.** Must equal an Entra app-role **Value** (Entra mode) or the `role` key (MDM mode), **exactly, case-sensitively** |
-| `modules` | array of string | no modules | `dashboard`, `devices`, `announcements`, `logs`, `reports`, `cleanup`, `settings`, plus `myDevice` (**reserved** — accepted but inert, see below). **Array order = sidebar order** — see *Sidebar order* below |
+| `modules` | array of string | no modules | `dashboard`, `devices`, `myDevices`, `announcements`, `logs`, `reports`, `cleanup`, `settings` (the legacy spelling `myDevice` is accepted and treated as `myDevices` — see below). **Array order = sidebar order** — see *Sidebar order* below |
 | `computerActions` | array of string | no computer actions | the `deviceActions.computer.actions[].id` set (`sendBlankPush`, `restart`, `restartSilent`, `shutdown`, `returnToService`, `enableRemoteDesktop`, `disableRemoteDesktop`, `enableBluetooth`, `disableBluetooth`, `viewFileVaultKey`, `viewLocalAdminPassword`, `screenShare`, `unlockUserAccount`, `wipe`; the reserved ids render nothing) |
 | `mobileDeviceActions` | array of string | no mobile actions | the `deviceActions.mobileDevice.actions[].id` set — forward-looking, no mobile actions menu exists yet |
 | `cleanupActions` | array of string | no cleanup actions | `unmanage`, `addToGroup`, `moveToSite`, `deleteFromProtect`, `deleteRecord` |
@@ -254,10 +254,44 @@ decides whether any of them work. The sample profile's `Helios.CleanupTech` role
 `allowExport = 1` to that entry (or hold another role that sets it, since it is OR'd across
 matched roles) if cleanup technicians should be able to export their device lists.
 
-`myDevice` is **reserved** for a per-user single-device view shipping in a **follow-up PR**.
-It is accepted in `modules` today but **inert** — unknown/unimplemented ids are ignored
-(logged once), which is also what lets newer profiles deploy safely to older app builds. You
-can pre-stage it; it simply renders nothing until that PR lands.
+#### `myDevices` — the self-service module
+
+`myDevices` **has shipped** (it was previously reserved, and documented as `myDevice`). It is
+a **read-only** view of the devices assigned to the person signed in: their Macs, iPhones,
+iPads and Vision Pros, each with serial, OS version, last check-in, free space, encryption
+state and battery. It renders **no action control of its own** — opening a device pushes the
+same detail views the Devices module uses, and those gate every action on `computerActions` /
+`mobileDeviceActions`, so a role granting `myDevices` and no actions is information-only.
+That makes it the one module that is safe to give to everybody.
+
+- The old singular id **`myDevice` still works** — it is normalized to `myDevices` when
+  capabilities resolve, so a profile pre-staged against the previous docs lights the module
+  up instead of silently granting nothing.
+- **Granting `myDevices` does NOT grant `devices`.** A user with only `myDevices` can see
+  their own devices and cannot search the fleet.
+
+**How a user is matched to their devices.** Helios knows the operator by email (the Entra UPN,
+or the address used at sign-in); Jamf inventory records are keyed by
+`userAndLocation.username`, which in most tenants is a directory short name. Helios does not
+guess the mapping — it asks Jamf: `GET /api/v1/users?filter=email=="<sign-in address>"`
+returns the user record(s) for that address, and inventory is then searched for **every**
+username those records carry (one person routinely holds both an `hea08299`-style record and
+a UPN-style one). Tune this in `features.myDevices`:
+
+| Key | Default | Effect |
+|---|---|---|
+| `enabled` | `true` | Machine-layer kill switch for the module |
+| `resolveDirectoryUsers` | `true` | Use `/api/v1/users` to learn the tenant's username(s) for the sign-in address. **Needs the Read Users privilege** — a denial is non-fatal and the app falls back to the switches below, with a note in the view |
+| `matchEmail` | `true` | Match `userAndLocation.email` / mobile `emailAddress` against the sign-in address |
+| `matchUsernameFromEmail` | `true` | Match a username equal to the full sign-in address |
+| `matchUsernameLocalPart` | `false` | Also try the part before the `@`. Off by default: it matches nothing in short-name tenants and is the one candidate that could match a *different* person where mailboxes are shared |
+| `matchRealName` | `false` | Match real name against the display name. Off by default — Jamf's formatting (`Doe, Jane A.`) rarely equals the token's |
+| `showLocalDeviceFallback` | `true` | When nothing matches, show the Mac Helios is running on (matched by hardware serial), **labelled as this Mac**, not as an assignment |
+| `maxDevices` | `50` | Cap, so a mis-scoped match cannot pull in the fleet |
+
+**API role privileges:** `Read Computers`, `Read Mobile Devices`, and — for the accurate
+identity match — `Read Users`. Reads route on the existing `deviceSearch` credential scope;
+no new routing key was added.
 
 #### Sidebar order (access 2.6 / ui 2.2)
 
@@ -283,12 +317,14 @@ Rules:
 
 - **`settings` is pinned** below the sidebar divider wherever you list it. Listing it grants
   it; its position is ignored. (Sign Out sits below it and is never gated.)
-- **Unknown / not-yet-implemented ids are skipped** with no error and no gap — `myDevice`
-  today. Ordering around a pre-staged id is safe.
+- **Unknown / not-yet-implemented ids are skipped** with no error and no gap. Ordering
+  around a pre-staged id is safe — that is what lets a newer profile deploy to an older
+  build. (`myDevice` is the one exception: it is an alias, not an unknown id.)
 - **The machine layer still prunes.** A module a role grants but this Mac disables — via
   `ui.sidebarItems[].isEnabled`, `ui.userInterface.showAnnouncements` /
-  `showSettings`, or `features.reports.enabled` — renders **no row**, and the rows after it
-  simply close up. Order never widens access; the two layers still intersect.
+  `showSettings`, `features.reports.enabled`, or `features.myDevices.enabled` — renders
+  **no row**, and the rows after it simply close up. Order never widens access; the two
+  layers still intersect.
 - **`ui.sidebarItems` no longer orders anything.** It supplies presence (`isEnabled`), label,
   and icon for an id; its own list position is meaningless. Its `order` key is **removed in
   ui 2.2** — a profile still delivering it decodes fine (extra plist keys are ignored) and

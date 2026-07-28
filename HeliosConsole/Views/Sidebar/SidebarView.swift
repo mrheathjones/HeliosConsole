@@ -12,6 +12,7 @@ import SwiftUI
 enum NavigationDestination: String, CaseIterable, Identifiable {
     case dashboard = "dashboard"
     case devices = "devices"
+    case myDevices = "myDevices"
     case announcements = "announcements"
     case logs = "logs"
     case reports = "reports"
@@ -24,6 +25,7 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "Dashboard"
         case .devices: return "Devices"
+        case .myDevices: return "My Devices"
         case .announcements: return "Announcements"
         case .logs: return "Logs"
         case .reports: return "Reports"
@@ -36,6 +38,7 @@ enum NavigationDestination: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "square.grid.2x2"
         case .devices: return "desktopcomputer"
+        case .myDevices: return "person.crop.square"
         case .announcements: return "megaphone"
         case .logs: return "doc.text.magnifyingglass"
         case .reports: return "chart.bar.doc.horizontal"
@@ -253,6 +256,8 @@ struct SidebarView: View {
             return false
         case .reports where config.features?.effectiveReports.effectiveEnabled == false:
             return false // features domain: reports module disabled
+        case .myDevices where config.features?.effectiveMyDevices.effectiveEnabled == false:
+            return false // features domain: My Devices module disabled
         default:
             break
         }

@@ -750,9 +750,10 @@ struct MDMConfiguration: Codable {
     /// This list is presentation only; it grants nothing on its own.
     /// (`cleanup` was missing and was unreachable exactly this way: it used
     /// to be appended outside the sidebarItems loop, so the default list
-    /// never had to carry it.) `myDevice` is deliberately ABSENT — it is
-    /// reserved for a follow-up PR and has no NavigationDestination case, so
-    /// it would be skipped anyway.
+    /// never had to carry it.) The reserved `myDevice` id from the pre-release
+    /// docs is NOT listed here: it is normalized to the shipped `myDevices` id
+    /// when capabilities resolve (`UserCapabilities.canonicalModuleID`), so
+    /// only `myDevices` ever reaches this layer.
     ///
     /// The ORDER of this array is not meaningful — row order comes from each
     /// role's `modules` array (access domain). These entries exist to supply
@@ -760,6 +761,7 @@ struct MDMConfiguration: Codable {
     static let defaultSidebarItems: [SidebarItemConfig] = [
         SidebarItemConfig(id: "dashboard", icon: "square.grid.2x2", title: "Dashboard"),
         SidebarItemConfig(id: "devices", icon: "desktopcomputer", title: "Devices"),
+        SidebarItemConfig(id: "myDevices", icon: "person.crop.square", title: "My Devices"),
         SidebarItemConfig(id: "announcements", icon: "megaphone", title: "Announcements"),
         SidebarItemConfig(id: "logs", icon: "doc.text.magnifyingglass", title: "Logs"),
         SidebarItemConfig(id: "reports", icon: "chart.bar.doc.horizontal", title: "Reports"),

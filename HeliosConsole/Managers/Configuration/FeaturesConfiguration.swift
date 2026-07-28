@@ -123,6 +123,11 @@ struct FeaturesConfiguration: Codable {
     let reports: ReportsSettings?
     let actionLog: ActionLogSettings?
 
+    /// My Devices module tuning: how the signed-in identity is matched to a
+    /// Jamf assigned user, and whether the local-Mac fallback is offered.
+    /// Which roles may SEE the module stays in access (`roles[].modules`).
+    let myDevices: MyDevicesSettings?
+
     /// Top-level UI area visibility switches (`showAnnouncements`,
     /// `showSettings`). MOVED HERE from the ui domain during the domain
     /// cleanup: these turn FEATURES on and off — they are not branding.
@@ -155,6 +160,7 @@ struct FeaturesConfiguration: Codable {
     var effectiveDeviceHealth: DeviceHealthSettings { deviceHealth ?? .empty }
     var effectiveReports: ReportsSettings { reports ?? .empty }
     var effectiveActionLog: ActionLogSettings { actionLog ?? .empty }
+    var effectiveMyDevices: MyDevicesSettings { myDevices ?? .empty }
     var effectiveUserExperience: UserExperienceSettings { userExperience ?? .empty }
     var effectiveCleanup: ManagedCleanupSettings { cleanup ?? ManagedCleanupSettings() }
     var effectiveLocalAdministration: ManagedLocalAdminSettings {
@@ -200,6 +206,7 @@ struct FeaturesConfiguration: Codable {
         deviceHealth: nil,
         reports: nil,
         actionLog: nil,
+        myDevices: nil,
         userExperience: nil,
         cleanup: nil,
         localAdministration: nil
@@ -241,6 +248,91 @@ struct FeaturesConfiguration: Codable {
         var effectiveMaxEntries: Int { max(0, maxEntries ?? 10000) }
 
         static let empty = ActionLogSettings(retentionDays: nil, maxEntries: nil)
+    }
+
+    // MARK: - My Devices
+
+    /// Tuning for the `myDevices` module: the ORDERED strategies used to map
+    /// the signed-in identity onto Jamf's assigned-user fields, and whether
+    /// the local-Mac fallback is offered when that mapping finds nothing.
+    ///
+    /// Nothing here is org-specific by construction: Helios knows the
+    /// operator's email (the Entra UPN, or the address they signed in with)
+    /// and their display name, and NOTHING about how a given Jamf tenant
+    /// populates `userAndLocation`. In most tenants the inventory username is
+    /// a directory short name (`hea08299`) that no amount of string
+    /// manipulation can derive from an email address — which is exactly why
+    /// `resolveDirectoryUsers` exists and is the DEFAULT: `/api/v1/users`
+    /// holds Jamf's own mapping from email to username, so the app asks
+    /// rather than guesses. The derived candidates below are the degraded
+    /// path for tenants whose API role withholds Read Users.
+    struct MyDevicesSettings: Codable {
+        /// Machine-layer kill switch for the whole module. Intersected with
+        /// the role grant, never a substitute for it. Default true.
+        let enabled: Bool?
+
+        /// Query `/api/v1/users?filter=email==…` to learn which Jamf user
+        /// records belong to the signed-in address, and search inventory for
+        /// EVERY username those records carry. This is the accurate path (it
+        /// covers the common case of one person holding both an
+        /// `hea08299`-style record and a UPN-style one) and needs the **Read
+        /// Users** privilege on the API role. Default true; a 403 is
+        /// non-fatal and falls through to the derived candidates below.
+        let resolveDirectoryUsers: Bool?
+
+        /// Match inventory records whose assigned-user EMAIL equals the
+        /// signed-in address (`userAndLocation.email` / mobile
+        /// `emailAddress`). Default true.
+        let matchEmail: Bool?
+
+        /// Match inventory records whose assigned USERNAME equals the
+        /// signed-in address verbatim — tenants that enroll with the UPN as
+        /// the username. Default true.
+        let matchUsernameFromEmail: Bool?
+
+        /// Also try the email's local part as a username (`heath.jones` from
+        /// `jane.doe@corp.com`). Off by default: in a tenant using short
+        /// names it matches nothing, and in a tenant with shared or
+        /// role-based mailboxes it is the one candidate that could match
+        /// SOMEONE ELSE's device. Enable only where the local part IS the
+        /// inventory username.
+        let matchUsernameLocalPart: Bool?
+
+        /// Match on the assigned user's real name against the signed-in
+        /// display name (`userAndLocation.realname` / mobile `fullName`).
+        /// Off by default — display names are not unique and Jamf's real-name
+        /// formatting ("Doe, Jane A.") rarely equals the token's.
+        let matchRealName: Bool?
+
+        /// When the identity lookup yields no devices, show the Mac Helios is
+        /// running on (matched by hardware serial), clearly labelled as this
+        /// Mac rather than as an assignment. Default true.
+        let showLocalDeviceFallback: Bool?
+
+        /// Cap on devices rendered. Guards a mis-scoped match (e.g. a shared
+        /// lab account naming hundreds of records) from dragging in the whole
+        /// fleet. Clamped to at least 1. Default 50.
+        let maxDevices: Int?
+
+        var effectiveEnabled: Bool { enabled ?? true }
+        var effectiveResolveDirectoryUsers: Bool { resolveDirectoryUsers ?? true }
+        var effectiveMatchEmail: Bool { matchEmail ?? true }
+        var effectiveMatchUsernameFromEmail: Bool { matchUsernameFromEmail ?? true }
+        var effectiveMatchUsernameLocalPart: Bool { matchUsernameLocalPart ?? false }
+        var effectiveMatchRealName: Bool { matchRealName ?? false }
+        var effectiveShowLocalDeviceFallback: Bool { showLocalDeviceFallback ?? true }
+        var effectiveMaxDevices: Int { max(1, maxDevices ?? 50) }
+
+        static let empty = MyDevicesSettings(
+            enabled: nil,
+            resolveDirectoryUsers: nil,
+            matchEmail: nil,
+            matchUsernameFromEmail: nil,
+            matchUsernameLocalPart: nil,
+            matchRealName: nil,
+            showLocalDeviceFallback: nil,
+            maxDevices: nil
+        )
     }
 
     // MARK: - Computers
