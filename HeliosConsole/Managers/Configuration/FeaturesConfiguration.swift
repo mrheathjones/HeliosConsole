@@ -290,7 +290,7 @@ struct FeaturesConfiguration: Codable {
         /// the username. Default true.
         let matchUsernameFromEmail: Bool?
 
-        /// Also try the email's local part as a username (`heath.jones` from
+        /// Also try the email's local part as a username (`jane.doe` from
         /// `jane.doe@corp.com`). Off by default: in a tenant using short
         /// names it matches nothing, and in a tenant with shared or
         /// role-based mailboxes it is the one candidate that could match

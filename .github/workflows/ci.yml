@@ -1,10 +1,11 @@
 name: CI
 
-# COST NOTE: macOS runners bill at ~10x Linux ($0.062/min on macos 3-core), and
-# this repo is private, so CI minutes are the scarce resource here. July 2026
-# exhausted the included allowance and every job then failed instantly with no
-# runner assigned — see docs note in the PR for the signature. The trigger and
-# early-exit below exist to keep that from recurring.
+# COST NOTE: macOS runners bill at ~10x Linux ($0.062/min on macos 3-core). This
+# repo was private through July 2026, when the included allowance was exhausted
+# and every job then failed instantly with no runner assigned — see docs note
+# in the PR for the signature. The trigger and early-exit below exist to keep
+# that from recurring, and still matter for private forks even though this
+# repo itself is now public.
 on:
   # PRs only. A push to main that arrived via PR was already built as that PR,
   # so also building the merge commit doubled the spend for a near-duplicate
