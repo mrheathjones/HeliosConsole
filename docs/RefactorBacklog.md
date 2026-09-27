@@ -27,23 +27,21 @@ going public — tracked here to work through after the initial GitHub release.
   and ~15 model structs. Split into `AppleBusinessManagerAuthClient`,
   `ABMHTTPClient`, and dedicated model files; leave `ABMAPIService` as a thin
   façade.
-- **Duplicated UI components** — **Mostly done.** `SectionHeader`,
+- ~~**Duplicated UI components**~~ — **Done.** `SectionHeader`,
   `DetailCard`, `DetailRow`, `SearchBar`, `FilterToggle`,
-  `PaginationControls`, `EmptyStateView`, `StatusBadge` now live in
+  `PaginationControls`, `EmptyStateView`, `StatusBadge` live in
   `Views/Shared/` (DeviceView's styling), adopted by `DeviceView`,
-  `MobileDeviceView`, and `ABMLookupView`. Remaining:
+  `MobileDeviceView`, and `ABMLookupView`. The private `statusBadge` copies in
+  `ComputerResultCard` and `DeviceListRow` now use `StatusBadge(size: .compact)`
+  (same 9pt list-row look).
   - `ReportsView` deliberately NOT migrated: its `sectionHeader(_:icon:color:)`
     is a light/dark-aware 16pt card subheading and `statusBadge(Bool)` is a
     Yes/No pill — different components, not drifted copies. Swapping in the
     shared white 24pt header would break Reports in light mode.
-  - Private `statusBadge(_:color:)` copies still in
-    `Dashboard/ComputerResultCard.swift` (x2) and `Device/DeviceListRow.swift`
-    — check whether they match `StatusBadge` before swapping.
-- **Duplicated pagination/filter state** — `PaginatedListState<Row>` +
-  `PaginatedRows` exist (`Views/Shared/`) and back DeviceView's 7 inventory
-  tabs. Follow-up: move `MobileDeviceView`'s five hand-rolled
-  search/page `@State` pairs onto it the same way (`DeviceInventoryState`
-  is the template).
+- ~~**Duplicated pagination/filter state**~~ — **Done.**
+  `PaginatedListState<Row>` + `PaginatedRows` (`Views/Shared/`) back
+  DeviceView's 7 inventory tabs (`DeviceInventoryState`) and MobileDeviceView's
+  5 searchable sections (`MobileDeviceInventoryState`).
 - **`Managers/Configuration/FeaturesConfiguration.swift` (941 lines)** —
   secondary candidate; worth a follow-up look for business logic that crept
   into what should be a settings/data layer.

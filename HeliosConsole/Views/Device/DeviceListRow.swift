@@ -47,11 +47,11 @@ struct DeviceListRow: View {
                             .foregroundColor(.white)
                         
                         if device.isSupervised {
-                            statusBadge("Supervised", color: .blue)
+                            StatusBadge("Supervised", color: .blue, size: .compact)
                         }
                         
                         if device.isManaged {
-                            statusBadge("Managed", color: .green)
+                            StatusBadge("Managed", color: .green, size: .compact)
                         }
                     }
                     
@@ -106,15 +106,6 @@ struct DeviceListRow: View {
                 isHovered = hovering
             }
         }
-    }
-    
-    private func statusBadge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color))
     }
     
     private func infoLabel(icon: String?, text: String) -> some View {

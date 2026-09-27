@@ -32,15 +32,15 @@ struct ComputerResultCard: View {
                             .foregroundColor(.white)
                         
                         if computer.isSupervised {
-                            statusBadge("Supervised", color: .blue)
+                            StatusBadge("Supervised", color: .blue, size: .compact)
                         }
                         
                         if computer.isManaged {
-                            statusBadge("Managed", color: .green)
+                            StatusBadge("Managed", color: .green, size: .compact)
                         }
                         
                         if computer.isFileVaultEnabled {
-                            statusBadge("Encrypted", color: .purple)
+                            StatusBadge("Encrypted", color: .purple, size: .compact)
                         }
                     }
                     
@@ -103,15 +103,6 @@ struct ComputerResultCard: View {
         }
     }
     
-    private func statusBadge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color))
-    }
-    
     private func infoLabel(icon: String?, text: String) -> some View {
         HStack(spacing: 4) {
             if let icon = icon {
@@ -160,11 +151,11 @@ struct SearchResultRow: View {
                             .background(Capsule().fill(result.platform.color))
                         
                         if result.isSupervised {
-                            statusBadge("Supervised", color: .blue)
+                            StatusBadge("Supervised", color: .blue, size: .compact)
                         }
                         
                         if result.isManaged {
-                            statusBadge("Managed", color: .green)
+                            StatusBadge("Managed", color: .green, size: .compact)
                         }
                     }
                     
@@ -210,15 +201,6 @@ struct SearchResultRow: View {
                 isHovered = hovering
             }
         }
-    }
-    
-    private func statusBadge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color))
     }
     
     private func infoLabel(icon: String?, text: String) -> some View {

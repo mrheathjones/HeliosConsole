@@ -7,6 +7,58 @@
 //
 
 import SwiftUI
+import Observation
+
+// MARK: - Inventory List State
+
+/// Search/page state for MobileDeviceView's paginated sections — the mobile
+/// counterpart of DeviceInventoryState.
+@Observable
+final class MobileDeviceInventoryState {
+    enum CertificateFilter: String, CaseIterable {
+        case all = "All"
+        case issued = "Issued"
+        case expiring = "Expiring"
+        case expired = "Expired"
+    }
+
+    let applications = PaginatedListState<MobileDeviceApplication> { app, text in
+        (app.name ?? "").localizedCaseInsensitiveContains(text) ||
+        (app.identifier ?? "").localizedCaseInsensitiveContains(text)
+    }
+
+    let profiles = PaginatedListState<MobileDeviceConfigurationProfile> { profile, text in
+        (profile.displayName ?? "").localizedCaseInsensitiveContains(text) ||
+        (profile.identifier ?? "").localizedCaseInsensitiveContains(text)
+    }
+
+    let certificates = PaginatedListState<MobileDeviceCertificate> { cert, text in
+        (cert.commonName ?? "").localizedCaseInsensitiveContains(text) ||
+        (cert.subjectName ?? "").localizedCaseInsensitiveContains(text)
+    }
+
+    let groups = PaginatedListState<MobileDeviceGroup> { group, text in
+        (group.groupName ?? "").localizedCaseInsensitiveContains(text)
+    }
+
+    let extensionAttributes = PaginatedListState<MobileDeviceExtensionAttribute> { attr, text in
+        (attr.name ?? "").localizedCaseInsensitiveContains(text) ||
+        (attr.value?.joined(separator: " ") ?? "").localizedCaseInsensitiveContains(text)
+    }
+
+    // Groups filters
+    var filterSmartGroups: Bool = true {
+        didSet { if filterSmartGroups != oldValue { groups.resetPage() } }
+    }
+    var filterStaticGroups: Bool = true {
+        didSet { if filterStaticGroups != oldValue { groups.resetPage() } }
+    }
+
+    // Certificates filter
+    var certificateFilter: CertificateFilter = .all {
+        didSet { if certificateFilter != oldValue { certificates.resetPage() } }
+    }
+}
 
 struct MobileDeviceView: View {
     let device: MobileDevice
@@ -37,35 +89,10 @@ struct MobileDeviceView: View {
     /// case here when its mobile flow lands.
     private let implementedMobileActions: [DeviceAction] = [.moveToSite]
     
-    // MARK: - Search State for Each Section
-    @State private var applicationsSearchText: String = ""
-    @State private var profilesSearchText: String = ""
-    @State private var certificatesSearchText: String = ""
-    @State private var groupsSearchText: String = ""
-    @State private var extensionAttributesSearchText: String = ""
-    
-    // MARK: - Filter State
-    // Groups filters
-    @State private var filterSmartGroups: Bool = true
-    @State private var filterStaticGroups: Bool = true
-    
-    // Certificates filter
-    enum CertificateFilter: String, CaseIterable {
-        case all = "All"
-        case issued = "Issued"
-        case expiring = "Expiring"
-        case expired = "Expired"
-    }
-    @State private var certificateFilter: CertificateFilter = .all
-    
-    // MARK: - Pagination State
-    @State private var applicationsPage: Int = 1
-    @State private var profilesPage: Int = 1
-    @State private var certificatesPage: Int = 1
-    @State private var groupsPage: Int = 1
-    @State private var extensionAttributesPage: Int = 1
-    
-    private let itemsPerPage: Int = 25
+    // MARK: - Inventory List State
+    /// Search, filter, and page state for the searchable sections — kept
+    /// here so it survives switching sections.
+    @State private var inventory = MobileDeviceInventoryState()
     
     var body: some View {
         ZStack {
@@ -717,45 +744,20 @@ struct MobileDeviceView: View {
             
             if let apps = device.applications, !apps.isEmpty {
                 // Search bar
-                SearchBar(text: $applicationsSearchText, placeholder: "Filter applications...")
+                SearchBar(text: Bindable(inventory.applications).searchText, placeholder: "Filter applications...")
                 
-                let filteredApps = applicationsSearchText.isEmpty ? apps : apps.filter {
-                    ($0.name ?? "").localizedCaseInsensitiveContains(applicationsSearchText) ||
-                    ($0.identifier ?? "").localizedCaseInsensitiveContains(applicationsSearchText)
-                }
+                let filteredApps = inventory.applications.filter(apps)
                 
                 if filteredApps.isEmpty {
                     EmptyStateView("No applications match search", icon: "app.badge")
                 } else {
-                    // Pagination
-                    let totalPages = max(1, Int(ceil(Double(filteredApps.count) / Double(itemsPerPage))))
-                    let startIndex = (applicationsPage - 1) * itemsPerPage
-                    let endIndex = min(startIndex + itemsPerPage, filteredApps.count)
-                    let paginatedApps = Array(filteredApps[startIndex..<endIndex])
-                    
-                    LazyVStack(spacing: 8) {
-                        ForEach(paginatedApps) { app in
-                            applicationRow(app)
-                        }
-                    }
-                    
-                    // Pagination controls
-                    if filteredApps.count > itemsPerPage {
-                        PaginationControls(
-                            currentPage: $applicationsPage,
-                            totalPages: totalPages,
-                            totalItems: filteredApps.count,
-                            startIndex: startIndex,
-                            endIndex: endIndex
-                        )
+                    PaginatedRows(state: inventory.applications, rows: filteredApps) { app in
+                        applicationRow(app)
                     }
                 }
             } else {
                 EmptyStateView("No applications installed", icon: "app.badge")
             }
-        }
-        .onChange(of: applicationsSearchText) { _, _ in
-            applicationsPage = 1
         }
     }
     
@@ -816,45 +818,20 @@ struct MobileDeviceView: View {
             
             if let profiles = device.configurationProfiles, !profiles.isEmpty {
                 // Search bar
-                SearchBar(text: $profilesSearchText, placeholder: "Filter profiles...")
+                SearchBar(text: Bindable(inventory.profiles).searchText, placeholder: "Filter profiles...")
                 
-                let filteredProfiles = profilesSearchText.isEmpty ? profiles : profiles.filter {
-                    ($0.displayName ?? "").localizedCaseInsensitiveContains(profilesSearchText) ||
-                    ($0.identifier ?? "").localizedCaseInsensitiveContains(profilesSearchText)
-                }
+                let filteredProfiles = inventory.profiles.filter(profiles)
                 
                 if filteredProfiles.isEmpty {
                     EmptyStateView("No profiles match search", icon: "doc.badge.gearshape")
                 } else {
-                    // Pagination
-                    let totalPages = max(1, Int(ceil(Double(filteredProfiles.count) / Double(itemsPerPage))))
-                    let startIndex = (profilesPage - 1) * itemsPerPage
-                    let endIndex = min(startIndex + itemsPerPage, filteredProfiles.count)
-                    let paginatedProfiles = Array(filteredProfiles[startIndex..<endIndex])
-                    
-                    LazyVStack(spacing: 8) {
-                        ForEach(paginatedProfiles) { profile in
-                            profileRow(profile)
-                        }
-                    }
-                    
-                    // Pagination controls
-                    if filteredProfiles.count > itemsPerPage {
-                        PaginationControls(
-                            currentPage: $profilesPage,
-                            totalPages: totalPages,
-                            totalItems: filteredProfiles.count,
-                            startIndex: startIndex,
-                            endIndex: endIndex
-                        )
+                    PaginatedRows(state: inventory.profiles, rows: filteredProfiles) { profile in
+                        profileRow(profile)
                     }
                 }
             } else {
                 EmptyStateView("No configuration profiles", icon: "doc.badge.gearshape")
             }
-        }
-        .onChange(of: profilesSearchText) { _, _ in
-            profilesPage = 1
         }
     }
     
@@ -909,22 +886,22 @@ struct MobileDeviceView: View {
             if let certs = device.certificates, !certs.isEmpty {
                 // Search bar and filters
                 HStack(spacing: 16) {
-                    SearchBar(text: $certificatesSearchText, placeholder: "Filter certificates...")
+                    SearchBar(text: Bindable(inventory.certificates).searchText, placeholder: "Filter certificates...")
                     
                     // Certificate status filter
                     HStack(spacing: 8) {
-                        ForEach(CertificateFilter.allCases, id: \.self) { filter in
+                        ForEach(MobileDeviceInventoryState.CertificateFilter.allCases, id: \.self) { filter in
                             Button {
-                                certificateFilter = filter
+                                inventory.certificateFilter = filter
                             } label: {
                                 Text(filter.rawValue)
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(certificateFilter == filter ? .white : .gray)
+                                    .foregroundColor(inventory.certificateFilter == filter ? .white : .gray)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                                     .background(
                                         Capsule()
-                                            .fill(certificateFilter == filter ? certificateFilterColor(filter) : Color.white.opacity(0.05))
+                                            .fill(inventory.certificateFilter == filter ? certificateFilterColor(filter) : Color.white.opacity(0.05))
                                     )
                             }
                             .buttonStyle(.plain)
@@ -937,42 +914,17 @@ struct MobileDeviceView: View {
                 if filteredCerts.isEmpty {
                     EmptyStateView("No certificates match filters", icon: "checkmark.seal")
                 } else {
-                    // Pagination
-                    let totalPages = max(1, Int(ceil(Double(filteredCerts.count) / Double(itemsPerPage))))
-                    let startIndex = (certificatesPage - 1) * itemsPerPage
-                    let endIndex = min(startIndex + itemsPerPage, filteredCerts.count)
-                    let paginatedCerts = Array(filteredCerts[startIndex..<endIndex])
-                    
-                    LazyVStack(spacing: 8) {
-                        ForEach(paginatedCerts) { cert in
-                            certificateRow(cert)
-                        }
-                    }
-                    
-                    // Pagination controls
-                    if filteredCerts.count > itemsPerPage {
-                        PaginationControls(
-                            currentPage: $certificatesPage,
-                            totalPages: totalPages,
-                            totalItems: filteredCerts.count,
-                            startIndex: startIndex,
-                            endIndex: endIndex
-                        )
+                    PaginatedRows(state: inventory.certificates, rows: filteredCerts) { cert in
+                        certificateRow(cert)
                     }
                 }
             } else {
                 EmptyStateView("No certificates", icon: "checkmark.seal")
             }
         }
-        .onChange(of: certificatesSearchText) { _, _ in
-            certificatesPage = 1
-        }
-        .onChange(of: certificateFilter) { _, _ in
-            certificatesPage = 1
-        }
     }
     
-    private func certificateFilterColor(_ filter: CertificateFilter) -> Color {
+    private func certificateFilterColor(_ filter: MobileDeviceInventoryState.CertificateFilter) -> Color {
         switch filter {
         case .all: return .blue
         case .issued: return .green
@@ -982,18 +934,11 @@ struct MobileDeviceView: View {
     }
     
     private func filteredCertificates(from certs: [MobileDeviceCertificate]) -> [MobileDeviceCertificate] {
-        var result = certs
-        
         // Apply search filter
-        if !certificatesSearchText.isEmpty {
-            result = result.filter {
-                ($0.commonName ?? "").localizedCaseInsensitiveContains(certificatesSearchText) ||
-                ($0.subjectName ?? "").localizedCaseInsensitiveContains(certificatesSearchText)
-            }
-        }
+        var result = inventory.certificates.filter(certs)
         
         // Apply status filter
-        switch certificateFilter {
+        switch inventory.certificateFilter {
         case .all:
             break
         case .issued:
@@ -1166,12 +1111,12 @@ struct MobileDeviceView: View {
             if let groups = device.groups, !groups.isEmpty {
                 // Search bar and filters
                 HStack(spacing: 16) {
-                    SearchBar(text: $groupsSearchText, placeholder: "Filter groups...")
+                    SearchBar(text: Bindable(inventory.groups).searchText, placeholder: "Filter groups...")
                     
                     // Group type toggles
                     HStack(spacing: 8) {
-                        FilterToggle("Smart", isOn: $filterSmartGroups, color: .purple)
-                        FilterToggle("Static", isOn: $filterStaticGroups, color: .blue)
+                        FilterToggle("Smart", isOn: $inventory.filterSmartGroups, color: .purple)
+                        FilterToggle("Static", isOn: $inventory.filterStaticGroups, color: .blue)
                     }
                 }
                 
@@ -1186,8 +1131,8 @@ struct MobileDeviceView: View {
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                         Button("Clear Filters") {
-                            filterSmartGroups = true
-                            filterStaticGroups = true
+                            inventory.filterSmartGroups = true
+                            inventory.filterStaticGroups = true
                         }
                         .font(.system(size: 12))
                         .foregroundColor(.blue)
@@ -1195,65 +1140,24 @@ struct MobileDeviceView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
                 } else {
-                    // Pagination
-                    let totalPages = max(1, Int(ceil(Double(filteredGroupsList.count) / Double(itemsPerPage))))
-                    let startIndex = (groupsPage - 1) * itemsPerPage
-                    let endIndex = min(startIndex + itemsPerPage, filteredGroupsList.count)
-                    let paginatedGroups = Array(filteredGroupsList[startIndex..<endIndex])
-                    
-                    LazyVStack(spacing: 8) {
-                        ForEach(paginatedGroups) { group in
-                            groupRow(group)
-                        }
-                    }
-                    
-                    // Pagination controls
-                    if filteredGroupsList.count > itemsPerPage {
-                        PaginationControls(
-                            currentPage: $groupsPage,
-                            totalPages: totalPages,
-                            totalItems: filteredGroupsList.count,
-                            startIndex: startIndex,
-                            endIndex: endIndex
-                        )
+                    PaginatedRows(state: inventory.groups, rows: filteredGroupsList) { group in
+                        groupRow(group)
                     }
                 }
             } else {
                 EmptyStateView("No group memberships", icon: "person.3")
             }
         }
-        .onChange(of: groupsSearchText) { _, _ in
-            groupsPage = 1
-        }
-        .onChange(of: filterSmartGroups) { _, _ in
-            groupsPage = 1
-        }
-        .onChange(of: filterStaticGroups) { _, _ in
-            groupsPage = 1
-        }
     }
     
     private func filteredGroups(from groups: [MobileDeviceGroup]) -> [MobileDeviceGroup] {
-        var result = groups
+        let showSmart = inventory.filterSmartGroups
+        let showStatic = inventory.filterStaticGroups
         
-        // Apply search filter
-        if !groupsSearchText.isEmpty {
-            result = result.filter {
-                ($0.groupName ?? "").localizedCaseInsensitiveContains(groupsSearchText)
-            }
+        // Apply search and type filters
+        return inventory.groups.filter(groups) { group in
+            group.smart == true ? showSmart : showStatic
         }
-        
-        // Apply type filters
-        if !filterSmartGroups || !filterStaticGroups {
-            result = result.filter { group in
-                let isSmart = group.smart == true
-                if filterSmartGroups && isSmart { return true }
-                if filterStaticGroups && !isSmart { return true }
-                return false
-            }
-        }
-        
-        return result
     }
     
     private func groupRow(_ group: MobileDeviceGroup) -> some View {
@@ -1314,45 +1218,20 @@ struct MobileDeviceView: View {
             
             if let attrs = device.extensionAttributes, !attrs.isEmpty {
                 // Search bar
-                SearchBar(text: $extensionAttributesSearchText, placeholder: "Filter extension attributes...")
+                SearchBar(text: Bindable(inventory.extensionAttributes).searchText, placeholder: "Filter extension attributes...")
                 
-                let filteredAttrs = extensionAttributesSearchText.isEmpty ? attrs : attrs.filter {
-                    ($0.name ?? "").localizedCaseInsensitiveContains(extensionAttributesSearchText) ||
-                    ($0.value?.joined(separator: " ") ?? "").localizedCaseInsensitiveContains(extensionAttributesSearchText)
-                }
+                let filteredAttrs = inventory.extensionAttributes.filter(attrs)
                 
                 if filteredAttrs.isEmpty {
                     EmptyStateView("No attributes match search", icon: "list.bullet.rectangle")
                 } else {
-                    // Pagination
-                    let totalPages = max(1, Int(ceil(Double(filteredAttrs.count) / Double(itemsPerPage))))
-                    let startIndex = (extensionAttributesPage - 1) * itemsPerPage
-                    let endIndex = min(startIndex + itemsPerPage, filteredAttrs.count)
-                    let paginatedAttrs = Array(filteredAttrs[startIndex..<endIndex])
-                    
-                    LazyVStack(spacing: 8) {
-                        ForEach(paginatedAttrs) { attr in
-                            extensionAttributeRow(attr)
-                        }
-                    }
-                    
-                    // Pagination controls
-                    if filteredAttrs.count > itemsPerPage {
-                        PaginationControls(
-                            currentPage: $extensionAttributesPage,
-                            totalPages: totalPages,
-                            totalItems: filteredAttrs.count,
-                            startIndex: startIndex,
-                            endIndex: endIndex
-                        )
+                    PaginatedRows(state: inventory.extensionAttributes, rows: filteredAttrs) { attr in
+                        extensionAttributeRow(attr)
                     }
                 }
             } else {
                 EmptyStateView("No extension attributes", icon: "list.bullet.rectangle")
             }
-        }
-        .onChange(of: extensionAttributesSearchText) { _, _ in
-            extensionAttributesPage = 1
         }
     }
     
