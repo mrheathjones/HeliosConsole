@@ -12,7 +12,7 @@
 //
 //  HOW IT READS (and why):
 //  Domains are read via `UserDefaults(suiteName:)` — NEVER
-//  `persistentDomain(forName:)` (Journal 2026-07-10 bug) and never with
+//  `persistentDomain(forName:)` (it skips the MDM-managed layer) and never with
 //  suiteName == the app's own bundle ID (Foundation rejects it; all five
 //  domains differ from both bundle IDs). Because BOTH apps are
 //  non-sandboxed, a suite read transparently surfaces

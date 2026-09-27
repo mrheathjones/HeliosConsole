@@ -24,8 +24,8 @@ companion app for quick access.
   (see [Jamf API role privileges](#jamf-api-role-privileges))
 - **APIs:** Jamf Pro V1 (computers), V2 (mobile devices), ABM (AppleCare via ES256 JWT)
 
-See [`docs/CLAUDE.md`](docs/CLAUDE.md) and [`docs/Journal.md`](docs/Journal.md) for the full
-architecture narrative, conventions, and gotchas.
+See [`docs/CLAUDE.md`](docs/CLAUDE.md) for the full architecture narrative,
+conventions, and gotchas.
 
 ## Requirements
 

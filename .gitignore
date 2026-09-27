@@ -35,5 +35,8 @@ DerivedData/
 # Distribution packages
 dist/
 
+# Local-only development journal (never commit)
+docs/Journal.md
+
 # Machine-local deployment overrides (org/machine-specific values)
 Deployment/build-pkg.local.sh
