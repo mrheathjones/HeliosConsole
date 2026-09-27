@@ -7,7 +7,8 @@ going public — tracked here to work through after the initial GitHub release.
 
 1. `DeviceView` decomposition
 2. Shared component/state extraction (pagination/filter/search)
-3. Efficiency fixes (N+1 search, redundant health-metric passes)
+3. Efficiency fixes (N+1 search, redundant health-metric passes) — one PR
+   per finding in §2, in the order listed there
 4. `AbmAPIService` auth/business-logic split
 5. Concurrency modernization sweep
 
