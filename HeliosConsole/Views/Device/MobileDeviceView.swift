@@ -155,15 +155,15 @@ struct MobileDeviceView: View {
                         .foregroundColor(.white)
                     
                     if device.isSupervised {
-                        statusBadge("Supervised", color: .blue)
+                        StatusBadge("Supervised", color: .blue)
                     }
                     
                     if device.managed ?? false {
-                        statusBadge("Managed", color: .green)
+                        StatusBadge("Managed", color: .green)
                     }
                     
                     // Platform badge
-                    statusBadge(device.platformType.rawValue, color: device.platformType.color)
+                    StatusBadge(device.platformType.rawValue, color: device.platformType.color)
                 }
                 
                 HStack(spacing: 20) {
@@ -298,15 +298,6 @@ struct MobileDeviceView: View {
         )
     }
     
-    private func statusBadge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(color))
-    }
-    
     private func headerInfoItem(icon: String, text: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
@@ -430,7 +421,7 @@ struct MobileDeviceView: View {
     
     private var overviewSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Device Overview", icon: "square.grid.2x2")
+            SectionHeader("Device Overview", icon: "square.grid.2x2")
             
             // Quick stats grid
             LazyVGrid(columns: [
@@ -469,19 +460,19 @@ struct MobileDeviceView: View {
             HStack(alignment: .top, spacing: 20) {
                 // Left column
                 VStack(spacing: 20) {
-                    detailCard(title: "Device Information") {
-                        detailRow("Name", device.name ?? "N/A")
-                        detailRow("Serial Number", device.serialNumber ?? "N/A")
-                        detailRow("Model", device.model)
-                        detailRow("Model Identifier", device.modelIdentifier ?? "N/A")
-                        detailRow("Platform", device.platformType.rawValue)
+                    DetailCard(title: "Device Information") {
+                        DetailRow("Name", device.name ?? "N/A")
+                        DetailRow("Serial Number", device.serialNumber ?? "N/A")
+                        DetailRow("Model", device.model)
+                        DetailRow("Model Identifier", device.modelIdentifier ?? "N/A")
+                        DetailRow("Platform", device.platformType.rawValue)
                     }
                     
-                    detailCard(title: "Operating System") {
-                        detailRow("Version", device.osVersion ?? "N/A")
-                        detailRow("Build", device.osBuild ?? "N/A")
+                    DetailCard(title: "Operating System") {
+                        DetailRow("Version", device.osVersion ?? "N/A")
+                        DetailRow("Build", device.osBuild ?? "N/A")
                         if let supplemental = device.osSupplementalBuildVersion {
-                            detailRow("Supplemental", supplemental)
+                            DetailRow("Supplemental", supplemental)
                         }
                     }
                 }
@@ -489,19 +480,19 @@ struct MobileDeviceView: View {
                 
                 // Right column
                 VStack(spacing: 20) {
-                    detailCard(title: "Management Status") {
-                        detailRow("Managed", device.managed ?? false ? "Yes" : "No")
-                        detailRow("Supervised", device.isSupervised ? "Yes" : "No")
-                        detailRow("Site", device.site?.name ?? "None")
+                    DetailCard(title: "Management Status") {
+                        DetailRow("Managed", device.managed ?? false ? "Yes" : "No")
+                        DetailRow("Supervised", device.isSupervised ? "Yes" : "No")
+                        DetailRow("Site", device.site?.name ?? "None")
                         if let enrollmentMethod = device.enrollmentMethod {
-                            detailRow("Enrollment", enrollmentMethod)
+                            DetailRow("Enrollment", enrollmentMethod)
                         }
                     }
                     
-                    detailCard(title: "Last Activity") {
-                        detailRow("Last Inventory", formatDate(device.lastInventoryUpdateTimestamp))
-                        detailRow("Initial Enrollment", formatDate(device.initialEntryTimestamp))
-                        detailRow("Last Enrollment", formatDate(device.lastEnrollmentTimestamp))
+                    DetailCard(title: "Last Activity") {
+                        DetailRow("Last Inventory", formatDate(device.lastInventoryUpdateTimestamp))
+                        DetailRow("Initial Enrollment", formatDate(device.initialEntryTimestamp))
+                        DetailRow("Last Enrollment", formatDate(device.lastEnrollmentTimestamp))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -545,19 +536,19 @@ struct MobileDeviceView: View {
     
     private var hardwareSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Hardware", icon: "cpu")
+            SectionHeader("Hardware", icon: "cpu")
             
             HStack(alignment: .top, spacing: 20) {
                 VStack(spacing: 20) {
-                    detailCard(title: "Storage") {
+                    DetailCard(title: "Storage") {
                         if let capacity = device.capacityMb {
-                            detailRow("Total Capacity", formatStorage(capacity))
+                            DetailRow("Total Capacity", formatStorage(capacity))
                         }
                         if let available = device.availableMb {
-                            detailRow("Available", formatStorage(available))
+                            DetailRow("Available", formatStorage(available))
                         }
                         if let used = device.percentageUsed {
-                            detailRow("Used", "\(used)%")
+                            DetailRow("Used", "\(used)%")
                             
                             // Storage bar
                             GeometryReader { geometry in
@@ -577,9 +568,9 @@ struct MobileDeviceView: View {
                     }
                     
                     if device.batteryLevel != nil {
-                        detailCard(title: "Battery") {
+                        DetailCard(title: "Battery") {
                             if let level = device.batteryLevel {
-                                detailRow("Level", "\(level)%")
+                                DetailRow("Level", "\(level)%")
                                 
                                 // Battery bar
                                 GeometryReader { geometry in
@@ -597,7 +588,7 @@ struct MobileDeviceView: View {
                                 .padding(.top, 4)
                             }
                             if let health = device.ios?.batteryHealth ?? device.visionos?.batteryHealth {
-                                detailRow("Health", health)
+                                DetailRow("Health", health)
                             }
                         }
                     }
@@ -605,15 +596,15 @@ struct MobileDeviceView: View {
                 .frame(maxWidth: .infinity)
                 
                 VStack(spacing: 20) {
-                    detailCard(title: "Network") {
-                        detailRow("IP Address", device.ipAddress ?? "N/A")
-                        detailRow("Wi-Fi MAC", device.wifiMacAddress ?? "N/A")
-                        detailRow("Bluetooth MAC", device.bluetoothMacAddress ?? "N/A")
+                    DetailCard(title: "Network") {
+                        DetailRow("IP Address", device.ipAddress ?? "N/A")
+                        DetailRow("Wi-Fi MAC", device.wifiMacAddress ?? "N/A")
+                        DetailRow("Bluetooth MAC", device.bluetoothMacAddress ?? "N/A")
                     }
                     
-                    detailCard(title: "Identifiers") {
-                        detailRow("UDID", device.udid ?? "N/A")
-                        detailRow("Management ID", device.managementId ?? "N/A")
+                    DetailCard(title: "Identifiers") {
+                        DetailRow("UDID", device.udid ?? "N/A")
+                        DetailRow("Management ID", device.managementId ?? "N/A")
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -625,19 +616,19 @@ struct MobileDeviceView: View {
     
     private var securitySection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Security", icon: "shield.checkered")
+            SectionHeader("Security", icon: "shield.checkered")
             
             if let security = device.security {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(spacing: 20) {
-                        detailCard(title: "Passcode & Protection") {
+                        DetailCard(title: "Passcode & Protection") {
                             securityRow("Passcode Present", security.passcodePresent ?? false)
                             securityRow("Passcode Compliant", security.passcodeCompliant ?? false)
                             securityRow("Passcode Compliant with Profile", security.passcodeCompliantWithProfile ?? false)
                             securityRow("Data Protected", security.dataProtected ?? false)
                         }
                         
-                        detailCard(title: "Device Security") {
+                        DetailCard(title: "Device Security") {
                             securityRow("Activation Lock", security.activationLockEnabled ?? false)
                             securityRow("Jailbreak Detected", security.jailBreakDetected ?? false, invertColors: true)
                         }
@@ -645,26 +636,26 @@ struct MobileDeviceView: View {
                     .frame(maxWidth: .infinity)
                     
                     VStack(spacing: 20) {
-                        detailCard(title: "Encryption") {
+                        DetailCard(title: "Encryption") {
                             securityRow("Block Level Encryption Capable", security.blockLevelEncryptionCapable ?? false)
                             securityRow("File Level Encryption Capable", security.fileLevelEncryptionCapable ?? false)
                             if let hw = security.hardwareEncryption {
-                                detailRow("Hardware Encryption", "\(hw)")
+                                DetailRow("Hardware Encryption", "\(hw)")
                             }
                         }
                         
                         if security.attestationStatus != nil {
-                            detailCard(title: "Attestation") {
-                                detailRow("Status", security.attestationStatus ?? "N/A")
-                                detailRow("Last Attempt", formatDate(security.lastAttestationAttemptDate))
-                                detailRow("Last Success", formatDate(security.lastSuccessfulAttestationDate))
+                            DetailCard(title: "Attestation") {
+                                DetailRow("Status", security.attestationStatus ?? "N/A")
+                                DetailRow("Last Attempt", formatDate(security.lastAttestationAttemptDate))
+                                DetailRow("Last Success", formatDate(security.lastSuccessfulAttestationDate))
                             }
                         }
                     }
                     .frame(maxWidth: .infinity)
                 }
             } else {
-                emptyStateView("No security information available", icon: "shield.checkered")
+                EmptyStateView("No security information available", icon: "shield.checkered")
             }
         }
     }
@@ -691,29 +682,29 @@ struct MobileDeviceView: View {
     
     private var userAndLocationSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("User & Location", icon: "person.fill")
+            SectionHeader("User & Location", icon: "person.fill")
             
             if let location = device.location,
                (location.username != nil || location.realName != nil || location.emailAddress != nil) {
                 HStack(alignment: .top, spacing: 20) {
-                    detailCard(title: "Assigned User") {
-                        detailRow("Username", location.username ?? "N/A")
-                        detailRow("Real Name", location.realName ?? "N/A")
-                        detailRow("Email", location.emailAddress ?? "N/A")
-                        detailRow("Position", location.position ?? "N/A")
-                        detailRow("Phone", location.phoneNumber ?? "N/A")
+                    DetailCard(title: "Assigned User") {
+                        DetailRow("Username", location.username ?? "N/A")
+                        DetailRow("Real Name", location.realName ?? "N/A")
+                        DetailRow("Email", location.emailAddress ?? "N/A")
+                        DetailRow("Position", location.position ?? "N/A")
+                        DetailRow("Phone", location.phoneNumber ?? "N/A")
                     }
                     .frame(maxWidth: .infinity)
                     
-                    detailCard(title: "Location") {
-                        detailRow("Room", location.room ?? "N/A")
-                        detailRow("Building ID", location.buildingId ?? "N/A")
-                        detailRow("Department ID", location.departmentId ?? "N/A")
+                    DetailCard(title: "Location") {
+                        DetailRow("Room", location.room ?? "N/A")
+                        DetailRow("Building ID", location.buildingId ?? "N/A")
+                        DetailRow("Department ID", location.departmentId ?? "N/A")
                     }
                     .frame(maxWidth: .infinity)
                 }
             } else {
-                emptyStateView("No user assigned to this device", icon: "person.crop.circle.badge.questionmark")
+                EmptyStateView("No user assigned to this device", icon: "person.crop.circle.badge.questionmark")
             }
         }
     }
@@ -722,11 +713,11 @@ struct MobileDeviceView: View {
     
     private var applicationsSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Applications (\(device.applications?.count ?? 0))", icon: "app.badge")
+            SectionHeader("Applications (\(device.applications?.count ?? 0))", icon: "app.badge")
             
             if let apps = device.applications, !apps.isEmpty {
                 // Search bar
-                searchBar(text: $applicationsSearchText, placeholder: "Filter applications...")
+                SearchBar(text: $applicationsSearchText, placeholder: "Filter applications...")
                 
                 let filteredApps = applicationsSearchText.isEmpty ? apps : apps.filter {
                     ($0.name ?? "").localizedCaseInsensitiveContains(applicationsSearchText) ||
@@ -734,7 +725,7 @@ struct MobileDeviceView: View {
                 }
                 
                 if filteredApps.isEmpty {
-                    emptyStateView("No applications match search", icon: "app.badge")
+                    EmptyStateView("No applications match search", icon: "app.badge")
                 } else {
                     // Pagination
                     let totalPages = max(1, Int(ceil(Double(filteredApps.count) / Double(itemsPerPage))))
@@ -750,7 +741,7 @@ struct MobileDeviceView: View {
                     
                     // Pagination controls
                     if filteredApps.count > itemsPerPage {
-                        paginationControls(
+                        PaginationControls(
                             currentPage: $applicationsPage,
                             totalPages: totalPages,
                             totalItems: filteredApps.count,
@@ -760,7 +751,7 @@ struct MobileDeviceView: View {
                     }
                 }
             } else {
-                emptyStateView("No applications installed", icon: "app.badge")
+                EmptyStateView("No applications installed", icon: "app.badge")
             }
         }
         .onChange(of: applicationsSearchText) { _, _ in
@@ -821,11 +812,11 @@ struct MobileDeviceView: View {
     
     private var profilesSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Configuration Profiles (\(device.configurationProfiles?.count ?? 0))", icon: "doc.badge.gearshape")
+            SectionHeader("Configuration Profiles (\(device.configurationProfiles?.count ?? 0))", icon: "doc.badge.gearshape")
             
             if let profiles = device.configurationProfiles, !profiles.isEmpty {
                 // Search bar
-                searchBar(text: $profilesSearchText, placeholder: "Filter profiles...")
+                SearchBar(text: $profilesSearchText, placeholder: "Filter profiles...")
                 
                 let filteredProfiles = profilesSearchText.isEmpty ? profiles : profiles.filter {
                     ($0.displayName ?? "").localizedCaseInsensitiveContains(profilesSearchText) ||
@@ -833,7 +824,7 @@ struct MobileDeviceView: View {
                 }
                 
                 if filteredProfiles.isEmpty {
-                    emptyStateView("No profiles match search", icon: "doc.badge.gearshape")
+                    EmptyStateView("No profiles match search", icon: "doc.badge.gearshape")
                 } else {
                     // Pagination
                     let totalPages = max(1, Int(ceil(Double(filteredProfiles.count) / Double(itemsPerPage))))
@@ -849,7 +840,7 @@ struct MobileDeviceView: View {
                     
                     // Pagination controls
                     if filteredProfiles.count > itemsPerPage {
-                        paginationControls(
+                        PaginationControls(
                             currentPage: $profilesPage,
                             totalPages: totalPages,
                             totalItems: filteredProfiles.count,
@@ -859,7 +850,7 @@ struct MobileDeviceView: View {
                     }
                 }
             } else {
-                emptyStateView("No configuration profiles", icon: "doc.badge.gearshape")
+                EmptyStateView("No configuration profiles", icon: "doc.badge.gearshape")
             }
         }
         .onChange(of: profilesSearchText) { _, _ in
@@ -913,12 +904,12 @@ struct MobileDeviceView: View {
     
     private var certificatesSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Certificates (\(device.certificates?.count ?? 0))", icon: "checkmark.seal")
+            SectionHeader("Certificates (\(device.certificates?.count ?? 0))", icon: "checkmark.seal")
             
             if let certs = device.certificates, !certs.isEmpty {
                 // Search bar and filters
                 HStack(spacing: 16) {
-                    searchBar(text: $certificatesSearchText, placeholder: "Filter certificates...")
+                    SearchBar(text: $certificatesSearchText, placeholder: "Filter certificates...")
                     
                     // Certificate status filter
                     HStack(spacing: 8) {
@@ -944,7 +935,7 @@ struct MobileDeviceView: View {
                 let filteredCerts = filteredCertificates(from: certs)
                 
                 if filteredCerts.isEmpty {
-                    emptyStateView("No certificates match filters", icon: "checkmark.seal")
+                    EmptyStateView("No certificates match filters", icon: "checkmark.seal")
                 } else {
                     // Pagination
                     let totalPages = max(1, Int(ceil(Double(filteredCerts.count) / Double(itemsPerPage))))
@@ -960,7 +951,7 @@ struct MobileDeviceView: View {
                     
                     // Pagination controls
                     if filteredCerts.count > itemsPerPage {
-                        paginationControls(
+                        PaginationControls(
                             currentPage: $certificatesPage,
                             totalPages: totalPages,
                             totalItems: filteredCerts.count,
@@ -970,7 +961,7 @@ struct MobileDeviceView: View {
                     }
                 }
             } else {
-                emptyStateView("No certificates", icon: "checkmark.seal")
+                EmptyStateView("No certificates", icon: "checkmark.seal")
             }
         }
         .onChange(of: certificatesSearchText) { _, _ in
@@ -1122,46 +1113,46 @@ struct MobileDeviceView: View {
     
     private var networkSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Network", icon: "antenna.radiowaves.left.and.right")
+            SectionHeader("Network", icon: "antenna.radiowaves.left.and.right")
             
             if let network = device.network {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(spacing: 20) {
-                        detailCard(title: "Carrier Information") {
-                            detailRow("Current Carrier", network.currentCarrierNetwork ?? "N/A")
-                            detailRow("Home Carrier", network.homeCarrierNetwork ?? "N/A")
-                            detailRow("Carrier Settings", network.carrierSettingsVersion ?? "N/A")
-                            detailRow("Phone Number", network.phoneNumber ?? "N/A")
+                        DetailCard(title: "Carrier Information") {
+                            DetailRow("Current Carrier", network.currentCarrierNetwork ?? "N/A")
+                            DetailRow("Home Carrier", network.homeCarrierNetwork ?? "N/A")
+                            DetailRow("Carrier Settings", network.carrierSettingsVersion ?? "N/A")
+                            DetailRow("Phone Number", network.phoneNumber ?? "N/A")
                         }
                         
-                        detailCard(title: "Cellular Identifiers") {
-                            detailRow("IMEI", network.imei ?? "N/A")
-                            detailRow("ICCID", network.iccid ?? "N/A")
-                            detailRow("MEID", network.meid ?? "N/A")
-                            detailRow("EID", network.eid ?? "N/A")
+                        DetailCard(title: "Cellular Identifiers") {
+                            DetailRow("IMEI", network.imei ?? "N/A")
+                            DetailRow("ICCID", network.iccid ?? "N/A")
+                            DetailRow("MEID", network.meid ?? "N/A")
+                            DetailRow("EID", network.eid ?? "N/A")
                         }
                     }
                     .frame(maxWidth: .infinity)
                     
                     VStack(spacing: 20) {
-                        detailCard(title: "Network Status") {
+                        DetailCard(title: "Network Status") {
                             securityRow("Roaming", network.roaming ?? false)
                             securityRow("Data Roaming Enabled", network.dataRoamingEnabled ?? false)
                             securityRow("Voice Roaming Enabled", network.voiceRoamingEnabled ?? false)
                             securityRow("Personal Hotspot", network.personalHotspotEnabled ?? false)
                         }
                         
-                        detailCard(title: "Mobile Network Codes") {
-                            detailRow("Current MCC", network.currentMobileCountryCode ?? "N/A")
-                            detailRow("Current MNC", network.currentMobileNetworkCode ?? "N/A")
-                            detailRow("Home MCC", network.homeMobileCountryCode ?? "N/A")
-                            detailRow("Home MNC", network.homeMobileNetworkCode ?? "N/A")
+                        DetailCard(title: "Mobile Network Codes") {
+                            DetailRow("Current MCC", network.currentMobileCountryCode ?? "N/A")
+                            DetailRow("Current MNC", network.currentMobileNetworkCode ?? "N/A")
+                            DetailRow("Home MCC", network.homeMobileCountryCode ?? "N/A")
+                            DetailRow("Home MNC", network.homeMobileNetworkCode ?? "N/A")
                         }
                     }
                     .frame(maxWidth: .infinity)
                 }
             } else {
-                emptyStateView("No network information available", icon: "antenna.radiowaves.left.and.right")
+                EmptyStateView("No network information available", icon: "antenna.radiowaves.left.and.right")
             }
         }
     }
@@ -1170,17 +1161,17 @@ struct MobileDeviceView: View {
     
     private var groupsSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Group Memberships (\(device.groups?.count ?? 0))", icon: "person.3")
+            SectionHeader("Group Memberships (\(device.groups?.count ?? 0))", icon: "person.3")
             
             if let groups = device.groups, !groups.isEmpty {
                 // Search bar and filters
                 HStack(spacing: 16) {
-                    searchBar(text: $groupsSearchText, placeholder: "Filter groups...")
+                    SearchBar(text: $groupsSearchText, placeholder: "Filter groups...")
                     
                     // Group type toggles
                     HStack(spacing: 8) {
-                        filterToggle("Smart", isOn: $filterSmartGroups, color: .purple)
-                        filterToggle("Static", isOn: $filterStaticGroups, color: .blue)
+                        FilterToggle("Smart", isOn: $filterSmartGroups, color: .purple)
+                        FilterToggle("Static", isOn: $filterStaticGroups, color: .blue)
                     }
                 }
                 
@@ -1218,7 +1209,7 @@ struct MobileDeviceView: View {
                     
                     // Pagination controls
                     if filteredGroupsList.count > itemsPerPage {
-                        paginationControls(
+                        PaginationControls(
                             currentPage: $groupsPage,
                             totalPages: totalPages,
                             totalItems: filteredGroupsList.count,
@@ -1228,7 +1219,7 @@ struct MobileDeviceView: View {
                     }
                 }
             } else {
-                emptyStateView("No group memberships", icon: "person.3")
+                EmptyStateView("No group memberships", icon: "person.3")
             }
         }
         .onChange(of: groupsSearchText) { _, _ in
@@ -1319,11 +1310,11 @@ struct MobileDeviceView: View {
     
     private var extensionAttributesSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Extension Attributes (\(device.extensionAttributes?.count ?? 0))", icon: "list.bullet.rectangle")
+            SectionHeader("Extension Attributes (\(device.extensionAttributes?.count ?? 0))", icon: "list.bullet.rectangle")
             
             if let attrs = device.extensionAttributes, !attrs.isEmpty {
                 // Search bar
-                searchBar(text: $extensionAttributesSearchText, placeholder: "Filter extension attributes...")
+                SearchBar(text: $extensionAttributesSearchText, placeholder: "Filter extension attributes...")
                 
                 let filteredAttrs = extensionAttributesSearchText.isEmpty ? attrs : attrs.filter {
                     ($0.name ?? "").localizedCaseInsensitiveContains(extensionAttributesSearchText) ||
@@ -1331,7 +1322,7 @@ struct MobileDeviceView: View {
                 }
                 
                 if filteredAttrs.isEmpty {
-                    emptyStateView("No attributes match search", icon: "list.bullet.rectangle")
+                    EmptyStateView("No attributes match search", icon: "list.bullet.rectangle")
                 } else {
                     // Pagination
                     let totalPages = max(1, Int(ceil(Double(filteredAttrs.count) / Double(itemsPerPage))))
@@ -1347,7 +1338,7 @@ struct MobileDeviceView: View {
                     
                     // Pagination controls
                     if filteredAttrs.count > itemsPerPage {
-                        paginationControls(
+                        PaginationControls(
                             currentPage: $extensionAttributesPage,
                             totalPages: totalPages,
                             totalItems: filteredAttrs.count,
@@ -1357,7 +1348,7 @@ struct MobileDeviceView: View {
                     }
                 }
             } else {
-                emptyStateView("No extension attributes", icon: "list.bullet.rectangle")
+                EmptyStateView("No extension attributes", icon: "list.bullet.rectangle")
             }
         }
         .onChange(of: extensionAttributesSearchText) { _, _ in
@@ -1432,34 +1423,34 @@ struct MobileDeviceView: View {
     
     private var purchasingSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Purchasing", icon: "dollarsign.circle")
+            SectionHeader("Purchasing", icon: "dollarsign.circle")
             
             if let purchasing = device.purchasing {
                 HStack(alignment: .top, spacing: 20) {
-                    detailCard(title: "Purchase Information") {
-                        detailRow("Purchased", purchasing.purchased ?? false ? "Yes" : "No")
-                        detailRow("Leased", purchasing.leased ?? false ? "Yes" : "No")
-                        detailRow("PO Number", purchasing.poNumber ?? "N/A")
-                        detailRow("Vendor", purchasing.vendor ?? "N/A")
-                        detailRow("Purchase Price", purchasing.purchasePrice ?? "N/A")
-                        detailRow("Purchasing Account", purchasing.purchasingAccount ?? "N/A")
-                        detailRow("Purchasing Contact", purchasing.purchasingContact ?? "N/A")
+                    DetailCard(title: "Purchase Information") {
+                        DetailRow("Purchased", purchasing.purchased ?? false ? "Yes" : "No")
+                        DetailRow("Leased", purchasing.leased ?? false ? "Yes" : "No")
+                        DetailRow("PO Number", purchasing.poNumber ?? "N/A")
+                        DetailRow("Vendor", purchasing.vendor ?? "N/A")
+                        DetailRow("Purchase Price", purchasing.purchasePrice ?? "N/A")
+                        DetailRow("Purchasing Account", purchasing.purchasingAccount ?? "N/A")
+                        DetailRow("Purchasing Contact", purchasing.purchasingContact ?? "N/A")
                     }
                     .frame(maxWidth: .infinity)
                     
-                    detailCard(title: "Dates & Warranty") {
-                        detailRow("PO Date", formatDate(purchasing.poDate))
-                        detailRow("Warranty Expires", formatDate(purchasing.warrantyExpiresDate))
-                        detailRow("Lease Expires", formatDate(purchasing.leaseExpiresDate))
+                    DetailCard(title: "Dates & Warranty") {
+                        DetailRow("PO Date", formatDate(purchasing.poDate))
+                        DetailRow("Warranty Expires", formatDate(purchasing.warrantyExpiresDate))
+                        DetailRow("Lease Expires", formatDate(purchasing.leaseExpiresDate))
                         if let lifeExpectancy = purchasing.lifeExpectancy, lifeExpectancy > 0 {
-                            detailRow("Life Expectancy", "\(lifeExpectancy) years")
+                            DetailRow("Life Expectancy", "\(lifeExpectancy) years")
                         }
-                        detailRow("AppleCare ID", purchasing.appleCareId ?? "N/A")
+                        DetailRow("AppleCare ID", purchasing.appleCareId ?? "N/A")
                     }
                     .frame(maxWidth: .infinity)
                 }
             } else {
-                emptyStateView("No purchasing information", icon: "dollarsign.circle")
+                EmptyStateView("No purchasing information", icon: "dollarsign.circle")
             }
         }
     }
@@ -1468,219 +1459,42 @@ struct MobileDeviceView: View {
     
     private var managementSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            sectionHeader("Management", icon: "gearshape.2")
+            SectionHeader("Management", icon: "gearshape.2")
             
             HStack(alignment: .top, spacing: 20) {
                 VStack(spacing: 20) {
-                    detailCard(title: "MDM Status") {
-                        detailRow("Managed", device.managed ?? false ? "Yes" : "No")
-                        detailRow("Supervised", device.isSupervised ? "Yes" : "No")
-                        detailRow("DDM Enabled", device.declarativeDeviceManagementEnabled ?? false ? "Yes" : "No")
-                        detailRow("Enrollment Valid", device.enrollmentSessionTokenValid ?? false ? "Yes" : "No")
+                    DetailCard(title: "MDM Status") {
+                        DetailRow("Managed", device.managed ?? false ? "Yes" : "No")
+                        DetailRow("Supervised", device.isSupervised ? "Yes" : "No")
+                        DetailRow("DDM Enabled", device.declarativeDeviceManagementEnabled ?? false ? "Yes" : "No")
+                        DetailRow("Enrollment Valid", device.enrollmentSessionTokenValid ?? false ? "Yes" : "No")
                     }
                     
-                    detailCard(title: "Enrollment") {
-                        detailRow("Method", device.enrollmentMethod ?? "N/A")
-                        detailRow("Device Ownership", device.deviceOwnershipLevel ?? "N/A")
-                        detailRow("Last Enrollment", formatDate(device.lastEnrollmentTimestamp))
-                        detailRow("MDM Profile Expires", formatDate(device.mdmProfileExpirationTimestamp))
+                    DetailCard(title: "Enrollment") {
+                        DetailRow("Method", device.enrollmentMethod ?? "N/A")
+                        DetailRow("Device Ownership", device.deviceOwnershipLevel ?? "N/A")
+                        DetailRow("Last Enrollment", formatDate(device.lastEnrollmentTimestamp))
+                        DetailRow("MDM Profile Expires", formatDate(device.mdmProfileExpirationTimestamp))
                     }
                 }
                 .frame(maxWidth: .infinity)
                 
                 VStack(spacing: 20) {
-                    detailCard(title: "Site & Location") {
-                        detailRow("Site", device.site?.name ?? "None")
-                        detailRow("Site ID", device.site?.id ?? "N/A")
-                        detailRow("Time Zone", device.timeZone ?? "N/A")
+                    DetailCard(title: "Site & Location") {
+                        DetailRow("Site", device.site?.name ?? "None")
+                        DetailRow("Site ID", device.site?.id ?? "N/A")
+                        DetailRow("Time Zone", device.timeZone ?? "N/A")
                     }
                     
-                    detailCard(title: "Identifiers") {
-                        detailRow("Jamf ID", device.id)
-                        detailRow("Management ID", device.managementId ?? "N/A")
-                        detailRow("Asset Tag", device.assetTag ?? "N/A")
+                    DetailCard(title: "Identifiers") {
+                        DetailRow("Jamf ID", device.id)
+                        DetailRow("Management ID", device.managementId ?? "N/A")
+                        DetailRow("Asset Tag", device.assetTag ?? "N/A")
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
         }
-    }
-    
-    // MARK: - Helper Views
-    
-    private func sectionHeader(_ title: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundColor(.blue)
-            
-            Text(title)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.white)
-            
-            Spacer()
-        }
-    }
-    
-    private func detailCard(title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray)
-                .textCase(.uppercase)
-            
-            VStack(spacing: 12) {
-                content()
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.03))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
-        )
-    }
-    
-    private func detailRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(.gray)
-            
-            Spacer()
-            
-            Text(value)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-    
-    private func searchBar(text: Binding<String>, placeholder: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
-            
-            TextField(placeholder, text: text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .foregroundColor(.white)
-            
-            if !text.wrappedValue.isEmpty {
-                Button {
-                    text.wrappedValue = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-    }
-    
-    private func filterToggle(_ label: String, isOn: Binding<Bool>, color: Color) -> some View {
-        Button {
-            isOn.wrappedValue.toggle()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 12))
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundColor(isOn.wrappedValue ? color : .gray)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(isOn.wrappedValue ? color.opacity(0.15) : Color.white.opacity(0.05))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(isOn.wrappedValue ? color.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-    
-    private func paginationControls(
-        currentPage: Binding<Int>,
-        totalPages: Int,
-        totalItems: Int,
-        startIndex: Int,
-        endIndex: Int
-    ) -> some View {
-        HStack {
-            Text("Showing \(startIndex + 1)-\(endIndex) of \(totalItems)")
-                .font(.system(size: 12))
-                .foregroundColor(.gray)
-            
-            Spacer()
-            
-            HStack(spacing: 8) {
-                Button {
-                    if currentPage.wrappedValue > 1 {
-                        currentPage.wrappedValue -= 1
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(currentPage.wrappedValue > 1 ? .white : .gray.opacity(0.5))
-                        .frame(width: 28, height: 28)
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-                .disabled(currentPage.wrappedValue <= 1)
-                
-                Text("\(currentPage.wrappedValue) / \(totalPages)")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                    .frame(minWidth: 60)
-                
-                Button {
-                    if currentPage.wrappedValue < totalPages {
-                        currentPage.wrappedValue += 1
-                    }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(currentPage.wrappedValue < totalPages ? .white : .gray.opacity(0.5))
-                        .frame(width: 28, height: 28)
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-                .disabled(currentPage.wrappedValue >= totalPages)
-            }
-        }
-        .padding(.top, 16)
-    }
-    
-    private func emptyStateView(_ message: String, icon: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 40, weight: .light))
-                .foregroundColor(.gray.opacity(0.5))
-            
-            Text(message)
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
     }
     
     // MARK: - Helpers

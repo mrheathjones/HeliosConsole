@@ -1378,52 +1378,53 @@ struct ABMDeviceDetailSheet: View {
     // MARK: - Cards
 
     private var deviceCard: some View {
-        detailCard(title: "Device", icon: abmFamilyIcon(for: device.productFamily), iconColors: [.blue, .cyan]) {
-            VStack(spacing: 0) {
+        DetailCard(title: "Device", icon: abmFamilyIcon(for: device.productFamily)) {
+            VStack(spacing: 12) {
                 if let model = device.deviceModel {
-                    detailRow(label: "Model", value: model, isFirst: true)
+                    DetailRow("Model", model)
                 }
 
                 if let family = device.productFamily {
-                    detailRow(label: "Product Family", value: family)
+                    DetailRow("Product Family", family)
                 }
 
                 if let productType = device.productType {
-                    detailRow(label: "Product Type", value: productType, monospaced: true)
+                    DetailRow("Product Type", productType, monospaced: true)
                 }
 
                 if let capacity = device.deviceCapacity {
-                    detailRow(label: "Capacity", value: capacity)
+                    DetailRow("Capacity", capacity)
                 }
 
                 if let color = device.color, !color.isEmpty {
-                    detailRow(label: "Color", value: color.capitalized, isLast: true)
+                    DetailRow("Color", color.capitalized)
                 }
             }
         }
     }
 
     private var identifiersCard: some View {
-        detailCard(title: "Identifiers", icon: "number", iconColors: [.purple, .pink]) {
-            VStack(spacing: 0) {
-                detailRow(label: "Serial Number", value: device.serialNumber, monospaced: true, isFirst: true)
+        DetailCard(title: "Identifiers", icon: "number") {
+            VStack(spacing: 12) {
+                DetailRow("Serial Number", device.serialNumber, monospaced: true)
 
                 if let assetTag {
-                    detailRow(label: "Asset Tag", value: assetTag, isLast: true)
+                    DetailRow("Asset Tag", assetTag)
                 }
             }
         }
     }
 
     private var assignmentCard: some View {
-        detailCard(title: "Assignment", icon: "server.rack", iconColors: [.green, .mint]) {
-            VStack(spacing: 0) {
+        DetailCard(title: "Assignment", icon: "server.rack") {
+            VStack(spacing: 12) {
                 HStack {
+                    // Same label column as DetailRow so the badge lines up
+                    // with the values below it.
                     Text("Status")
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
-
-                    Spacer()
+                        .frame(width: 180, alignment: .leading)
 
                     Text(statusTitle)
                         .font(.system(size: 11, weight: .semibold))
@@ -1431,15 +1432,15 @@ struct ABMDeviceDetailSheet: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(statusColor.opacity(0.15)))
+
+                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
 
                 if let server = assignedServer {
-                    detailRow(label: "MDM Server", value: server.serverName)
+                    DetailRow("MDM Server", server.serverName)
 
                     if let serverType = server.serverType {
-                        detailRow(label: "Server Type", value: serverType, isLast: true)
+                        DetailRow("Server Type", serverType)
                     }
                 }
             }
@@ -1447,30 +1448,30 @@ struct ABMDeviceDetailSheet: View {
     }
 
     private var datesCard: some View {
-        detailCard(title: "Dates", icon: "calendar", iconColors: [.orange, .yellow]) {
-            VStack(spacing: 0) {
+        DetailCard(title: "Dates", icon: "calendar") {
+            VStack(spacing: 12) {
                 if let added = formatISODate(device.addedToOrgDateTime) {
-                    detailRow(label: "Added to Org", value: added, isFirst: true)
+                    DetailRow("Added to Org", added)
                 }
 
                 if let updated = formatISODate(device.updatedDateTime) {
-                    detailRow(label: "Last Updated", value: updated)
+                    DetailRow("Last Updated", updated)
                 }
 
                 if let ordered = formatISODate(device.orderDateTime) {
-                    detailRow(label: "Order Date", value: ordered)
+                    DetailRow("Order Date", ordered)
                 }
 
                 if let orderNumber = device.orderNumber, !orderNumber.isEmpty {
-                    detailRow(label: "Order Number", value: orderNumber, monospaced: true, isLast: true)
+                    DetailRow("Order Number", orderNumber, monospaced: true)
                 }
             }
         }
     }
 
     private var appleCareCard: some View {
-        detailCard(title: "AppleCare", icon: "cross.case", iconColors: [.red, .orange]) {
-            VStack(spacing: 0) {
+        DetailCard(title: "AppleCare", icon: "cross.case") {
+            VStack(spacing: 12) {
                 if isLoadingCoverage {
                     HStack(spacing: 10) {
                         ProgressView()
@@ -1480,8 +1481,6 @@ struct ABMDeviceDetailSheet: View {
                             .foregroundColor(.gray)
                         Spacer()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
                 } else if coverageUnavailable {
                     HStack {
                         Text("AppleCare information unavailable")
@@ -1489,8 +1488,6 @@ struct ABMDeviceDetailSheet: View {
                             .foregroundColor(.gray)
                         Spacer()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
                 } else if coverages.isEmpty {
                     HStack {
                         Text("No coverage records for this device")
@@ -1498,8 +1495,6 @@ struct ABMDeviceDetailSheet: View {
                             .foregroundColor(.gray)
                         Spacer()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
                 } else {
                     ForEach(coverages) { coverage in
                         coverageRow(coverage)
@@ -1554,8 +1549,6 @@ struct ABMDeviceDetailSheet: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
     }
 
     // MARK: - AppleCare Loading
@@ -1577,65 +1570,6 @@ struct ABMDeviceDetailSheet: View {
     }
 
     // MARK: - Card Helpers
-
-    private func detailCard<Content: View>(
-        title: String,
-        icon: String,
-        iconColors: [Color],
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Card header
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(colors: iconColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
-            Divider()
-                .background(Color.white.opacity(0.1))
-
-            content()
-        }
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    private func detailRow(
-        label: String,
-        value: String,
-        monospaced: Bool = false,
-        isFirst: Bool = false,
-        isLast: Bool = false
-    ) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(.gray)
-
-            Spacer()
-
-            Text(value)
-                .font(.system(size: 13, weight: .medium, design: monospaced ? .monospaced : .default))
-                .foregroundColor(.white)
-                .textSelection(.enabled)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
 
     private func formatISODate(_ isoString: String?) -> String? {
         guard let date = ABMDateParser.date(from: isoString) else { return nil }

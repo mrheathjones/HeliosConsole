@@ -309,7 +309,10 @@ bash -n "$SCRIPTS_DIR/preinstall" || die "generated preinstall failed bash -n"
 # "update" a stray copy of the app elsewhere on disk instead.
 COMPONENT_PLIST="$WORK/component.plist"
 pkgbuild --analyze --root "$STAGING" "$COMPONENT_PLIST" >/dev/null
-/usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST"
+# Newer pkgbuild omits the key entirely (relocatable is then the default), so
+# Set fails there — Add it instead.
+/usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :0:BundleIsRelocatable bool false" "$COMPONENT_PLIST"
 
 info "Building component package…"
 pkgbuild \

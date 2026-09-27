@@ -13,12 +13,12 @@ going public — tracked here to work through after the initial GitHub release.
 
 ## 1. Modularity
 
-- **`Views/Device/DeviceView.swift` (5,297 lines)** — mixes 8 inventory tabs,
-  raw URLSession/OAuth networking, MDM command orchestration (wipe/erase/
-  restart/unlock), and an erase-acknowledgment polling state machine in one
-  View. Split into: `DeviceCommandExecutor` (networking + commands), a generic
-  `PaginatedListState<Row>` for per-tab lists, and separate
-  `DeviceOverviewView` / `DeviceInventoryTabsView` / `DeviceActionsMenu` views.
+- ~~**`Views/Device/DeviceView.swift` (5,297 lines)**~~ — **Done**
+  (`refactor/device-view-decomposition`). Now a ~490-line shell over
+  `DeviceCommandExecutor`, `DeviceActionFlow`/`DeviceActionsMenu`,
+  `DeviceActionOverlays`, `DeviceOverviewView`, `DeviceDetailSectionsView`,
+  `DeviceInventoryTabsView` (+ `DeviceInventoryState` on
+  `PaginatedListState<Row>`), and `DeviceLogsSectionView`.
 - **`Views/Reports/ReportsView.swift` (2,291 lines)** — same class of problem
   at smaller scale; extract per-report-type view models + a shared
   `ReportExportService`.
@@ -27,16 +27,23 @@ going public — tracked here to work through after the initial GitHub release.
   and ~15 model structs. Split into `AppleBusinessManagerAuthClient`,
   `ABMHTTPClient`, and dedicated model files; leave `ABMAPIService` as a thin
   façade.
-- **Duplicated UI components** — `detailCard`, `sectionHeader`, `detailRow`,
-  `searchBar`, `filterToggle`, `paginationControls`, `emptyStateView`,
-  `statusBadge` copy-pasted across `DeviceView`, `MobileDeviceView`,
-  `ABMLookupView`, `ReportsView` — already visibly diverged in styling
-  (e.g. `detailCard` differs between `DeviceView.swift:4878` and
-  `MobileDeviceView.swift:1525`). Extract to `Views/Shared/`.
-- **Duplicated pagination/filter state** — each feature view reimplements its
-  own `currentPage`/`totalPages`/filter-flag state instead of a shared
-  `PagedFilterableList<Row, Filter>`. Fixing this would eliminate most of the
-  UI-component duplication above as a side effect.
+- **Duplicated UI components** — **Mostly done.** `SectionHeader`,
+  `DetailCard`, `DetailRow`, `SearchBar`, `FilterToggle`,
+  `PaginationControls`, `EmptyStateView`, `StatusBadge` now live in
+  `Views/Shared/` (DeviceView's styling), adopted by `DeviceView`,
+  `MobileDeviceView`, and `ABMLookupView`. Remaining:
+  - `ReportsView` deliberately NOT migrated: its `sectionHeader(_:icon:color:)`
+    is a light/dark-aware 16pt card subheading and `statusBadge(Bool)` is a
+    Yes/No pill — different components, not drifted copies. Swapping in the
+    shared white 24pt header would break Reports in light mode.
+  - Private `statusBadge(_:color:)` copies still in
+    `Dashboard/ComputerResultCard.swift` (x2) and `Device/DeviceListRow.swift`
+    — check whether they match `StatusBadge` before swapping.
+- **Duplicated pagination/filter state** — `PaginatedListState<Row>` +
+  `PaginatedRows` exist (`Views/Shared/`) and back DeviceView's 7 inventory
+  tabs. Follow-up: move `MobileDeviceView`'s five hand-rolled
+  search/page `@State` pairs onto it the same way (`DeviceInventoryState`
+  is the template).
 - **`Managers/Configuration/FeaturesConfiguration.swift` (941 lines)** —
   secondary candidate; worth a follow-up look for business logic that crept
   into what should be a settings/data layer.

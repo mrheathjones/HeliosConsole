@@ -157,6 +157,24 @@
 		CLF13 /* CleanupReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR13 /* CleanupReportModels.swift */; };
 		CLF14 /* CleanupReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR14 /* CleanupReportPDF.swift */; };
 		CLF15 /* CleanupExportMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLR15 /* CleanupExportMenu.swift */; };
+		FSHV01 /* DetailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV01 /* DetailCard.swift */; };
+		FSHV02 /* DetailRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV02 /* DetailRow.swift */; };
+		FSHV03 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV03 /* EmptyStateView.swift */; };
+		FSHV04 /* FilterToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV04 /* FilterToggle.swift */; };
+		FSHV05 /* PaginatedListState.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV05 /* PaginatedListState.swift */; };
+		FSHV06 /* PaginationControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV06 /* PaginationControls.swift */; };
+		FSHV07 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV07 /* SearchBar.swift */; };
+		FSHV08 /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV08 /* SectionHeader.swift */; };
+		FSHV09 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSHV09 /* StatusBadge.swift */; };
+		FDVX01 /* DeviceActionOverlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX01 /* DeviceActionOverlays.swift */; };
+		FDVX02 /* DeviceActionsMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX02 /* DeviceActionsMenu.swift */; };
+		FDVX03 /* DeviceCommandExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX03 /* DeviceCommandExecutor.swift */; };
+		FDVX04 /* DeviceDetailSectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX04 /* DeviceDetailSectionsView.swift */; };
+		FDVX05 /* DeviceFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX05 /* DeviceFormatting.swift */; };
+		FDVX06 /* DeviceInventoryTabsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX06 /* DeviceInventoryTabsView.swift */; };
+		FDVX07 /* DeviceLogsSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX07 /* DeviceLogsSectionView.swift */; };
+		FDVX08 /* DeviceOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX08 /* DeviceOverviewView.swift */; };
+		FDVX09 /* DeviceSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = SDVX09 /* DeviceSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -275,6 +293,24 @@
 		CLR13 /* CleanupReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportModels.swift; sourceTree = "<group>"; };
 		CLR14 /* CleanupReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupReportPDF.swift; sourceTree = "<group>"; };
 		CLR15 /* CleanupExportMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExportMenu.swift; sourceTree = "<group>"; };
+		SSHV01 /* DetailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailCard.swift; sourceTree = "<group>"; };
+		SSHV02 /* DetailRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailRow.swift; sourceTree = "<group>"; };
+		SSHV03 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
+		SSHV04 /* FilterToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterToggle.swift; sourceTree = "<group>"; };
+		SSHV05 /* PaginatedListState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaginatedListState.swift; sourceTree = "<group>"; };
+		SSHV06 /* PaginationControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaginationControls.swift; sourceTree = "<group>"; };
+		SSHV07 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
+		SSHV08 /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
+		SSHV09 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		SDVX01 /* DeviceActionOverlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceActionOverlays.swift; sourceTree = "<group>"; };
+		SDVX02 /* DeviceActionsMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceActionsMenu.swift; sourceTree = "<group>"; };
+		SDVX03 /* DeviceCommandExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCommandExecutor.swift; sourceTree = "<group>"; };
+		SDVX04 /* DeviceDetailSectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDetailSectionsView.swift; sourceTree = "<group>"; };
+		SDVX05 /* DeviceFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceFormatting.swift; sourceTree = "<group>"; };
+		SDVX06 /* DeviceInventoryTabsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceInventoryTabsView.swift; sourceTree = "<group>"; };
+		SDVX07 /* DeviceLogsSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLogsSectionView.swift; sourceTree = "<group>"; };
+		SDVX08 /* DeviceOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOverviewView.swift; sourceTree = "<group>"; };
+		SDVX09 /* DeviceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -444,6 +480,7 @@
 				GRP017 /* Enrollments */,
 				GRP018 /* Components */,
 				7EB1713D2F79626000105721 /* Logs */,
+				GRP_SHARED /* Shared */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -507,6 +544,15 @@
 				SSMS1 /* SiteMoveSheet.swift */,
 				SABM4 /* PreStageView.swift */,
 				S046 /* MobileDeviceView.swift */,
+				SDVX01 /* DeviceActionOverlays.swift */,
+				SDVX02 /* DeviceActionsMenu.swift */,
+				SDVX03 /* DeviceCommandExecutor.swift */,
+				SDVX04 /* DeviceDetailSectionsView.swift */,
+				SDVX05 /* DeviceFormatting.swift */,
+				SDVX06 /* DeviceInventoryTabsView.swift */,
+				SDVX07 /* DeviceLogsSectionView.swift */,
+				SDVX08 /* DeviceOverviewView.swift */,
+				SDVX09 /* DeviceSection.swift */,
 			);
 			path = Device;
 			sourceTree = "<group>";
@@ -630,6 +676,22 @@
 				CLR15 /* CleanupExportMenu.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		GRP_SHARED /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				SSHV01 /* DetailCard.swift */,
+				SSHV02 /* DetailRow.swift */,
+				SSHV03 /* EmptyStateView.swift */,
+				SSHV04 /* FilterToggle.swift */,
+				SSHV05 /* PaginatedListState.swift */,
+				SSHV06 /* PaginationControls.swift */,
+				SSHV07 /* SearchBar.swift */,
+				SSHV08 /* SectionHeader.swift */,
+				SSHV09 /* StatusBadge.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -853,6 +915,24 @@
 				F042 /* DeviceListRow.swift in Sources */,
 				F043 /* DeviceListView.swift in Sources */,
 				F044 /* DeviceView.swift in Sources */,
+				FDVX09 /* DeviceSection.swift in Sources */,
+				FDVX08 /* DeviceOverviewView.swift in Sources */,
+				FDVX07 /* DeviceLogsSectionView.swift in Sources */,
+				FDVX06 /* DeviceInventoryTabsView.swift in Sources */,
+				FDVX05 /* DeviceFormatting.swift in Sources */,
+				FDVX04 /* DeviceDetailSectionsView.swift in Sources */,
+				FDVX03 /* DeviceCommandExecutor.swift in Sources */,
+				FDVX02 /* DeviceActionsMenu.swift in Sources */,
+				FDVX01 /* DeviceActionOverlays.swift in Sources */,
+				FSHV09 /* StatusBadge.swift in Sources */,
+				FSHV08 /* SectionHeader.swift in Sources */,
+				FSHV07 /* SearchBar.swift in Sources */,
+				FSHV06 /* PaginationControls.swift in Sources */,
+				FSHV05 /* PaginatedListState.swift in Sources */,
+				FSHV04 /* FilterToggle.swift in Sources */,
+				FSHV03 /* EmptyStateView.swift in Sources */,
+				FSHV02 /* DetailRow.swift in Sources */,
+				FSHV01 /* DetailCard.swift in Sources */,
 				F902 /* DeviceHistorySectionView.swift in Sources */,
 				F910 /* MyDevicesService.swift in Sources */,
 				F911 /* LocalDeviceIdentity.swift in Sources */,
@@ -1018,7 +1098,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1046,7 +1126,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1074,7 +1154,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1104,7 +1184,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
